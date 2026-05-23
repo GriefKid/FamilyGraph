@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ node.username }}
+{% endblock %}
+
+{% block extra_css %}
+
+<style>
+
+/* PROFILE */
+
+.profile{
+display:flex;
+align-items:center;
+gap:20px;
+flex-wrap:wrap;
+}
+
+.avatar{
+width:90px;
+height:90px;
+border-radius:50%;
+overflow:hidden;
+border:2px solid var(--border);
+}
+
+.avatar img{
+width:100%;
+height:100%;
+object-fit:cover;
+}
+
+.avatar-placeholder{
+width:90px;
+height:90px;
+border-radius:50%;
+background:var(--primary);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:28px;
+color:white;
+font-weight:bold;
+}
+
+.profile-info{
+flex:1;
+}
+
+.name{
+font-size:22px;
+font-weight:bold;
+margin-bottom:4px;
+}
+
+.username{
+color:#94a3b8;
+margin-bottom:10px;
+}
+
+.meta{
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+margin-bottom:12px;
+}
+
+.meta span{
+background:rgba(0,0,0,.2);
+padding:6px 12px;
+border-radius:8px;
+font-size:13px;
+}
+
+/* RELATIONS */
+
+.rel-list{
+display:flex;
+flex-direction:column;
+gap:10px;
+}
+
+.rel{
+display:flex;
+justify-content:space-between;
+padding:12px;
+border-radius:10px;
+border:1px solid var(--border);
+}
+
+.rel a{
+color:var(--primary);
+text-decoration:none;
+}
+
+/* INFO */
+
+.info-list{
+display:flex;
+flex-wrap:wrap;
+gap:10px;
+}
+
+.info{
+background:rgba(0,0,0,.2);
+padding:8px 12px;
+border-radius:8px;
+font-size:13px;
+border:1px solid var(--border);
+}
+
+.empty{
+color:#94a3b8;
+font-size:14px;
+}
+
+</style>
+
+{% endblock %}
+
+{% block content %}
+
+<!-- NODE CARD -->
+
+<div class="card">
+
+<div class="card-title">
+نود
+</div>
+
+<div class="profile">
+
+{% if node.picture %}
+
+<div class="avatar">
+<img src="{{ node.picture.url }}">
+</div>
+
+{% else %}
+
+<div class="avatar-placeholder">
+{{ node.username|first }}
+</div>
+
+{% endif %}
+
+<div class="profile-info">
+
+<div class="name">
+{{ node.name|default:"بدون نام" }}
+</div>
+
+<div class="username">
+@{{ node.username }}
+</div>
+
+<div class="meta">
+
+{% if node.career %}
+<span>💼 {{ node.career }}</span>
+{% endif %}
+
+{% if node.birth_day %}
+<span>🎂 {{ node.birth_day }}</span>
+{% endif %}
+
+</div>
+
+<a href="{% url 'node_update' node.id %}" class="btn">
+ویرایش
+</a>
+
+<a href="{% url 'node_delete' node.id %}" class="btn btn-danger">
+حذف
+</a>
+
+</div>
+
+</div>
+
+</div>
+
+
+<!-- RELATIONS -->
+
+<div class="card">
+
+<div class="card-title">
+روابط
+</div>
+
+{% if relationships %}
+
+<div class="rel-list">
+
+{% for r in relationships %}
+
+<div class="rel">
+
+<div>
+<a href="/nodes/{{ r.father.id }}/">
+{{ r.father.username }}
+</a>
+
+→
+
+<a href="/nodes/{{ r.child.id }}/">
+{{ r.child.username }}
+</a>
+</div>
+
+<div>
+{{ r.rel }}
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% else %}
+
+<div class="empty">
+هیچ رابطه‌ای ثبت نشده
+</div>
+
+{% endif %}
+
+</div>
+
+
+<!-- INFO -->
+
+<div class="card">
+
+<div class="card-title">
+اطلاعات
+</div>
+
+{% if informations %}
+
+<div class="info-list">
+
+{% for info in informations %}
+
+<div class="info">
+{{ info.data }}
+</div>
+
+{% endfor %}
+
+</div>
+
+{% else %}
+
+<div class="empty">
+اطعاتی ثبت نشده
+</div>
+
+{% endif %}
+
+</div>
+
+{% endblock %}

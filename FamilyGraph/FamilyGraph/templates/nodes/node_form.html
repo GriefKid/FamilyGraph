@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if object %}
+ویرایش نود
+{% else %}
+ایجاد نود جدید
+{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+
+<style>
+
+.form-container{
+	max-width:700px;
+	margin:70px auto;
+}
+
+.form-title{
+	text-align:center;
+	font-size:22px;
+	margin-bottom:30px;
+}
+
+.form-group{
+	margin-bottom:18px;
+	display:flex;
+	flex-direction:column;
+}
+
+.form-group label{
+	margin-bottom:6px;
+	color:#94a3b8;
+	font-size:14px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea{
+	background:#0f172a;
+	border:1px solid #334155;
+	border-radius:6px;
+	padding:10px;
+	color:#e2e8f0;
+}
+
+.form-actions{
+	margin-top:30px;
+	display:flex;
+	justify-content:center;
+	gap:10px;
+}
+
+.btn-success{
+	background:#22c55e;
+	color:white;
+	border:none;
+}
+
+.btn-success:hover{
+	background:#16a34a;
+}
+
+</style>
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card form-container">
+
+	<div class="form-title">
+
+		{% if object %}
+		ویرایش نود {{ object.username }}
+		{% else %}
+		ایجاد نود جدید
+		{% endif %}
+
+	</div>
+
+	<form method="post" enctype="multipart/form-data">
+
+		{% csrf_token %}
+
+		{% for field in form %}
+
+		<div class="form-group">
+
+			<label>
+				{{ field.label }}
+			</label>
+
+			{{ field }}
+
+			{% if field.errors %}
+			<div style="color:#ef4444;font-size:13px;margin-top:4px;">
+				{{ field.errors }}
+			</div>
+			{% endif %}
+
+		</div>
+
+		{% endfor %}
+
+		<div class="form-actions">
+
+			<button type="submit" class="btn btn-success">
+				ذخیره
+			</button>
+
+			<a href="/nodes/" class="btn">
+				انصراف
+			</a>
+
+		</div>
+
+	</form>
+
+</div>
+
+{% endblock %}

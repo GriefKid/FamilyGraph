@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}
+نودها
+{% endblock %}
+
+{% block extra_css %}
+
+<style>
+
+.nodes-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:20px;
+flex-wrap:wrap;
+gap:10px;
+}
+
+.search{
+padding:8px 12px;
+border-radius:8px;
+border:1px solid var(--border);
+background:var(--card);
+color:var(--text);
+width:220px;
+}
+
+/* GRID */
+
+.node-grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+gap:18px;
+}
+
+/* CARD */
+
+.node-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:14px;
+padding:18px;
+display:flex;
+flex-direction:column;
+align-items:center;
+gap:10px;
+transition:.2s;
+}
+
+.node-card:hover{
+transform:translateY(-4px);
+border-color:var(--primary);
+}
+
+/* AVATAR */
+
+.avatar{
+width:70px;
+height:70px;
+border-radius:50%;
+overflow:hidden;
+border:2px solid var(--border);
+}
+
+.avatar img{
+width:100%;
+height:100%;
+object-fit:cover;
+}
+
+.avatar-placeholder{
+width:70px;
+height:70px;
+border-radius:50%;
+background:var(--primary);
+display:flex;
+align-items:center;
+justify-content:center;
+color:white;
+font-weight:bold;
+font-size:22px;
+}
+
+/* TEXT */
+
+.username{
+font-size:16px;
+font-weight:bold;
+}
+
+.name{
+font-size:13px;
+color:#94a3b8;
+}
+
+.career{
+font-size:12px;
+opacity:.8;
+}
+
+.node-actions{
+margin-top:6px;
+}
+
+</style>
+
+{% endblock %}
+
+
+{% block content %}
+
+<div class="card">
+
+<div class="nodes-header">
+
+<h3>نودها</h3>
+
+<div style="display:flex; gap:10px;">
+
+<input
+class="search"
+type="text"
+placeholder="جستجو..."
+onkeyup="filterNodes(this.value)"
+>
+
+<a href="{% url 'node_create' %}" class="btn">
++ نود جدید
+</a>
+
+</div>
+
+</div>
+
+
+<div class="node-grid" id="nodeGrid">
+
+{% for node in nodes %}
+
+<div class="node-card" data-name="{{ node.username|lower }}">
+
+{% if node.picture %}
+
+<div class="avatar">
+<img src="{{ node.picture.url }}">
+</div>
+
+{% else %}
+
+<div class="avatar-placeholder">
+{{ node.username|first }}
+</div>
+
+{% endif %}
+
+<div class="username">
+{{ node.username }}
+</div>
+
+{% if node.name %}
+
+<div class="name">
+{{ node.name }}
+</div>
+
+{% endif %}
+
+{% if node.career %}
+
+<div class="career">
+{{ node.career }}
+</div>
+
+{% endif %}
+
+<div class="node-actions">
+
+<a href="{% url 'node_detail' node.id %}" class="btn">
+مشاهده
+</a>
+
+</div>
+
+</div>
+
+{% empty %}
+
+<p>هیچ نودی وجود ندارد</p>
+
+{% endfor %}
+
+</div>
+
+</div>
+
+
+<!-- PAGINATION -->
+
+{% if is_paginated %}
+
+<div style="margin-top:20px; text-align:center;">
+
+{% if page_obj.has_previous %}
+
+<a class="btn" href="?page={{ page_obj.previous_page_number }}">
+قبلی
+</a>
+
+{% endif %}
+
+<span style="margin:0 10px;">
+صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}
+</span>
+
+{% if page_obj.has_next %}
+
+<a class="btn" href="?page={{ page_obj.next_page_number }}">
+بعدی
+</a>
+
+{% endif %}
+
+</div>
+
+{% endif %}
+
+<script>
+
+function filterNodes(q){
+
+q = q.toLowerCase()
+
+let cards = document.querySelectorAll(".node-card")
+
+cards.forEach(card=>{
+
+let name = card.dataset.name
+
+card.style.display = name.includes(q) ? "flex" : "none"
+
+})
+
+}
+
+</script>
+
+{% endblock %}

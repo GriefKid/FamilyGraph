@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}
+	مشاهده اطلاعات
+{% endblock %}
+
+{% block content %}
+
+<div class="container">
+
+	<h2 class="title">
+		Information #{{ object.id }} - {{ object.node.username }}
+	</h2>
+
+	<div class="card">
+
+		<div class="row">
+			<div class="label">
+				ID
+			</div>
+
+			<div class="value">
+				{{ object.id }}
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="label">
+				Node
+			</div>
+
+			<div class="value">
+				<a href="{% url 'node_detail' object.node.id %}">
+					{{ object.node.username }}
+				</a>
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="label">
+				Visibility
+			</div>
+
+			<div class="value">
+				{{ object.visibility }}
+			</div>
+		</div>
+
+		<div class="row data-row">
+			<div class="label">
+				Data
+			</div>
+
+			<pre class="json">
+{{ object.data|safe }}
+			</pre>
+		</div>
+
+	</div>
+
+	<div class="actions">
+
+		<a
+			href="{% url 'information_update' object.id %}"
+			class="btn edit"
+		>
+			ویرایش
+		</a>
+
+		<a
+			href="{% url 'information_delete' object.id %}"
+			class="btn delete"
+		>
+			حذف
+		</a>
+
+		<a
+			href="{% url 'information_list' %}"
+			class="btn back"
+		>
+			بازگشت
+		</a>
+
+	</div>
+
+</div>
+
+
+<style>
+
+.container{
+	width:90%;
+	max-width:800px;
+	margin:auto;
+	margin-top:40px;
+	color:white;
+}
+
+.title{
+	font-size:28px;
+	margin-bottom:30px;
+}
+
+.card{
+	background:#0f1a2e;
+	border:1px solid #1d2c4d;
+	border-radius:8px;
+	padding:20px;
+}
+
+.row{
+	display:flex;
+	margin-bottom:16px;
+}
+
+.label{
+	width:150px;
+	color:#9fb3d1;
+	font-weight:bold;
+}
+
+.value{
+	flex:1;
+}
+
+.data-row{
+	flex-direction:column;
+}
+
+.json{
+	background:#081226;
+	padding:15px;
+	border-radius:6px;
+	overflow:auto;
+	color:#8fe388;
+	margin-top:10px;
+}
+
+.actions{
+	margin-top:30px;
+	display:flex;
+	gap:10px;
+}
+
+.btn{
+	padding:10px 16px;
+	border-radius:6px;
+	text-decoration:none;
+	color:white;
+}
+
+.edit{
+	background:#3b82f6;
+}
+
+.delete{
+	background:#ef4444;
+}
+
+.back{
+	background:#555;
+}
+
+</style>
+
+{% endblock %}

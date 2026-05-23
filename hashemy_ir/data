@@ -1,0 +1,12 @@
+birth_date = [02/03/1374]
+name[3] =
+name[0] = ['seyed', 'seyyed']
+name[1] = ['amirhosien', 'amirhossien',
+            'amir', 'hosien', 'hossien',
+            'amirhosiyn', 'amirhosyn', 'hosyn',
+            'hosiyn'
+           ]
+name[2] = ['hashemi', 'hashemy']
+enjoy = ['ali', 'mohammad', 'mahdi', ]
+username = ['freerash']
+dns: 195.28.169.70

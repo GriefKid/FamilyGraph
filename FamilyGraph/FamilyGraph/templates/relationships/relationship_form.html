@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}
+ایجاد رابطه
+{% endblock %}
+
+{% block extra_css %}
+
+.form-box{
+	max-width:420px;
+	margin:auto;
+}
+
+.form-group{
+	display:flex;
+	flex-direction:column;
+	margin-bottom:16px;
+}
+
+.form-group label{
+	font-size:13px;
+	margin-bottom:6px;
+	color:#94a3b8;
+}
+
+.form-group input,
+.form-group select{
+	padding:8px 10px;
+	border-radius:8px;
+	border:1px solid var(--border);
+	background:var(--card);
+	color:var(--text);
+	font-size:14px;
+}
+
+.form-group input:focus,
+.form-group select:focus{
+	outline:none;
+	border-color:var(--primary);
+}
+
+.form-actions{
+	display:flex;
+	gap:10px;
+	margin-top:10px;
+}
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card form-box">
+
+	<div class="card-title">
+		رابطه جدید
+	</div>
+
+	<form method="post">
+
+		{% csrf_token %}
+
+		{% if form.errors %}
+			<div style="color:#ef4444;margin-bottom:12px;">
+				{{ form.errors }}
+			</div>
+		{% endif %}
+
+		<div class="form-group">
+			<label>نوع رابطه</label>
+			{{ form.rel }}
+		</div>
+
+		<div class="form-group">
+			<label>پدر</label>
+			{{ form.father }}
+		</div>
+
+		<div class="form-group">
+			<label>فرزند</label>
+			{{ form.child }}
+		</div>
+
+		<div class="form-actions">
+
+			<button type="submit" class="btn">
+				ذخیره تغییرات
+			</button>
+
+			<a href="{% url 'relationship_list' %}" class="btn">
+				انصراف
+			</a>
+
+		</div>
+
+	</form>
+
+</div>
+
+{% endblock %}

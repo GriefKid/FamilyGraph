@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+<meta charset="UTF-8">
+<title>{% block title %}GraphFamily{% endblock %}</title>
+
+<style>
+
+*{
+box-sizing:border-box;
+margin:0;
+padding:0;
+}
+
+body{
+font-family:sans-serif;
+background:var(--bg);
+color:var(--text);
+min-height:100vh;
+}
+
+/* THEME */
+
+:root{
+--bg:#0f172a;
+--card:#1e293b;
+--text:#e2e8f0;
+--border:#334155;
+--primary:#6366f1;
+}
+
+.light{
+--bg:#f1f5f9;
+--card:#ffffff;
+--text:#0f172a;
+--border:#d1d5db;
+--primary:#4f46e5;
+}
+
+/* NAVBAR */
+
+.navbar{
+height:60px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:0 30px;
+background:#0b132b;
+border-bottom:1px solid var(--border);
+}
+
+.logo{
+font-size:20px;
+font-weight:bold;
+color:#818cf8;
+}
+
+.nav-links{
+display:flex;
+gap:20px;
+}
+
+.nav-links a{
+color:var(--text);
+text-decoration:none;
+font-size:14px;
+}
+
+.nav-links a:hover{
+color:var(--primary);
+}
+
+/* THEME SWITCH */
+
+.switch{
+width:46px;
+height:24px;
+background:#444;
+border-radius:20px;
+position:relative;
+cursor:pointer;
+}
+
+.switch::after{
+content:"";
+width:20px;
+height:20px;
+background:white;
+position:absolute;
+top:2px;
+left:2px;
+border-radius:50%;
+transition:.3s;
+}
+
+.light .switch::after{
+left:24px;
+}
+
+/* MAIN CONTAINER */
+
+.main{
+max-width:1100px;
+margin:40px auto;
+padding:20px;
+width:100%;
+}
+
+/* CARD */
+
+.card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:16px;
+padding:24px;
+margin-bottom:25px;
+}
+
+.card-title{
+font-size:18px;
+font-weight:bold;
+margin-bottom:18px;
+}
+
+/* BUTTON */
+
+.btn{
+padding:8px 14px;
+border-radius:8px;
+border:1px solid var(--border);
+background:var(--card);
+color:var(--text);
+text-decoration:none;
+font-size:13px;
+cursor:pointer;
+}
+
+.btn:hover{
+border-color:var(--primary);
+}
+
+.btn-danger{
+background:#ef4444;
+border:none;
+color:white;
+}
+
+{% block extra_css %}{% endblock %}
+
+</style>
+</head>
+
+<body>
+
+<div class="navbar">
+
+<div class="logo">
+GraphFamily
+</div>
+
+<div class="nav-links">
+<a href="/">خانه</a>
+<a href="/nodes/">نودها</a>
+<a href="/relationships/">روابط</a>
+<a href="/informations/">اطلاعات</a>
+</div>
+
+<div class="switch" onclick="toggleTheme()"></div>
+
+</div>
+
+<div class="main">
+{% block content %}{% endblock %}
+</div>
+
+<script>
+
+function toggleTheme(){
+document.body.classList.toggle("light")
+localStorage.setItem("theme",
+document.body.classList.contains("light")?"light":"dark")
+}
+
+if(localStorage.getItem("theme")==="light"){
+document.body.classList.add("light")
+}
+
+</script>
+
+</body>
+</html>
