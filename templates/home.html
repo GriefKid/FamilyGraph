@@ -12,177 +12,368 @@ width:100%;
 height:calc(100vh - 54px);
 position:relative;
 overflow:hidden;
+background:var(--bg);
 }
 
-#graph{ width:100%; height:100%; }
+#graph-svg{
+width:100%;
+height:100%;
+cursor:grab;
+display:block;
+}
 
-.node-circle{
-fill:#1e1e38;
-stroke:#6366f1;
+#graph-svg:active{ cursor:grabbing; }
+
+/* ─── EDGES ─── */
+.edge-line{
+stroke:#252540;
 stroke-width:1.5;
-cursor:pointer;
-transition:.2s;
+transition:stroke .2s;
 }
 
-.node-circle:hover{
-fill:#6366f1;
-stroke:#818cf8;
-stroke-width:2;
-}
+.edge-line.highlighted{ stroke:#6366f1; stroke-width:2.5; }
 
-.node-label{
-fill:#e8eaf6;
+.edge-label{
+fill:#3a3a5c;
 font-family:'Vazirmatn',sans-serif;
-font-size:12px;
+font-size:10px;
 text-anchor:middle;
 pointer-events:none;
 user-select:none;
 }
 
-.edge-line{
-stroke:#1c1c30;
+/* ─── NODES ─── */
+.node-group{ cursor:pointer; }
+
+.node-bg{
+fill:#111120;
+stroke:#252540;
 stroke-width:1.5;
+transition:fill .18s, stroke .18s, stroke-width .18s;
 }
 
-.edge-label{
-fill:#4a4a72;
+.node-group:hover .node-bg{
+fill:#1e1e3a;
+stroke:#6366f1;
+stroke-width:2;
+}
+
+.node-group.pinned .node-bg{
+stroke:#f59e0b;
+stroke-width:2;
+}
+
+.node-glow{
+fill:none;
+stroke:#6366f1;
+stroke-width:0;
+opacity:0;
+transition:stroke-width .18s, opacity .18s;
+}
+
+.node-group:hover .node-glow{
+stroke-width:8;
+opacity:.18;
+}
+
+.node-label{
+fill:#c8caf0;
 font-family:'Vazirmatn',sans-serif;
-font-size:10px;
+font-size:11px;
 text-anchor:middle;
+dominant-baseline:middle;
 pointer-events:none;
+user-select:none;
 }
 
+/* ─── TOOLTIP ─── */
+#tooltip{
+position:absolute;
+background:rgba(10,10,20,.96);
+border:1px solid #1c1c30;
+border-radius:10px;
+padding:10px 14px;
+font-size:12px;
+color:#e8eaf6;
+backdrop-filter:blur(12px);
+pointer-events:none;
+opacity:0;
+transform:translateY(4px);
+transition:opacity .12s, transform .12s;
+z-index:200;
+min-width:130px;
+}
+
+#tooltip.show{
+opacity:1;
+transform:translateY(0);
+}
+
+.tt-name{ font-weight:700; font-size:13px; margin-bottom:5px; color:#818cf8; }
+.tt-row{ color:#6060a0; font-size:11px; margin-top:2px; }
+.tt-row span{ color:#a0a0c8; }
+
+/* ─── CONTROLS ─── */
+.graph-controls{
+position:absolute;
+top:16px;
+left:16px;
+display:flex;
+flex-direction:column;
+gap:6px;
+z-index:100;
+}
+
+.ctrl-btn{
+width:34px;
+height:34px;
+border-radius:8px;
+border:1px solid #1c1c30;
+background:rgba(11,11,22,.9);
+color:#8888aa;
+font-size:15px;
+cursor:pointer;
+display:flex;
+align-items:center;
+justify-content:center;
+backdrop-filter:blur(10px);
+transition:.15s;
+font-family:'Vazirmatn',sans-serif;
+}
+
+.ctrl-btn:hover{
+background:rgba(99,102,241,.2);
+border-color:rgba(99,102,241,.5);
+color:#e8eaf6;
+}
+
+/* ─── INFO OVERLAY ─── */
 .graph-info{
 position:absolute;
 bottom:20px;
 right:20px;
-background:rgba(13,13,26,.85);
+background:rgba(11,11,22,.88);
 border:1px solid #1c1c30;
 border-radius:10px;
 padding:10px 16px;
 font-size:12px;
 color:#4a4a72;
-backdrop-filter:blur(8px);
+backdrop-filter:blur(10px);
+line-height:1.8;
 }
 
-.graph-info span{ color:#6366f1; font-weight:600; }
+.graph-info b{ color:#6366f1; font-weight:600; }
+
+.pin-hint{
+position:absolute;
+bottom:22px;
+left:16px;
+font-size:11px;
+color:#2a2a44;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div id="graph-wrap">
-  <svg id="graph"></svg>
-  <div class="graph-info">
-    نودها: <span id="nodeCount">—</span> &nbsp;|&nbsp; روابط: <span id="edgeCount">—</span>
+  <svg id="graph-svg"></svg>
+
+  <div id="tooltip">
+    <div class="tt-name" id="tt-name"></div>
+    <div class="tt-row">روابط: <span id="tt-rels">—</span></div>
+    <div class="tt-row" id="tt-career-row" style="display:none">شغل: <span id="tt-career"></span></div>
   </div>
+
+  <div class="graph-controls">
+    <button class="ctrl-btn" id="btn-zi" title="بزرگ‌نمایی">+</button>
+    <button class="ctrl-btn" id="btn-zo" title="کوچک‌نمایی">−</button>
+    <button class="ctrl-btn" id="btn-fit" title="نمای کامل">⊙</button>
+  </div>
+
+  <div class="graph-info">
+    نودها: <b id="nodeCount">—</b> &emsp; روابط: <b id="edgeCount">—</b>
+  </div>
+
+  <div class="pin-hint">دابل‌کلیک روی نود = پین / آن‌پین</div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script>
-const svg = document.getElementById("graph")
+(async () => {
 
-async function load(){
-  const res  = await fetch("/api/graph/all/")
-  const data = await res.json()
+const wrap   = document.getElementById("graph-wrap")
+const svgEl  = d3.select("#graph-svg")
+const tip    = document.getElementById("tooltip")
+const W = () => wrap.clientWidth
+const H = () => wrap.clientHeight
 
-  const W = svg.clientWidth  || window.innerWidth  - 230
-  const H = svg.clientHeight || window.innerHeight - 54
-
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`)
-
-  const nodes = data.nodes.map(n=>({
-    id:n.id, label:n.username,
-    x: 60 + Math.random()*(W-120),
-    y: 60 + Math.random()*(H-120),
-    vx:0, vy:0
-  }))
-
-  const edges = data.edges
-  const map   = {}
-  nodes.forEach(n=>map[n.id]=n)
-
-  document.getElementById("nodeCount").textContent = nodes.length
-  document.getElementById("edgeCount").textContent = edges.length
-
-  // force simulation (simple)
-  for(let iter=0; iter<120; iter++){
-    // repulsion
-    for(let i=0;i<nodes.length;i++){
-      for(let j=i+1;j<nodes.length;j++){
-        const a=nodes[i], b=nodes[j]
-        const dx=b.x-a.x, dy=b.y-a.y
-        const dist=Math.max(Math.sqrt(dx*dx+dy*dy),1)
-        const f=3000/(dist*dist)
-        a.vx-=f*dx/dist; a.vy-=f*dy/dist
-        b.vx+=f*dx/dist; b.vy+=f*dy/dist
-      }
-    }
-    // attraction
-    edges.forEach(e=>{
-      const a=map[e.source], b=map[e.target]
-      if(!a||!b) return
-      const dx=b.x-a.x, dy=b.y-a.y
-      const dist=Math.max(Math.sqrt(dx*dx+dy*dy),1)
-      const f=(dist-160)*.04
-      a.vx+=f*dx/dist; a.vy+=f*dy/dist
-      b.vx-=f*dx/dist; b.vy-=f*dy/dist
-    })
-    // center gravity + damping
-    nodes.forEach(n=>{
-      n.vx+=(W/2-n.x)*.004
-      n.vy+=(H/2-n.y)*.004
-      n.vx*=.8; n.vy*=.8
-      n.x+=n.vx; n.y+=n.vy
-      n.x=Math.max(50,Math.min(W-50,n.x))
-      n.y=Math.max(40,Math.min(H-40,n.y))
-    })
-  }
-
-  svg.innerHTML=""
-
-  // edges
-  edges.forEach(e=>{
-    const a=map[e.source], b=map[e.target]
-    if(!a||!b) return
-    const line=ns("line")
-    line.setAttribute("x1",a.x); line.setAttribute("y1",a.y)
-    line.setAttribute("x2",b.x); line.setAttribute("y2",b.y)
-    line.setAttribute("class","edge-line")
-    svg.appendChild(line)
-
-    if(e.label){
-      const t=ns("text")
-      t.setAttribute("x",(a.x+b.x)/2)
-      t.setAttribute("y",(a.y+b.y)/2-4)
-      t.setAttribute("class","edge-label")
-      t.textContent=e.label
-      svg.appendChild(t)
-    }
-  })
-
-  // nodes
-  nodes.forEach(n=>{
-    const g=ns("g")
-    g.style.cursor="pointer"
-    g.addEventListener("click",()=>{ window.location.href="/nodes/"+n.id+"/" })
-
-    const c=ns("circle")
-    c.setAttribute("cx",n.x); c.setAttribute("cy",n.y)
-    c.setAttribute("r",32)
-    c.setAttribute("class","node-circle")
-    g.appendChild(c)
-
-    const t=ns("text")
-    t.setAttribute("x",n.x); t.setAttribute("y",n.y+5)
-    t.setAttribute("class","node-label")
-    t.textContent=n.label.length>10 ? n.label.slice(0,9)+"…" : n.label
-    g.appendChild(t)
-
-    svg.appendChild(g)
-  })
+/* ── fetch ── */
+let data
+try {
+  data = await fetch("/api/graph/all/").then(r => r.json())
+} catch(e) {
+  console.error(e)
+  return
 }
 
-function ns(tag){ return document.createElementNS("http://www.w3.org/2000/svg",tag) }
+const nodes = data.nodes.map(n => ({ ...n, id: String(n.id) }))
+const links = data.edges.map(e => ({
+  source: String(e.source),
+  target: String(e.target),
+  label:  e.label || ""
+}))
 
-load()
+document.getElementById("nodeCount").textContent = nodes.length
+document.getElementById("edgeCount").textContent = links.length
+
+/* ── zoom ── */
+const zoom = d3.zoom()
+  .scaleExtent([0.15, 5])
+  .on("zoom", e => gMain.attr("transform", e.transform))
+
+svgEl.call(zoom).on("dblclick.zoom", null)
+
+/* ── defs: arrowhead ── */
+svgEl.append("defs").append("marker")
+  .attr("id",         "arr")
+  .attr("viewBox",    "0 -4 8 8")
+  .attr("refX",       36)
+  .attr("refY",       0)
+  .attr("markerWidth", 5)
+  .attr("markerHeight", 5)
+  .attr("orient",     "auto")
+  .append("path")
+  .attr("d",    "M0,-4L8,0L0,4")
+  .attr("fill", "#252540")
+
+/* ── main group ── */
+const gMain  = svgEl.append("g")
+const gEdges = gMain.append("g")
+const gNodes = gMain.append("g")
+
+/* ── edges ── */
+const edgeLine = gEdges.selectAll("line")
+  .data(links)
+  .join("line")
+  .attr("class", "edge-line")
+  .attr("marker-end", "url(#arr)")
+
+const edgeLabelEl = gEdges.selectAll("text")
+  .data(links.filter(l => l.label))
+  .join("text")
+  .attr("class", "edge-label")
+  .text(d => d.label)
+
+/* ── nodes ── */
+const pinnedSet = new Set()
+let   dragMoved = false
+
+const nodeGroup = gNodes.selectAll("g")
+  .data(nodes)
+  .join("g")
+  .attr("class", "node-group")
+  .call(
+    d3.drag()
+      .on("start", (e, d) => {
+        dragMoved = false
+        if (!e.active) sim.alphaTarget(0.3).restart()
+        d.fx = d.x; d.fy = d.y
+      })
+      .on("drag", (e, d) => {
+        dragMoved = true
+        d.fx = e.x; d.fy = e.y
+      })
+      .on("end", (e, d) => {
+        if (!e.active) sim.alphaTarget(0)
+        if (!pinnedSet.has(d.id)) { d.fx = null; d.fy = null }
+      })
+  )
+  .on("click", (e, d) => {
+    if (dragMoved) { dragMoved = false; return }
+    window.location.href = "/nodes/" + d.id + "/"
+  })
+  .on("dblclick", (e, d) => {
+    e.stopPropagation()
+    if (pinnedSet.has(d.id)) {
+      pinnedSet.delete(d.id)
+      d.fx = null; d.fy = null
+      d3.select(e.currentTarget).classed("pinned", false)
+    } else {
+      pinnedSet.add(d.id)
+      d.fx = d.x; d.fy = d.y
+      d3.select(e.currentTarget).classed("pinned", true)
+    }
+  })
+  .on("mouseover", (e, d) => {
+    const relCount = links.filter(l =>
+      (l.source.id || l.source) === d.id ||
+      (l.target.id || l.target) === d.id
+    ).length
+    document.getElementById("tt-name").textContent  = d.username
+    document.getElementById("tt-rels").textContent  = relCount
+
+    const careerRow = document.getElementById("tt-career-row")
+    if (d.career) {
+      document.getElementById("tt-career").textContent = d.career
+      careerRow.style.display = "block"
+    } else {
+      careerRow.style.display = "none"
+    }
+
+    tip.classList.add("show")
+  })
+  .on("mousemove", e => {
+    const rect = wrap.getBoundingClientRect()
+    let tx = e.clientX - rect.left + 18
+    let ty = e.clientY - rect.top  - 14
+    if (tx + 160 > W()) tx -= 170
+    tip.style.left = tx + "px"
+    tip.style.top  = ty + "px"
+  })
+  .on("mouseout", () => tip.classList.remove("show"))
+
+/* glow ring */
+nodeGroup.append("circle").attr("class", "node-glow").attr("r", 28)
+/* main circle */
+nodeGroup.append("circle").attr("class", "node-bg").attr("r", 26)
+/* label */
+nodeGroup.append("text")
+  .attr("class", "node-label")
+  .attr("y", 0)
+  .text(d => d.username.length > 11 ? d.username.slice(0,10) + "…" : d.username)
+
+/* ── simulation ── */
+const sim = d3.forceSimulation(nodes)
+  .force("link",      d3.forceLink(links).id(d => d.id).distance(180).strength(0.35))
+  .force("charge",    d3.forceManyBody().strength(-500))
+  .force("center",    d3.forceCenter(W() / 2, H() / 2))
+  .force("collision", d3.forceCollide(46))
+  .on("tick", tick)
+
+function tick() {
+  edgeLine
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y)
+
+  edgeLabelEl
+    .attr("x", d => (d.source.x + d.target.x) / 2)
+    .attr("y", d => (d.source.y + d.target.y) / 2 - 6)
+
+  nodeGroup.attr("transform", d => `translate(${d.x},${d.y})`)
+}
+
+/* ── controls ── */
+document.getElementById("btn-zi").onclick  = () => svgEl.transition().duration(300).call(zoom.scaleBy, 1.5)
+document.getElementById("btn-zo").onclick  = () => svgEl.transition().duration(300).call(zoom.scaleBy, 0.67)
+document.getElementById("btn-fit").onclick = () => svgEl.transition().duration(400).call(zoom.transform, d3.zoomIdentity)
+
+/* ── resize ── */
+window.addEventListener("resize", () => {
+  sim.force("center", d3.forceCenter(W() / 2, H() / 2)).alpha(0.2).restart()
+})
+
+})()
 </script>
 {% endblock %}
