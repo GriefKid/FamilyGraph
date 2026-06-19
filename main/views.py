@@ -89,8 +89,8 @@ def node_detail(request, pk):
     node = get_object_or_404(Node, pk=pk)
 
     relationships = Relationship.objects.filter(
-        Q(father=node) | Q(child=node)
-    ).select_related('father', 'child')
+        Q(source=node) | Q(target=node)
+    ).select_related('source', 'target')
 
     informations = Information.objects.filter(node=node)
 
@@ -219,17 +219,17 @@ def graph_level_data(request, level=0):
             for depth in range(1, level + 1):
                 next_parents = []
                 current_rels = Relationship.objects.filter(
-                    father__in=current_parents
-                ).select_related('child')[:nodes_per_level]
-                
+                    source__in=current_parents
+                ).select_related('target')[:nodes_per_level]
+
                 for rel in current_rels:
-                    if rel.child not in nodes:
-                        nodes.append(rel.child)
-                        next_parents.append(rel.child)
+                    if rel.target not in nodes:
+                        nodes.append(rel.target)
+                        next_parents.append(rel.target)
                     relationships.append({
                         'id': f"e{rel.id}",
-                        'source': rel.father.id,
-                        'target': rel.child.id,
+                        'source': rel.source.id,
+                        'target': rel.target.id,
                         'label': rel.rel or f"L{depth}"
                     })
                 
@@ -327,8 +327,8 @@ def home_graph_api(request):
         elements["edges"].append({
             "data": {
                 "id": f"rel-{rel.id}",
-                "source": str(rel.father.id),
-                "target": str(rel.child.id),
+                "source": str(rel.source.id),
+                "target": str(rel.target.id),
                 "label": rel.rel or "",
             }
         })
@@ -357,8 +357,8 @@ def graph_all_api(request):
     for r in relationships:
 
         edge_data.append({
-            "source":str(r.father_id),
-            "target":str(r.child_id),
+            "source":str(r.source_id),
+            "target":str(r.target_id),
             "label":r.rel or ""
         })
 

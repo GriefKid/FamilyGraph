@@ -16,18 +16,18 @@ class Node(models.Model):
 
 class Relationship(models.Model):
     rel = models.CharField(max_length=100, blank=True, null=True)
-    father = models.ForeignKey(Node, related_name='as_father', on_delete=models.PROTECT)
-    child = models.ForeignKey(Node, related_name='as_child', on_delete=models.PROTECT)
+    source = models.ForeignKey(Node, related_name='as_source', on_delete=models.PROTECT)
+    target = models.ForeignKey(Node, related_name='as_target', on_delete=models.PROTECT)
 
     def __str__(self):
         return self.rel
 
     def clean(self):
-        if self.father == self.child:
+        if self.source == self.target:
             raise ValidationError("A node cannot have a relationship with itself.")
 
     class Meta:
-        unique_together = ('father', 'child', 'rel')
+        unique_together = ('source', 'target', 'rel')
 
 class Information(models.Model):
 
