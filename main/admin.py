@@ -9,16 +9,16 @@ class NodeAdmin(admin.ModelAdmin):
 
 @admin.register(Relationship)
 class RelationshipAdmin(admin.ModelAdmin):
-    list_display = ['rel', 'get_father', 'get_child']
-    raw_id_fields = ['father', 'child']
-    
-    @display(description='پدر')
-    def get_father(self, obj):
-        return obj.father.username or 'N/A'
-    
-    @display(description='فرزند')    
-    def get_child(self, obj):
-        return obj.child.username or 'N/A'
+    list_display = ['rel', 'get_source', 'get_target']
+    raw_id_fields = ['source', 'target']
+
+    @display(description='مبدا')
+    def get_source(self, obj):
+        return obj.source.username or 'N/A'
+
+    @display(description='مقصد')
+    def get_target(self, obj):
+        return obj.target.username or 'N/A'
 
 @admin.register(Information)
 class InformationAdmin(admin.ModelAdmin):
