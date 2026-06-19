@@ -15,8 +15,8 @@ class RelationshipForm(forms.ModelForm):
         fields = "__all__"
 
         widgets = {
-            "father": forms.Select(attrs={"class": "form-select"}),
-            "child": forms.Select(attrs={"class": "form-select"}),
+            "source": forms.Select(attrs={"class": "form-select"}),
+            "target": forms.Select(attrs={"class": "form-select"}),
             "rel": forms.TextInput(attrs={"class": "form-control"}),
         }
 
