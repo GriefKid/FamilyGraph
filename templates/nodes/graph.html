@@ -157,24 +157,58 @@ let scale=1
 /* ---------------- DRAG VIEW ---------------- */
 
 let dragging=false
+let dragMoved=false
 let lastX=0
 let lastY=0
 
 canvas.addEventListener("mousedown",e=>{
 	dragging=true
+	dragMoved=false
 	lastX=e.clientX
 	lastY=e.clientY
 })
 
-canvas.addEventListener("mouseup",()=>dragging=false)
-canvas.addEventListener("mouseleave",()=>dragging=false)
+canvas.addEventListener("mouseup",e=>{
+	if(!dragMoved){
+		/* click — find node under cursor */
+		let cx=(e.offsetX-offsetX)/scale
+		let cy=(e.offsetY-offsetY)/scale
+		for(let n of nodes){
+			let r=images[n.id]&&images[n.id].complete ? 20 : 10
+			let dx=cx-n.x, dy=cy-n.y
+			if(dx*dx+dy*dy<=r*r){
+				window.location.href="/nodes/"+n.id+"/"
+				break
+			}
+		}
+	}
+	dragging=false
+	dragMoved=false
+})
+
+canvas.addEventListener("mouseleave",()=>{ dragging=false; dragMoved=false })
 
 canvas.addEventListener("mousemove",e=>{
 
+	/* hover cursor */
+	if(!dragging){
+		let cx=(e.offsetX-offsetX)/scale
+		let cy=(e.offsetY-offsetY)/scale
+		let onNode=nodes.some(n=>{
+			let r=images[n.id]&&images[n.id].complete?20:10
+			return (cx-n.x)**2+(cy-n.y)**2<=r*r
+		})
+		canvas.style.cursor=onNode?"pointer":"grab"
+	}
+
 	if(!dragging) return
 
-	offsetX += e.clientX-lastX
-	offsetY += e.clientY-lastY
+	let dx=e.clientX-lastX
+	let dy=e.clientY-lastY
+	if(Math.abs(dx)+Math.abs(dy)>4) dragMoved=true
+
+	offsetX += dx
+	offsetY += dy
 
 	lastX = e.clientX
 	lastY = e.clientY
@@ -455,16 +489,6 @@ function drawEdges(){
 		ctx.moveTo(s.x,s.y)
 		ctx.lineTo(t.x,t.y)
 		ctx.stroke()
-
-		/* edge label */
-		if(label&&label!=="سایر"){
-			let mx=(s.x+t.x)/2
-			let my=(s.y+t.y)/2
-			ctx.fillStyle=baseColor+"cc"
-			ctx.font="10px Arial"
-			ctx.textAlign="center"
-			ctx.fillText(label,mx,my-4)
-		}
 
 	})
 
