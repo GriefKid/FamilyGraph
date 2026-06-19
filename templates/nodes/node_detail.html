@@ -1,117 +1,151 @@
 {% extends "base.html" %}
 
-{% block title %}{{ node.username }}{% endblock %}
+{% block title %}{{ node.username }} — FamilyGraph{% endblock %}
+{% block page_title %}پروفایل نود{% endblock %}
+{% block nav_nodes %}active{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'node_list' %}" class="btn btn-sm">← بازگشت</a>
+  <a href="{% url 'node_update' node.id %}" class="btn btn-sm">ویرایش</a>
+  <a href="{% url 'node_delete' node.id %}" class="btn btn-sm btn-danger">حذف</a>
+{% endblock %}
 
 {% block extra_css %}
 <style>
 
-/* PROFILE */
-.profile{
-display:flex;
-align-items:center;
-gap:24px;
-flex-wrap:wrap;
+.layout{
+display:grid;
+grid-template-columns:280px 1fr;
+gap:20px;
+align-items:start;
+}
+
+@media(max-width:700px){
+  .layout{ grid-template-columns:1fr; }
+}
+
+/* LEFT PANEL */
+.profile-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+padding:24px 20px;
+text-align:center;
+}
+
+.avatar-wrap{
+margin-bottom:16px;
 }
 
 .avatar{
-width:100px;
-height:100px;
+width:88px;
+height:88px;
 border-radius:50%;
 overflow:hidden;
 border:3px solid var(--primary);
-flex-shrink:0;
+margin:0 auto;
 }
 
-.avatar img{
-width:100%;
-height:100%;
-object-fit:cover;
-}
+.avatar img{ width:100%; height:100%; object-fit:cover; }
 
-.avatar-placeholder{
-width:100px;
-height:100px;
+.avatar-ph{
+width:88px;
+height:88px;
 border-radius:50%;
-background:var(--primary);
+background:linear-gradient(135deg,var(--primary),#818cf8);
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:32px;
 color:white;
-font-weight:bold;
-flex-shrink:0;
+font-weight:700;
+font-size:30px;
+margin:0 auto;
 }
 
-.profile-info{ flex:1; }
-
 .profile-name{
-font-size:22px;
-font-weight:bold;
+font-size:18px;
+font-weight:700;
 margin-bottom:4px;
 }
 
 .profile-username{
-font-size:14px;
-opacity:.5;
-margin-bottom:14px;
-}
-
-.meta{
-display:flex;
-gap:8px;
-flex-wrap:wrap;
+font-size:13px;
+color:var(--text-muted);
 margin-bottom:16px;
 }
 
-.badge{
-background:var(--border);
-color:var(--text);
-padding:5px 12px;
-border-radius:20px;
+.profile-fields{
+text-align:right;
+border-top:1px solid var(--border);
+padding-top:16px;
+display:flex;
+flex-direction:column;
+gap:10px;
+}
+
+.field-row{
+display:flex;
+justify-content:space-between;
+align-items:center;
 font-size:13px;
 }
 
-.profile-actions{
-display:flex;
-gap:8px;
-}
+.field-key{ color:var(--text-muted); }
+.field-val{ font-weight:500; }
 
-/* SECTION TITLE */
-.section-title{
-font-size:15px;
-font-weight:bold;
-margin-bottom:14px;
-opacity:.7;
-text-transform:uppercase;
-letter-spacing:.5px;
-}
-
-/* RELATIONS */
-.rel-list{
+/* RIGHT PANEL */
+.right-panel{
 display:flex;
 flex-direction:column;
-gap:8px;
+gap:16px;
 }
+
+.section-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+overflow:hidden;
+}
+
+.section-head{
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:14px 20px;
+border-bottom:1px solid var(--border);
+}
+
+.section-head-title{
+font-size:13px;
+font-weight:600;
+}
+
+.count-badge{
+font-size:11px;
+background:var(--border);
+color:var(--text-muted);
+padding:2px 8px;
+border-radius:20px;
+}
+
+.rel-list{ padding:8px 12px; }
 
 .rel-row{
 display:flex;
 align-items:center;
 justify-content:space-between;
-padding:12px 16px;
-border-radius:10px;
-border:1px solid var(--border);
-background:var(--bg);
+padding:10px 8px;
+border-radius:8px;
+font-size:13px;
+transition:.15s;
 }
 
-.rel-row:hover{
-border-color:var(--primary);
-}
+.rel-row:hover{ background:var(--primary-dim); }
 
 .rel-nodes{
 display:flex;
 align-items:center;
 gap:8px;
-font-size:14px;
 }
 
 .rel-nodes a{
@@ -120,140 +154,136 @@ text-decoration:none;
 font-weight:500;
 }
 
-.rel-nodes .me{
-color:var(--text);
-font-weight:600;
-}
+.rel-me{ font-weight:600; }
 
-.rel-arrow{
-opacity:.4;
-font-size:12px;
-}
+.rel-arrow{ color:var(--text-muted); font-size:11px; }
 
 .rel-type{
-font-size:12px;
+font-size:11px;
 background:var(--border);
 padding:3px 10px;
 border-radius:20px;
-opacity:.8;
+color:var(--text-muted);
 }
 
-/* INFO */
-.info-grid{
-display:flex;
-flex-wrap:wrap;
-gap:10px;
+.empty-section{
+padding:24px 20px;
+color:var(--text-muted);
+font-size:13px;
+text-align:center;
 }
 
-.info-card{
-background:var(--bg);
+.info-list{ padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
+
+.info-item{
+background:var(--surface);
 border:1px solid var(--border);
-border-radius:10px;
+border-radius:8px;
 padding:10px 14px;
 font-size:13px;
-}
-
-/* EMPTY */
-.empty{
-opacity:.4;
-font-size:14px;
-padding:8px 0;
 }
 
 </style>
 {% endblock %}
 
+
 {% block content %}
+<div class="layout">
 
-<!-- PROFILE -->
-<div class="card">
+  <!-- LEFT: PROFILE -->
+  <div class="profile-card">
 
-  <div class="profile">
-
-    {% if node.picture %}
-      <div class="avatar">
-        <img src="{{ node.picture.url }}" alt="{{ node.username }}">
-      </div>
-    {% else %}
-      <div class="avatar-placeholder">
-        {{ node.username|first|upper }}
-      </div>
-    {% endif %}
-
-    <div class="profile-info">
-
-      <div class="profile-name">{{ node.name|default:node.username }}</div>
-      <div class="profile-username">@{{ node.username }}</div>
-
-      <div class="meta">
-        {% if node.career %}
-          <span class="badge">💼 {{ node.career }}</span>
-        {% endif %}
-        {% if node.birth_day %}
-          <span class="badge">🎂 {{ node.birth_day }}</span>
-        {% endif %}
-        {% if node.phone_number %}
-          <span class="badge">📞 {{ node.phone_number }}</span>
-        {% endif %}
-      </div>
-
-      <div class="profile-actions">
-        <a href="{% url 'node_update' node.id %}" class="btn">ویرایش</a>
-        <a href="{% url 'node_delete' node.id %}" class="btn btn-danger">حذف</a>
-      </div>
-
+    <div class="avatar-wrap">
+      {% if node.picture %}
+        <div class="avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
+      {% else %}
+        <div class="avatar-ph">{{ node.username|first|upper }}</div>
+      {% endif %}
     </div>
+
+    <div class="profile-name">{{ node.name|default:node.username }}</div>
+    <div class="profile-username">@{{ node.username }}</div>
+
+    <div class="profile-fields">
+      {% if node.career %}
+      <div class="field-row">
+        <span class="field-key">شغل</span>
+        <span class="field-val">{{ node.career }}</span>
+      </div>
+      {% endif %}
+      {% if node.birth_day %}
+      <div class="field-row">
+        <span class="field-key">تولد</span>
+        <span class="field-val">{{ node.birth_day }}</span>
+      </div>
+      {% endif %}
+      {% if node.phone_number %}
+      <div class="field-row">
+        <span class="field-key">تلفن</span>
+        <span class="field-val" style="direction:ltr;">{{ node.phone_number }}</span>
+      </div>
+      {% endif %}
+      <div class="field-row">
+        <span class="field-key">روابط</span>
+        <span class="field-val">{{ relationships|length }}</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: RELATIONS + INFO -->
+  <div class="right-panel">
+
+    <!-- RELATIONS -->
+    <div class="section-card">
+      <div class="section-head">
+        <span class="section-head-title">روابط</span>
+        <span class="count-badge">{{ relationships|length }}</span>
+      </div>
+
+      {% if relationships %}
+        <div class="rel-list">
+          {% for r in relationships %}
+          <div class="rel-row">
+            <div class="rel-nodes">
+              {% if r.source == node %}
+                <span class="rel-me">{{ r.source.username }}</span>
+                <span class="rel-arrow">→</span>
+                <a href="{% url 'node_detail' r.target.id %}">{{ r.target.username }}</a>
+              {% else %}
+                <a href="{% url 'node_detail' r.source.id %}">{{ r.source.username }}</a>
+                <span class="rel-arrow">→</span>
+                <span class="rel-me">{{ r.target.username }}</span>
+              {% endif %}
+            </div>
+            <span class="rel-type">{{ r.rel|default:"—" }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-section">هیچ رابطه‌ای ثبت نشده</div>
+      {% endif %}
+    </div>
+
+    <!-- INFO -->
+    <div class="section-card">
+      <div class="section-head">
+        <span class="section-head-title">اطلاعات</span>
+        <span class="count-badge">{{ informations|length }}</span>
+      </div>
+
+      {% if informations %}
+        <div class="info-list">
+          {% for info in informations %}
+            <div class="info-item">{{ info.data }}</div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-section">اطلاعاتی ثبت نشده</div>
+      {% endif %}
+    </div>
+
   </div>
 
 </div>
-
-
-<!-- RELATIONS -->
-<div class="card">
-
-  <div class="section-title">روابط ({{ relationships|length }})</div>
-
-  {% if relationships %}
-    <div class="rel-list">
-      {% for r in relationships %}
-        <div class="rel-row">
-          <div class="rel-nodes">
-            {% if r.source == node %}
-              <span class="me">{{ r.source.username }}</span>
-              <span class="rel-arrow">←</span>
-              <a href="{% url 'node_detail' r.target.id %}">{{ r.target.username }}</a>
-            {% else %}
-              <a href="{% url 'node_detail' r.source.id %}">{{ r.source.username }}</a>
-              <span class="rel-arrow">←</span>
-              <span class="me">{{ r.target.username }}</span>
-            {% endif %}
-          </div>
-          <span class="rel-type">{{ r.rel|default:"—" }}</span>
-        </div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <div class="empty">هیچ رابطه‌ای ثبت نشده</div>
-  {% endif %}
-
-</div>
-
-
-<!-- INFO -->
-<div class="card">
-
-  <div class="section-title">اطلاعات ({{ informations|length }})</div>
-
-  {% if informations %}
-    <div class="info-grid">
-      {% for info in informations %}
-        <div class="info-card">{{ info.data }}</div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <div class="empty">اطلاعاتی ثبت نشده</div>
-  {% endif %}
-
-</div>
-
 {% endblock %}

@@ -1,149 +1,275 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
-
 <head>
 <meta charset="UTF-8">
-<title>{% block title %}GraphFamily{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}FamilyGraph{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
 
-*{
-box-sizing:border-box;
-margin:0;
-padding:0;
-}
-
-body{
-font-family:sans-serif;
-background:var(--bg);
-color:var(--text);
-min-height:100vh;
-}
-
-/* THEME */
+*{ box-sizing:border-box; margin:0; padding:0; }
 
 :root{
---bg:#0f172a;
---card:#1e293b;
+--bg:#09090f;
+--surface:#111118;
+--card:#16161f;
+--border:#1f1f2e;
+--border-light:#2a2a3e;
 --text:#e2e8f0;
---border:#334155;
+--text-muted:#64748b;
 --primary:#6366f1;
+--primary-dim:rgba(99,102,241,.12);
+--danger:#ef4444;
+--sidebar-w:220px;
 }
 
 .light{
 --bg:#f1f5f9;
---card:#ffffff;
+--surface:#ffffff;
+--card:#f8fafc;
+--border:#e2e8f0;
+--border-light:#cbd5e1;
 --text:#0f172a;
---border:#d1d5db;
+--text-muted:#64748b;
 --primary:#4f46e5;
+--primary-dim:rgba(79,70,229,.08);
 }
 
-/* NAVBAR */
-
-.navbar{
-height:60px;
+body{
+font-family:'Vazirmatn', sans-serif;
+background:var(--bg);
+color:var(--text);
+min-height:100vh;
 display:flex;
-align-items:center;
-justify-content:space-between;
-padding:0 30px;
-background:#0b132b;
-border-bottom:1px solid var(--border);
+font-size:14px;
+line-height:1.6;
+}
+
+/* ── SIDEBAR ── */
+
+.sidebar{
+width:var(--sidebar-w);
+min-height:100vh;
+background:var(--surface);
+border-left:1px solid var(--border);
+display:flex;
+flex-direction:column;
+position:fixed;
+right:0;
+top:0;
+z-index:100;
 }
 
 .logo{
-font-size:20px;
-font-weight:bold;
-color:#818cf8;
+padding:20px 20px 16px;
+border-bottom:1px solid var(--border);
 }
 
-.nav-links{
+.logo-text{
+font-size:16px;
+font-weight:700;
+color:var(--primary);
+letter-spacing:-.3px;
+}
+
+.logo-sub{
+font-size:11px;
+color:var(--text-muted);
+margin-top:2px;
+}
+
+.nav{
+padding:12px 10px;
+flex:1;
+}
+
+.nav-section{
+font-size:10px;
+font-weight:600;
+color:var(--text-muted);
+letter-spacing:.8px;
+text-transform:uppercase;
+padding:10px 10px 6px;
+}
+
+.nav-item{
 display:flex;
-gap:20px;
-}
-
-.nav-links a{
-color:#e2e8f0;
+align-items:center;
+gap:10px;
+padding:9px 10px;
+border-radius:8px;
 text-decoration:none;
-font-size:14px;
+color:var(--text-muted);
+font-size:13px;
+font-weight:500;
+transition:.15s;
+margin-bottom:2px;
 }
 
-.nav-links a:hover{
-color:#818cf8;
+.nav-item:hover{
+background:var(--primary-dim);
+color:var(--text);
 }
 
-/* THEME SWITCH */
-
-.switch{
-width:46px;
-height:24px;
-background:#444;
-border-radius:20px;
-position:relative;
-cursor:pointer;
+.nav-item.active{
+background:var(--primary-dim);
+color:var(--primary);
 }
 
-.switch::after{
-content:"";
+.nav-item .icon{
+font-size:15px;
 width:20px;
-height:20px;
-background:white;
-position:absolute;
-top:2px;
-left:2px;
-border-radius:50%;
-transition:.3s;
+text-align:center;
 }
 
-.light .switch::after{
-left:24px;
+.sidebar-footer{
+padding:12px 10px;
+border-top:1px solid var(--border);
 }
 
-/* MAIN CONTAINER */
+.theme-btn{
+display:flex;
+align-items:center;
+gap:8px;
+padding:8px 10px;
+border-radius:8px;
+border:none;
+background:none;
+color:var(--text-muted);
+font-family:'Vazirmatn', sans-serif;
+font-size:13px;
+cursor:pointer;
+width:100%;
+transition:.15s;
+}
 
-.main{
+.theme-btn:hover{
+background:var(--primary-dim);
+color:var(--text);
+}
+
+/* ── MAIN ── */
+
+.main-wrap{
+margin-right:var(--sidebar-w);
+flex:1;
+min-height:100vh;
+display:flex;
+flex-direction:column;
+}
+
+.topbar{
+height:56px;
+background:var(--surface);
+border-bottom:1px solid var(--border);
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:0 28px;
+position:sticky;
+top:0;
+z-index:50;
+}
+
+.page-title{
+font-size:15px;
+font-weight:600;
+}
+
+.topbar-actions{
+display:flex;
+gap:8px;
+}
+
+.content{
+padding:28px;
+flex:1;
 max-width:1100px;
-margin:40px auto;
-padding:20px;
 width:100%;
 }
 
-/* CARD */
+/* ── CARD ── */
 
 .card{
 background:var(--card);
 border:1px solid var(--border);
-border-radius:16px;
-padding:24px;
-margin-bottom:25px;
+border-radius:12px;
+padding:20px 24px;
+margin-bottom:20px;
+}
+
+.card-header{
+display:flex;
+align-items:center;
+justify-content:space-between;
+margin-bottom:16px;
 }
 
 .card-title{
-font-size:18px;
-font-weight:bold;
-margin-bottom:18px;
+font-size:14px;
+font-weight:600;
 }
 
-/* BUTTON */
+.card-count{
+font-size:12px;
+color:var(--text-muted);
+background:var(--border);
+padding:2px 8px;
+border-radius:20px;
+}
+
+/* ── BUTTON ── */
 
 .btn{
-padding:8px 14px;
+display:inline-flex;
+align-items:center;
+gap:6px;
+padding:7px 14px;
 border-radius:8px;
 border:1px solid var(--border);
-background:var(--card);
+background:var(--surface);
 color:var(--text);
 text-decoration:none;
 font-size:13px;
+font-family:'Vazirmatn', sans-serif;
+font-weight:500;
 cursor:pointer;
+transition:.15s;
 }
 
 .btn:hover{
 border-color:var(--primary);
+color:var(--primary);
+}
+
+.btn-primary{
+background:var(--primary);
+border-color:var(--primary);
+color:white;
+}
+
+.btn-primary:hover{
+opacity:.9;
+color:white;
 }
 
 .btn-danger{
-background:#ef4444;
-border:none;
+background:transparent;
+border-color:var(--danger);
+color:var(--danger);
+}
+
+.btn-danger:hover{
+background:var(--danger);
 color:white;
+}
+
+.btn-sm{
+padding:4px 10px;
+font-size:12px;
 }
 
 {% block extra_css %}{% endblock %}
@@ -153,39 +279,68 @@ color:white;
 
 <body>
 
-<div class="navbar">
+<!-- SIDEBAR -->
+<aside class="sidebar">
 
-<div class="logo">
-GraphFamily
-</div>
+  <div class="logo">
+    <div class="logo-text">FamilyGraph</div>
+    <div class="logo-sub">نقشه روابط شخصی</div>
+  </div>
 
-<div class="nav-links">
-<a href="/">خانه</a>
-<a href="/nodes/">نودها</a>
-<a href="/relationships/">روابط</a>
-<a href="/informations/">اطلاعات</a>
-</div>
+  <nav class="nav">
+    <div class="nav-section">منو</div>
 
-<div class="switch" onclick="toggleTheme()"></div>
+    <a href="/" class="nav-item {% block nav_home %}{% endblock %}">
+      <span class="icon">⬡</span> خانه
+    </a>
+    <a href="/nodes/" class="nav-item {% block nav_nodes %}{% endblock %}">
+      <span class="icon">◉</span> نودها
+    </a>
+    <a href="/relationships/" class="nav-item {% block nav_rels %}{% endblock %}">
+      <span class="icon">⟶</span> روابط
+    </a>
+    <a href="/informations/" class="nav-item {% block nav_info %}{% endblock %}">
+      <span class="icon">≡</span> اطلاعات
+    </a>
+  </nav>
 
-</div>
+  <div class="sidebar-footer">
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">☀</span>
+      <span id="theme-label">تم روشن</span>
+    </button>
+  </div>
 
-<div class="main">
-{% block content %}{% endblock %}
+</aside>
+
+<!-- MAIN -->
+<div class="main-wrap">
+
+  <div class="topbar">
+    <span class="page-title">{% block page_title %}{% endblock %}</span>
+    <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
+  </div>
+
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+
 </div>
 
 <script>
-
 function toggleTheme(){
-document.body.classList.toggle("light")
-localStorage.setItem("theme",
-document.body.classList.contains("light")?"light":"dark")
+  const isLight = document.body.classList.toggle("light")
+  localStorage.setItem("theme", isLight ? "light" : "dark")
+  document.getElementById("theme-icon").textContent = isLight ? "☾" : "☀"
+  document.getElementById("theme-label").textContent = isLight ? "تم تاریک" : "تم روشن"
 }
 
-if(localStorage.getItem("theme")==="light"){
-document.body.classList.add("light")
+const saved = localStorage.getItem("theme")
+if(saved === "light"){
+  document.body.classList.add("light")
+  document.getElementById("theme-icon").textContent = "☾"
+  document.getElementById("theme-label").textContent = "تم تاریک"
 }
-
 </script>
 
 </body>

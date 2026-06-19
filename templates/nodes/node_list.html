@@ -1,38 +1,58 @@
 {% extends "base.html" %}
 
-{% block title %}نودها{% endblock %}
+{% block title %}نودها — FamilyGraph{% endblock %}
+{% block page_title %}نودها{% endblock %}
+{% block nav_nodes %}active{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{% url 'node_create' %}" class="btn btn-primary">+ نود جدید</a>
+{% endblock %}
 
 {% block extra_css %}
 <style>
 
-.nodes-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
+.stats-row{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+gap:12px;
 margin-bottom:20px;
-flex-wrap:wrap;
+}
+
+.stat-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:10px;
+padding:14px 18px;
+}
+
+.stat-value{
+font-size:26px;
+font-weight:700;
+color:var(--primary);
+line-height:1;
+}
+
+.stat-label{
+font-size:12px;
+color:var(--text-muted);
+margin-top:4px;
+}
+
+.toolbar{
+display:flex;
 gap:10px;
-}
-
-.nodes-header h3{
-font-size:20px;
-font-weight:bold;
-}
-
-.nodes-count{
-font-size:13px;
-opacity:.6;
-margin-top:2px;
+margin-bottom:16px;
 }
 
 .search{
-padding:8px 12px;
+flex:1;
+padding:8px 14px;
 border-radius:8px;
 border:1px solid var(--border);
-background:var(--card);
+background:var(--surface);
 color:var(--text);
-width:220px;
-font-size:14px;
+font-family:'Vazirmatn',sans-serif;
+font-size:13px;
 }
 
 .search:focus{
@@ -40,104 +60,103 @@ outline:none;
 border-color:var(--primary);
 }
 
-/* GRID */
-
 .node-grid{
 display:grid;
-grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
-gap:16px;
+grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+gap:14px;
 }
 
-/* CARD */
-
 .node-card{
-background:var(--card);
+background:var(--surface);
 border:1px solid var(--border);
-border-radius:14px;
+border-radius:12px;
 padding:20px 16px;
 display:flex;
 flex-direction:column;
 align-items:center;
-gap:8px;
-transition:.2s;
+gap:10px;
 text-decoration:none;
 color:var(--text);
+transition:.2s;
+position:relative;
 }
 
 .node-card:hover{
-transform:translateY(-4px);
 border-color:var(--primary);
-box-shadow:0 4px 20px rgba(99,102,241,.15);
+transform:translateY(-3px);
+box-shadow:0 8px 24px rgba(99,102,241,.12);
 }
 
-/* AVATAR */
+.avatar-wrap{
+position:relative;
+}
 
 .avatar{
-width:72px;
-height:72px;
+width:68px;
+height:68px;
 border-radius:50%;
 overflow:hidden;
 border:2px solid var(--border);
 }
 
-.avatar img{
-width:100%;
-height:100%;
-object-fit:cover;
-}
+.avatar img{ width:100%; height:100%; object-fit:cover; }
 
-.avatar-placeholder{
-width:72px;
-height:72px;
+.avatar-ph{
+width:68px;
+height:68px;
 border-radius:50%;
-background:var(--primary);
+background:linear-gradient(135deg,var(--primary),#818cf8);
 display:flex;
 align-items:center;
 justify-content:center;
 color:white;
-font-weight:bold;
-font-size:24px;
+font-weight:700;
+font-size:22px;
 }
 
-/* TEXT */
-
 .node-username{
-font-size:15px;
-font-weight:bold;
+font-size:14px;
+font-weight:600;
 text-align:center;
 }
 
 .node-name{
 font-size:12px;
-opacity:.6;
+color:var(--text-muted);
 text-align:center;
 }
 
 .node-career{
-font-size:12px;
-background:var(--border);
-padding:2px 8px;
+font-size:11px;
+background:var(--primary-dim);
+color:var(--primary);
+padding:3px 10px;
 border-radius:20px;
-opacity:.8;
 }
-
-/* EMPTY STATE */
 
 .empty-state{
+grid-column:1/-1;
 text-align:center;
 padding:60px 20px;
-opacity:.5;
 }
 
-.empty-state .icon{
-font-size:48px;
-margin-bottom:12px;
-}
+.empty-icon{ font-size:40px; margin-bottom:12px; opacity:.3; }
 
-.empty-state p{
-font-size:15px;
+.empty-text{
+color:var(--text-muted);
+font-size:14px;
 margin-bottom:16px;
 }
+
+.pagination{
+display:flex;
+align-items:center;
+justify-content:center;
+gap:10px;
+margin-top:20px;
+}
+
+.page-info{ font-size:13px; color:var(--text-muted); }
 
 </style>
 {% endblock %}
@@ -145,48 +164,40 @@ margin-bottom:16px;
 
 {% block content %}
 
+<!-- STATS -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-value">{{ page_obj.paginator.count|default:nodes|length }}</div>
+    <div class="stat-label">کل نودها</div>
+  </div>
+</div>
+
+<!-- NODE LIST CARD -->
 <div class="card">
 
-  <div class="nodes-header">
-
-    <div>
-      <h3>نودها</h3>
-      <div class="nodes-count">{{ nodes|length }} نود</div>
-    </div>
-
-    <div style="display:flex; gap:10px; align-items:center;">
-
-      <input
-        class="search"
-        type="text"
-        placeholder="جستجو..."
-        onkeyup="filterNodes(this.value)"
-      >
-
-      <a href="{% url 'node_create' %}" class="btn">+ نود جدید</a>
-
-    </div>
-
+  <div class="toolbar">
+    <input
+      class="search"
+      type="text"
+      placeholder="جستجو با نام یا username..."
+      onkeyup="filterNodes(this.value)"
+    >
   </div>
-
 
   <div class="node-grid" id="nodeGrid">
 
     {% for node in nodes %}
-
     <a class="node-card"
        href="{% url 'node_detail' node.id %}"
        data-search="{{ node.username|lower }} {{ node.name|lower }}">
 
-      {% if node.picture %}
-        <div class="avatar">
-          <img src="{{ node.picture.url }}" alt="{{ node.username }}">
-        </div>
-      {% else %}
-        <div class="avatar-placeholder">
-          {{ node.username|first|upper }}
-        </div>
-      {% endif %}
+      <div class="avatar-wrap">
+        {% if node.picture %}
+          <div class="avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
+        {% else %}
+          <div class="avatar-ph">{{ node.username|first|upper }}</div>
+        {% endif %}
+      </div>
 
       <div class="node-username">{{ node.username }}</div>
 
@@ -199,47 +210,35 @@ margin-bottom:16px;
       {% endif %}
 
     </a>
-
     {% empty %}
-
-    <div class="empty-state" style="grid-column:1/-1;">
-      <div class="icon">🫥</div>
-      <p>هنوز هیچ نودی وجود ندارد</p>
-      <a href="{% url 'node_create' %}" class="btn">اولین نود رو اضافه کن</a>
+    <div class="empty-state">
+      <div class="empty-icon">◎</div>
+      <div class="empty-text">هنوز هیچ نودی ثبت نشده</div>
+      <a href="{% url 'node_create' %}" class="btn btn-primary">+ اولین نود رو اضافه کن</a>
     </div>
-
     {% endfor %}
 
   </div>
 
 </div>
 
-
 {% if is_paginated %}
-<div style="margin-top:20px; text-align:center; display:flex; gap:10px; justify-content:center; align-items:center;">
-
+<div class="pagination">
   {% if page_obj.has_previous %}
-    <a class="btn" href="?page={{ page_obj.previous_page_number }}">قبلی</a>
+    <a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}">قبلی</a>
   {% endif %}
-
-  <span style="font-size:13px; opacity:.6;">
-    صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}
-  </span>
-
+  <span class="page-info">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
   {% if page_obj.has_next %}
-    <a class="btn" href="?page={{ page_obj.next_page_number }}">بعدی</a>
+    <a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">بعدی</a>
   {% endif %}
-
 </div>
 {% endif %}
 
-
 <script>
-function filterNodes(q) {
+function filterNodes(q){
   q = q.toLowerCase().trim()
-  document.querySelectorAll(".node-card").forEach(card => {
-    const s = card.dataset.search || ""
-    card.style.display = s.includes(q) ? "flex" : "none"
+  document.querySelectorAll(".node-card").forEach(c=>{
+    c.style.display = (c.dataset.search||"").includes(q) ? "flex" : "none"
   })
 }
 </script>
