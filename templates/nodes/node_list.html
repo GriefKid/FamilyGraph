@@ -1,68 +1,85 @@
 {% extends "base.html" %}
-
 {% block title %}نودها — FamilyGraph{% endblock %}
 {% block page_title %}نودها{% endblock %}
 {% block nav_nodes %}active{% endblock %}
-
-{% block topbar_actions %}
-  <a href="{% url 'node_create' %}" class="btn btn-primary">+ نود جدید</a>
-{% endblock %}
+{% block topbar_actions %}<a href="{% url 'node_create' %}" class="btn btn-primary">+ نود جدید</a>{% endblock %}
 
 {% block extra_css %}
 <style>
 
-.stats-row{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
-gap:12px;
-margin-bottom:20px;
+.stat-row{
+display:flex;
+gap:14px;
+margin-bottom:22px;
 }
 
-.stat-card{
+.stat{
 background:var(--card);
 border:1px solid var(--border);
-border-radius:10px;
-padding:14px 18px;
+border-radius:var(--radius);
+padding:16px 20px;
+min-width:130px;
 }
 
-.stat-value{
-font-size:26px;
+.stat-n{
+font-size:28px;
 font-weight:700;
 color:var(--primary);
 line-height:1;
 }
 
-.stat-label{
-font-size:12px;
+.stat-l{
+font-size:11px;
 color:var(--text-muted);
 margin-top:4px;
+text-transform:uppercase;
+letter-spacing:.5px;
 }
 
 .toolbar{
 display:flex;
 gap:10px;
-margin-bottom:16px;
+margin-bottom:18px;
+align-items:center;
+}
+
+.search-wrap{
+flex:1;
+position:relative;
+}
+
+.search-icon{
+position:absolute;
+right:12px;
+top:50%;
+transform:translateY(-50%);
+color:var(--text-muted);
+pointer-events:none;
+font-size:14px;
 }
 
 .search{
-flex:1;
-padding:8px 14px;
-border-radius:8px;
+width:100%;
+padding:9px 36px 9px 14px;
+border-radius:var(--radius);
 border:1px solid var(--border);
-background:var(--surface);
+background:var(--card);
 color:var(--text);
 font-family:'Vazirmatn',sans-serif;
 font-size:13px;
+transition:var(--transition);
 }
 
 .search:focus{
 outline:none;
-border-color:var(--primary);
+border-color:var(--primary-border);
+box-shadow:0 0 0 3px var(--primary-glow);
 }
 
+/* GRID */
 .node-grid{
 display:grid;
-grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+grid-template-columns:repeat(auto-fill,minmax(185px,1fr));
 gap:14px;
 }
 
@@ -70,25 +87,52 @@ gap:14px;
 background:var(--surface);
 border:1px solid var(--border);
 border-radius:12px;
-padding:20px 16px;
+padding:22px 16px 18px;
 display:flex;
 flex-direction:column;
 align-items:center;
-gap:10px;
+gap:8px;
 text-decoration:none;
 color:var(--text);
-transition:.2s;
-position:relative;
+transition:var(--transition);
+cursor:pointer;
 }
 
 .node-card:hover{
-border-color:var(--primary);
+border-color:var(--primary-border);
+background:var(--card);
 transform:translateY(-3px);
-box-shadow:0 8px 24px rgba(99,102,241,.12);
+box-shadow:0 8px 28px rgba(99,102,241,.12);
 }
 
-.avatar-wrap{
-position:relative;
+.avatar-ring{
+padding:3px;
+border-radius:50%;
+background:linear-gradient(135deg,var(--border),var(--border));
+transition:var(--transition);
+}
+
+.node-card:hover .avatar-ring{
+background:linear-gradient(135deg,#6366f1,#8b5cf6);
+}
+
+.avatar-ph{
+width:68px;
+height:68px;
+border-radius:50%;
+background:linear-gradient(135deg,#1e1e38,#2a2a4a);
+display:flex;
+align-items:center;
+justify-content:center;
+color:var(--primary);
+font-weight:700;
+font-size:22px;
+transition:var(--transition);
+}
+
+.node-card:hover .avatar-ph{
+background:linear-gradient(135deg,#6366f1,#8b5cf6);
+color:#fff;
 }
 
 .avatar{
@@ -96,28 +140,15 @@ width:68px;
 height:68px;
 border-radius:50%;
 overflow:hidden;
-border:2px solid var(--border);
 }
 
 .avatar img{ width:100%; height:100%; object-fit:cover; }
 
-.avatar-ph{
-width:68px;
-height:68px;
-border-radius:50%;
-background:linear-gradient(135deg,var(--primary),#818cf8);
-display:flex;
-align-items:center;
-justify-content:center;
-color:white;
-font-weight:700;
-font-size:22px;
-}
-
 .node-username{
-font-size:14px;
+font-size:13px;
 font-weight:600;
 text-align:center;
+margin-top:4px;
 }
 
 .node-name{
@@ -128,70 +159,81 @@ text-align:center;
 
 .node-career{
 font-size:11px;
-background:var(--primary-dim);
+background:var(--primary-glow);
 color:var(--primary);
 padding:3px 10px;
 border-radius:20px;
+border:1px solid var(--primary-border);
 }
 
+/* EMPTY */
 .empty-state{
 grid-column:1/-1;
 text-align:center;
-padding:60px 20px;
+padding:80px 20px;
 }
 
-.empty-icon{ font-size:40px; margin-bottom:12px; opacity:.3; }
+.empty-icon{
+font-size:36px;
+opacity:.2;
+margin-bottom:14px;
+}
 
 .empty-text{
 color:var(--text-muted);
 font-size:14px;
-margin-bottom:16px;
+margin-bottom:20px;
 }
 
+/* PAGINATION */
 .pagination{
 display:flex;
 align-items:center;
 justify-content:center;
 gap:10px;
-margin-top:20px;
+margin-top:22px;
 }
 
-.page-info{ font-size:13px; color:var(--text-muted); }
+.page-info{ font-size:12px; color:var(--text-muted); }
+
+/* FADE IN */
+@keyframes fadeUp{
+from{ opacity:0; transform:translateY(8px); }
+to  { opacity:1; transform:translateY(0);   }
+}
+
+.node-card{ animation:fadeUp .25s ease both; }
+{% for i in "12345678901234567890123456" %}
+.node-card:nth-child({{ forloop.counter }}){ animation-delay:{{ forloop.counter0 }}0ms; }
+{% endfor %}
 
 </style>
 {% endblock %}
 
-
 {% block content %}
 
-<!-- STATS -->
-<div class="stats-row">
-  <div class="stat-card">
-    <div class="stat-value">{{ page_obj.paginator.count|default:nodes|length }}</div>
-    <div class="stat-label">کل نودها</div>
+<div class="stat-row">
+  <div class="stat">
+    <div class="stat-n">{{ page_obj.paginator.count|default:nodes|length }}</div>
+    <div class="stat-l">کل نودها</div>
   </div>
 </div>
 
-<!-- NODE LIST CARD -->
 <div class="card">
-
   <div class="toolbar">
-    <input
-      class="search"
-      type="text"
-      placeholder="جستجو با نام یا username..."
-      onkeyup="filterNodes(this.value)"
-    >
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search" type="text" placeholder="جستجو با نام یا username..." onkeyup="filterNodes(this.value)">
+    </div>
   </div>
 
   <div class="node-grid" id="nodeGrid">
-
     {% for node in nodes %}
     <a class="node-card"
        href="{% url 'node_detail' node.id %}"
        data-search="{{ node.username|lower }} {{ node.name|lower }}">
 
-      <div class="avatar-wrap">
+      <div class="avatar-ring">
         {% if node.picture %}
           <div class="avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
         {% else %}
@@ -200,14 +242,8 @@ margin-top:20px;
       </div>
 
       <div class="node-username">{{ node.username }}</div>
-
-      {% if node.name %}
-        <div class="node-name">{{ node.name }}</div>
-      {% endif %}
-
-      {% if node.career %}
-        <div class="node-career">{{ node.career }}</div>
-      {% endif %}
+      {% if node.name %}<div class="node-name">{{ node.name }}</div>{% endif %}
+      {% if node.career %}<div class="node-career">{{ node.career }}</div>{% endif %}
 
     </a>
     {% empty %}
@@ -217,20 +253,14 @@ margin-top:20px;
       <a href="{% url 'node_create' %}" class="btn btn-primary">+ اولین نود رو اضافه کن</a>
     </div>
     {% endfor %}
-
   </div>
-
 </div>
 
 {% if is_paginated %}
 <div class="pagination">
-  {% if page_obj.has_previous %}
-    <a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}">قبلی</a>
-  {% endif %}
-  <span class="page-info">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-  {% if page_obj.has_next %}
-    <a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">بعدی</a>
-  {% endif %}
+  {% if page_obj.has_previous %}<a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
+  <span class="page-info">{{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
 </div>
 {% endif %}
 
@@ -238,9 +268,8 @@ margin-top:20px;
 function filterNodes(q){
   q = q.toLowerCase().trim()
   document.querySelectorAll(".node-card").forEach(c=>{
-    c.style.display = (c.dataset.search||"").includes(q) ? "flex" : "none"
+    c.style.display=(c.dataset.search||"").includes(q)?"flex":"none"
   })
 }
 </script>
-
 {% endblock %}

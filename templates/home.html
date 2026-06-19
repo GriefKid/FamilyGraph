@@ -1,169 +1,188 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Graph</title>
+{% extends "base.html" %}
+{% block title %}گراف — FamilyGraph{% endblock %}
+{% block page_title %}گراف روابط{% endblock %}
+{% block nav_home %}active{% endblock %}
 
+{% block extra_css %}
 <style>
+.content{ padding:0 !important; }
 
-body{
-margin:0;
-background:#0b1020;
-font-family:system-ui;
-color:white;
+#graph-wrap{
+width:100%;
+height:calc(100vh - 54px);
+position:relative;
 overflow:hidden;
 }
 
-#graph{
-width:100vw;
-height:100vh;
-}
+#graph{ width:100%; height:100%; }
 
-.node{
-fill:#3b82f6;
-stroke:#1e40af;
-stroke-width:2;
-transition:0.2s;
+.node-circle{
+fill:#1e1e38;
+stroke:#6366f1;
+stroke-width:1.5;
 cursor:pointer;
+transition:.2s;
 }
 
-.node:hover{
-fill:#60a5fa;
-}
-
-.edge{
-stroke:#94a3b8;
+.node-circle:hover{
+fill:#6366f1;
+stroke:#818cf8;
 stroke-width:2;
 }
 
-.text{
-fill:white;
-font-size:14px;
+.node-label{
+fill:#e8eaf6;
+font-family:'Vazirmatn',sans-serif;
+font-size:12px;
 text-anchor:middle;
 pointer-events:none;
 user-select:none;
 }
 
+.edge-line{
+stroke:#1c1c30;
+stroke-width:1.5;
+}
+
+.edge-label{
+fill:#4a4a72;
+font-family:'Vazirmatn',sans-serif;
+font-size:10px;
+text-anchor:middle;
+pointer-events:none;
+}
+
+.graph-info{
+position:absolute;
+bottom:20px;
+right:20px;
+background:rgba(13,13,26,.85);
+border:1px solid #1c1c30;
+border-radius:10px;
+padding:10px 16px;
+font-size:12px;
+color:#4a4a72;
+backdrop-filter:blur(8px);
+}
+
+.graph-info span{ color:#6366f1; font-weight:600; }
 </style>
-</head>
+{% endblock %}
 
-<body>
-
-<svg id="graph" viewBox="0 0 1200 800"></svg>
+{% block content %}
+<div id="graph-wrap">
+  <svg id="graph"></svg>
+  <div class="graph-info">
+    نودها: <span id="nodeCount">—</span> &nbsp;|&nbsp; روابط: <span id="edgeCount">—</span>
+  </div>
+</div>
 
 <script>
-
 const svg = document.getElementById("graph")
 
 async function load(){
+  const res  = await fetch("/api/graph/all/")
+  const data = await res.json()
 
-const res = await fetch("/api/home/graph/")
-const json = await res.json()
+  const W = svg.clientWidth  || window.innerWidth  - 230
+  const H = svg.clientHeight || window.innerHeight - 54
 
-const nodes = json.nodes.map(n=>({
-id:n.data.id,
-label:n.data.label,
-children:[]
-}))
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`)
 
-const edges = json.edges.map(e=>({
-source:e.data.source,
-target:e.data.target
-}))
+  const nodes = data.nodes.map(n=>({
+    id:n.id, label:n.username,
+    x: 60 + Math.random()*(W-120),
+    y: 60 + Math.random()*(H-120),
+    vx:0, vy:0
+  }))
 
-const map = {}
-nodes.forEach(n=>map[n.id]=n)
+  const edges = data.edges
+  const map   = {}
+  nodes.forEach(n=>map[n.id]=n)
 
-edges.forEach(e=>{
-if(map[e.source] && map[e.target]){
-map[e.source].children.push(map[e.target])
+  document.getElementById("nodeCount").textContent = nodes.length
+  document.getElementById("edgeCount").textContent = edges.length
+
+  // force simulation (simple)
+  for(let iter=0; iter<120; iter++){
+    // repulsion
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const a=nodes[i], b=nodes[j]
+        const dx=b.x-a.x, dy=b.y-a.y
+        const dist=Math.max(Math.sqrt(dx*dx+dy*dy),1)
+        const f=3000/(dist*dist)
+        a.vx-=f*dx/dist; a.vy-=f*dy/dist
+        b.vx+=f*dx/dist; b.vy+=f*dy/dist
+      }
+    }
+    // attraction
+    edges.forEach(e=>{
+      const a=map[e.source], b=map[e.target]
+      if(!a||!b) return
+      const dx=b.x-a.x, dy=b.y-a.y
+      const dist=Math.max(Math.sqrt(dx*dx+dy*dy),1)
+      const f=(dist-160)*.04
+      a.vx+=f*dx/dist; a.vy+=f*dy/dist
+      b.vx-=f*dx/dist; b.vy-=f*dy/dist
+    })
+    // center gravity + damping
+    nodes.forEach(n=>{
+      n.vx+=(W/2-n.x)*.004
+      n.vy+=(H/2-n.y)*.004
+      n.vx*=.8; n.vy*=.8
+      n.x+=n.vx; n.y+=n.vy
+      n.x=Math.max(50,Math.min(W-50,n.x))
+      n.y=Math.max(40,Math.min(H-40,n.y))
+    })
+  }
+
+  svg.innerHTML=""
+
+  // edges
+  edges.forEach(e=>{
+    const a=map[e.source], b=map[e.target]
+    if(!a||!b) return
+    const line=ns("line")
+    line.setAttribute("x1",a.x); line.setAttribute("y1",a.y)
+    line.setAttribute("x2",b.x); line.setAttribute("y2",b.y)
+    line.setAttribute("class","edge-line")
+    svg.appendChild(line)
+
+    if(e.label){
+      const t=ns("text")
+      t.setAttribute("x",(a.x+b.x)/2)
+      t.setAttribute("y",(a.y+b.y)/2-4)
+      t.setAttribute("class","edge-label")
+      t.textContent=e.label
+      svg.appendChild(t)
+    }
+  })
+
+  // nodes
+  nodes.forEach(n=>{
+    const g=ns("g")
+    g.style.cursor="pointer"
+    g.addEventListener("click",()=>{ window.location.href="/nodes/"+n.id+"/" })
+
+    const c=ns("circle")
+    c.setAttribute("cx",n.x); c.setAttribute("cy",n.y)
+    c.setAttribute("r",32)
+    c.setAttribute("class","node-circle")
+    g.appendChild(c)
+
+    const t=ns("text")
+    t.setAttribute("x",n.x); t.setAttribute("y",n.y+5)
+    t.setAttribute("class","node-label")
+    t.textContent=n.label.length>10 ? n.label.slice(0,9)+"…" : n.label
+    g.appendChild(t)
+
+    svg.appendChild(g)
+  })
 }
-})
 
-const childIds = new Set(edges.map(e=>e.target))
-const root = nodes.find(n=>!childIds.has(n.id)) || nodes[0]
-
-layoutTree(root,600,120,400)
-
-draw(nodes,edges)
-
-}
-
-function layoutTree(node,x,y,width){
-
-node.x = x
-node.y = y
-
-if(!node.children.length) return
-
-const step = width / node.children.length
-let start = x - width/2 + step/2
-
-node.children.forEach(child=>{
-layoutTree(child,start,y+180,width/2)
-start += step
-})
-
-}
-
-function draw(nodes,edges){
-
-edges.forEach(e=>{
-
-const a = nodes.find(n=>n.id==e.source)
-const b = nodes.find(n=>n.id==e.target)
-
-if(!a || !b) return
-
-const line = document.createElementNS("http://www.w3.org/2000/svg","line")
-
-line.setAttribute("x1",a.x)
-line.setAttribute("y1",a.y)
-
-line.setAttribute("x2",b.x)
-line.setAttribute("y2",b.y)
-
-line.setAttribute("class","edge")
-
-svg.appendChild(line)
-
-})
-
-nodes.forEach(n=>{
-
-const circle = document.createElementNS("http://www.w3.org/2000/svg","circle")
-
-circle.setAttribute("cx",n.x)
-circle.setAttribute("cy",n.y)
-circle.setAttribute("r",40)
-
-circle.setAttribute("class","node")
-
-circle.addEventListener("click",()=>{
-window.location.href = "/nodes/" + n.id + "/"
-})
-
-svg.appendChild(circle)
-
-
-const text = document.createElementNS("http://www.w3.org/2000/svg","text")
-
-text.setAttribute("x",n.x)
-text.setAttribute("y",n.y+5)
-
-text.setAttribute("class","text")
-
-text.textContent = n.label
-
-svg.appendChild(text)
-
-})
-
-}
+function ns(tag){ return document.createElementNS("http://www.w3.org/2000/svg",tag) }
 
 load()
-
 </script>
-
-</body>
-</html>
+{% endblock %}

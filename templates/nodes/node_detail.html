@@ -1,11 +1,9 @@
 {% extends "base.html" %}
-
 {% block title %}{{ node.username }} — FamilyGraph{% endblock %}
-{% block page_title %}پروفایل نود{% endblock %}
+{% block page_title %}پروفایل{% endblock %}
 {% block nav_nodes %}active{% endblock %}
-
 {% block topbar_actions %}
-  <a href="{% url 'node_list' %}" class="btn btn-sm">← بازگشت</a>
+  <a href="{% url 'node_list' %}" class="btn btn-sm">← نودها</a>
   <a href="{% url 'node_update' node.id %}" class="btn btn-sm">ویرایش</a>
   <a href="{% url 'node_delete' node.id %}" class="btn btn-sm btn-danger">حذف</a>
 {% endblock %}
@@ -15,72 +13,91 @@
 
 .layout{
 display:grid;
-grid-template-columns:280px 1fr;
+grid-template-columns:260px 1fr;
 gap:20px;
 align-items:start;
 }
 
-@media(max-width:700px){
-  .layout{ grid-template-columns:1fr; }
-}
+@media(max-width:720px){ .layout{ grid-template-columns:1fr; } }
 
-/* LEFT PANEL */
+/* ─── PROFILE CARD ─── */
 .profile-card{
 background:var(--card);
 border:1px solid var(--border);
 border-radius:12px;
-padding:24px 20px;
+overflow:hidden;
+}
+
+.profile-banner{
+height:80px;
+background:linear-gradient(135deg,#1a1a3e 0%,#0f0f25 50%,#1a1440 100%);
+position:relative;
+}
+
+.light .profile-banner{
+background:linear-gradient(135deg,#e0e0ff 0%,#f0f0ff 50%,#e8e0ff 100%);
+}
+
+.profile-body{
+padding:0 20px 22px;
 text-align:center;
 }
 
 .avatar-wrap{
-margin-bottom:16px;
+margin-top:-36px;
+margin-bottom:12px;
+}
+
+.avatar-ring{
+display:inline-block;
+padding:3px;
+border-radius:50%;
+background:linear-gradient(135deg,#6366f1,#8b5cf6);
+box-shadow:0 0 20px rgba(99,102,241,.35);
 }
 
 .avatar{
-width:88px;
-height:88px;
+width:72px;
+height:72px;
 border-radius:50%;
 overflow:hidden;
-border:3px solid var(--primary);
-margin:0 auto;
+display:block;
 }
 
 .avatar img{ width:100%; height:100%; object-fit:cover; }
 
 .avatar-ph{
-width:88px;
-height:88px;
+width:72px;
+height:72px;
 border-radius:50%;
-background:linear-gradient(135deg,var(--primary),#818cf8);
+background:linear-gradient(135deg,#6366f1,#8b5cf6);
 display:flex;
 align-items:center;
 justify-content:center;
-color:white;
+color:#fff;
 font-weight:700;
-font-size:30px;
-margin:0 auto;
+font-size:26px;
 }
 
 .profile-name{
-font-size:18px;
+font-size:17px;
 font-weight:700;
-margin-bottom:4px;
+margin-bottom:3px;
 }
 
 .profile-username{
-font-size:13px;
+font-size:12px;
 color:var(--text-muted);
 margin-bottom:16px;
 }
 
 .profile-fields{
-text-align:right;
 border-top:1px solid var(--border);
 padding-top:16px;
 display:flex;
 flex-direction:column;
-gap:10px;
+gap:11px;
+text-align:right;
 }
 
 .field-row{
@@ -90,15 +107,21 @@ align-items:center;
 font-size:13px;
 }
 
-.field-key{ color:var(--text-muted); }
+.field-key{ color:var(--text-muted); font-size:12px; }
 .field-val{ font-weight:500; }
 
-/* RIGHT PANEL */
-.right-panel{
-display:flex;
-flex-direction:column;
-gap:16px;
+.badge-count{
+background:var(--primary-glow);
+color:var(--primary);
+border:1px solid var(--primary-border);
+padding:2px 9px;
+border-radius:20px;
+font-size:12px;
+font-weight:600;
 }
+
+/* ─── RIGHT PANEL ─── */
+.right-panel{ display:flex; flex-direction:column; gap:16px; }
 
 .section-card{
 background:var(--card);
@@ -113,6 +136,7 @@ align-items:center;
 justify-content:space-between;
 padding:14px 20px;
 border-bottom:1px solid var(--border);
+background:var(--surface);
 }
 
 .section-head-title{
@@ -120,32 +144,33 @@ font-size:13px;
 font-weight:600;
 }
 
-.count-badge{
+.chip{
 font-size:11px;
 background:var(--border);
 color:var(--text-muted);
-padding:2px 8px;
+padding:2px 9px;
 border-radius:20px;
 }
 
-.rel-list{ padding:8px 12px; }
+/* RELATIONS */
+.rel-list{ padding:6px 12px; }
 
 .rel-row{
 display:flex;
 align-items:center;
 justify-content:space-between;
-padding:10px 8px;
+padding:10px 10px;
 border-radius:8px;
-font-size:13px;
-transition:.15s;
+transition:var(--transition);
 }
 
-.rel-row:hover{ background:var(--primary-dim); }
+.rel-row:hover{ background:var(--primary-glow); }
 
 .rel-nodes{
 display:flex;
 align-items:center;
 gap:8px;
+font-size:13px;
 }
 
 .rel-nodes a{
@@ -154,26 +179,26 @@ text-decoration:none;
 font-weight:500;
 }
 
+.rel-nodes a:hover{ text-decoration:underline; }
+
 .rel-me{ font-weight:600; }
+.rel-arrow{ color:var(--text-muted); font-size:10px; }
 
-.rel-arrow{ color:var(--text-muted); font-size:11px; }
-
-.rel-type{
+.rel-badge{
 font-size:11px;
 background:var(--border);
+color:var(--text-muted);
 padding:3px 10px;
 border-radius:20px;
-color:var(--text-muted);
 }
 
-.empty-section{
-padding:24px 20px;
-color:var(--text-muted);
-font-size:13px;
-text-align:center;
+/* INFO */
+.info-list{
+padding:14px 16px;
+display:flex;
+flex-direction:column;
+gap:8px;
 }
-
-.info-list{ padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
 
 .info-item{
 background:var(--surface);
@@ -181,66 +206,77 @@ border:1px solid var(--border);
 border-radius:8px;
 padding:10px 14px;
 font-size:13px;
+color:var(--text-soft);
+}
+
+.empty-sec{
+padding:28px 20px;
+text-align:center;
+color:var(--text-muted);
+font-size:13px;
 }
 
 </style>
 {% endblock %}
 
-
 {% block content %}
 <div class="layout">
 
-  <!-- LEFT: PROFILE -->
+  <!-- LEFT -->
   <div class="profile-card">
+    <div class="profile-banner"></div>
+    <div class="profile-body">
+      <div class="avatar-wrap">
+        <div class="avatar-ring">
+          {% if node.picture %}
+            <a class="avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></a>
+          {% else %}
+            <div class="avatar-ph">{{ node.username|first|upper }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="profile-name">{{ node.name|default:node.username }}</div>
+      <div class="profile-username">@{{ node.username }}</div>
 
-    <div class="avatar-wrap">
-      {% if node.picture %}
-        <div class="avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
-      {% else %}
-        <div class="avatar-ph">{{ node.username|first|upper }}</div>
-      {% endif %}
+      <div class="profile-fields">
+        {% if node.career %}
+        <div class="field-row">
+          <span class="field-key">شغل</span>
+          <span class="field-val">{{ node.career }}</span>
+        </div>
+        {% endif %}
+        {% if node.birth_day %}
+        <div class="field-row">
+          <span class="field-key">تولد</span>
+          <span class="field-val">{{ node.birth_day }}</span>
+        </div>
+        {% endif %}
+        {% if node.phone_number %}
+        <div class="field-row">
+          <span class="field-key">تلفن</span>
+          <span class="field-val" style="direction:ltr;">{{ node.phone_number }}</span>
+        </div>
+        {% endif %}
+        <div class="field-row">
+          <span class="field-key">روابط</span>
+          <span class="badge-count">{{ relationships|length }}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-key">اطلاعات</span>
+          <span class="badge-count">{{ informations|length }}</span>
+        </div>
+      </div>
     </div>
-
-    <div class="profile-name">{{ node.name|default:node.username }}</div>
-    <div class="profile-username">@{{ node.username }}</div>
-
-    <div class="profile-fields">
-      {% if node.career %}
-      <div class="field-row">
-        <span class="field-key">شغل</span>
-        <span class="field-val">{{ node.career }}</span>
-      </div>
-      {% endif %}
-      {% if node.birth_day %}
-      <div class="field-row">
-        <span class="field-key">تولد</span>
-        <span class="field-val">{{ node.birth_day }}</span>
-      </div>
-      {% endif %}
-      {% if node.phone_number %}
-      <div class="field-row">
-        <span class="field-key">تلفن</span>
-        <span class="field-val" style="direction:ltr;">{{ node.phone_number }}</span>
-      </div>
-      {% endif %}
-      <div class="field-row">
-        <span class="field-key">روابط</span>
-        <span class="field-val">{{ relationships|length }}</span>
-      </div>
-    </div>
-
   </div>
 
-  <!-- RIGHT: RELATIONS + INFO -->
+  <!-- RIGHT -->
   <div class="right-panel">
 
-    <!-- RELATIONS -->
     <div class="section-card">
       <div class="section-head">
         <span class="section-head-title">روابط</span>
-        <span class="count-badge">{{ relationships|length }}</span>
+        <span class="chip">{{ relationships|length }}</span>
       </div>
-
       {% if relationships %}
         <div class="rel-list">
           {% for r in relationships %}
@@ -256,22 +292,20 @@ font-size:13px;
                 <span class="rel-me">{{ r.target.username }}</span>
               {% endif %}
             </div>
-            <span class="rel-type">{{ r.rel|default:"—" }}</span>
+            <span class="rel-badge">{{ r.rel|default:"—" }}</span>
           </div>
           {% endfor %}
         </div>
       {% else %}
-        <div class="empty-section">هیچ رابطه‌ای ثبت نشده</div>
+        <div class="empty-sec">هیچ رابطه‌ای ثبت نشده</div>
       {% endif %}
     </div>
 
-    <!-- INFO -->
     <div class="section-card">
       <div class="section-head">
         <span class="section-head-title">اطلاعات</span>
-        <span class="count-badge">{{ informations|length }}</span>
+        <span class="chip">{{ informations|length }}</span>
       </div>
-
       {% if informations %}
         <div class="info-list">
           {% for info in informations %}
@@ -279,7 +313,7 @@ font-size:13px;
           {% endfor %}
         </div>
       {% else %}
-        <div class="empty-section">اطلاعاتی ثبت نشده</div>
+        <div class="empty-sec">اطلاعاتی ثبت نشده</div>
       {% endif %}
     </div>
 
