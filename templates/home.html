@@ -349,57 +349,62 @@ const nodes = data.nodes.map(n => ({ ...n, id: String(n.id) }))
 const links = data.edges.map(e => ({
   source: String(e.source),
   target: String(e.target),
-  label:  e.label || ""
+  label:  e.label || "سایر"
 }))
 
 document.getElementById("nodeCount").textContent = nodes.length
 document.getElementById("edgeCount").textContent = links.length
 
-/* ── rel types & colours ── */
-const relTypes = [...new Set(links.map(l => l.label || "—"))].sort()
+/* ── rel types & colours (index-based IDs, no btoa) ── */
+const relTypes = [...new Set(links.map(l => l.label))].sort()
 const relColor = {}
-relTypes.forEach((r, i) => relColor[r] = PALETTE[i % PALETTE.length])
+const relIdx   = {}   // rel → numeric index for safe marker id
+relTypes.forEach((r, i) => {
+  relColor[r] = PALETTE[i % PALETTE.length]
+  relIdx[r]   = i
+})
 
-/* map node → dominant rel colour */
-function nodeColor(d) {
+/* safe marker id */
+const mId = rel => "arr" + relIdx[rel]
+
+/* node dominant colour */
+function dominantRel(d) {
   const myLinks = links.filter(l =>
     (l.source.id || l.source) === d.id ||
     (l.target.id || l.target) === d.id
   )
-  if (!myLinks.length) return "#1e1e38"
-  // pick most frequent rel type
+  if (!myLinks.length) return null
   const freq = {}
-  myLinks.forEach(l => { const r = l.label||"—"; freq[r]=(freq[r]||0)+1 })
-  const top = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0]
-  return relColor[top] + "28"   // very transparent fill
+  myLinks.forEach(l => { freq[l.label] = (freq[l.label]||0) + 1 })
+  return Object.entries(freq).sort((a,b) => b[1]-a[1])[0][0]
+}
+
+function nodeColor(d) {
+  const r = dominantRel(d)
+  return r ? relColor[r] + "30" : "#1e1e38"
 }
 
 function nodeStroke(d) {
-  const myLinks = links.filter(l =>
-    (l.source.id || l.source) === d.id ||
-    (l.target.id || l.target) === d.id
-  )
-  if (!myLinks.length) return "#3a3a5c"
-  const freq = {}
-  myLinks.forEach(l => { const r = l.label||"—"; freq[r]=(freq[r]||0)+1 })
-  const top = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0]
-  return relColor[top]
+  const r = dominantRel(d)
+  return r ? relColor[r] : "#3a3a5c"
 }
 
 /* ── build filter UI ── */
-const activeRels = new Set(relTypes) // all active by default
+const activeRels = new Set(relTypes)
+const chkMap = {}   // rel → checkbox element (safe key by index)
 
-relTypes.forEach(rel => {
-  const count = links.filter(l => (l.label||"—") === rel).length
+relTypes.forEach((rel, i) => {
+  const count = links.filter(l => l.label === rel).length
   const div   = document.createElement("div")
   div.className = "fp-item"
   div.innerHTML = `
-    <input type="checkbox" id="chk-${rel}" checked>
+    <input type="checkbox" id="chk${i}" checked>
     <span class="fp-swatch" style="background:${relColor[rel]}"></span>
     <span class="fp-label">${rel}</span>
     <span class="fp-count">${count}</span>
   `
   const chk = div.querySelector("input")
+  chkMap[rel] = chk
   chk.addEventListener("change", () => {
     if (chk.checked) activeRels.add(rel)
     else             activeRels.delete(rel)
@@ -411,7 +416,7 @@ relTypes.forEach(rel => {
 document.getElementById("btn-reset-filter").onclick = () => {
   relTypes.forEach(r => {
     activeRels.add(r)
-    document.getElementById("chk-" + r).checked = true
+    chkMap[r].checked = true
   })
   applyFilter()
 }
@@ -423,11 +428,11 @@ const zoom = d3.zoom()
 
 svgEl.call(zoom).on("dblclick.zoom", null)
 
-/* ── defs ── */
+/* ── defs: one arrow marker per rel type (index-based id) ── */
 const defs = svgEl.append("defs")
 relTypes.forEach(rel => {
   defs.append("marker")
-    .attr("id",          "arr-" + btoa(rel).replace(/=/g,""))
+    .attr("id",          mId(rel))
     .attr("viewBox",     "0 -4 8 8")
     .attr("refX",        34)
     .attr("refY",        0)
@@ -449,15 +454,15 @@ const edgeLine = gEdges.selectAll("line")
   .data(links)
   .join("line")
   .attr("class", "edge-line")
-  .style("stroke", d => relColor[d.label||"—"])
-  .attr("marker-end", d => `url(#arr-${btoa(d.label||"—").replace(/=/g,"")})`)
+  .style("stroke", d => relColor[d.label])
+  .attr("marker-end", d => `url(#${mId(d.label)})`)
 
 const edgeLabelEl = gEdges.selectAll("text")
-  .data(links.filter(l => l.label))
+  .data(links)
   .join("text")
   .attr("class", "edge-label")
-  .style("fill", d => relColor[d.label] + "aa")
-  .text(d => d.label)
+  .style("fill", d => relColor[d.label] + "99")
+  .text(d => d.label !== "سایر" ? d.label : "")
 
 /* ── nodes ── */
 const pinnedSet = new Set()
@@ -543,18 +548,15 @@ nodeGroup.append("text")
 
 /* ── filter logic ── */
 function applyFilter() {
-  // edges
-  edgeLine.classed("faded", d => !activeRels.has(d.label||"—"))
-
+  edgeLine.classed("faded", d => !activeRels.has(d.label))
   edgeLabelEl.style("opacity", d => activeRels.has(d.label) ? 1 : 0)
 
-  // nodes: fade if ALL their edges are filtered out
   nodeGroup.classed("faded", d => {
     const myLinks = links.filter(l =>
       (l.source.id||l.source) === d.id || (l.target.id||l.target) === d.id
     )
     if (!myLinks.length) return false
-    return myLinks.every(l => !activeRels.has(l.label||"—"))
+    return myLinks.every(l => !activeRels.has(l.label))
   })
 }
 
