@@ -1,6 +1,9 @@
+import json
 import logging
+import os
 from django.db.models import Q, ProtectedError
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
@@ -334,6 +337,74 @@ def home_graph_api(request):
         })
 
     return JsonResponse(elements)
+
+
+def chat_view(request):
+    return render(request, 'chat/chat.html')
+
+
+def chat_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        user_message = data.get('message', '').strip()
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    if not user_message:
+        return JsonResponse({'error': 'message is empty'}, status=400)
+
+    # ─── serialize graph ───
+    all_nodes = Node.objects.all()
+    all_rels  = Relationship.objects.select_related('source', 'target')
+    all_info  = Information.objects.select_related('node')
+
+    nodes_text = "\n".join(
+        f"- {n.username}"
+        + (f" (نام: {n.name})" if n.name else "")
+        + (f" (شغل: {n.career})" if n.career else "")
+        + (f" (تولد: {n.birth_day})" if n.birth_day else "")
+        for n in all_nodes
+    )
+
+    rels_text = "\n".join(
+        f"- {r.source.username} → {r.target.username}"
+        + (f" [{r.rel}]" if r.rel else "")
+        for r in all_rels
+    )
+
+    info_text = "\n".join(
+        f"- {i.node.username}: {i.data}"
+        for i in all_info
+    ) or "موردی ثبت نشده"
+
+    system_prompt = (
+        "تو یک دستیار هوشمند هستی که به تحلیل شبکه روابط شخصی کمک می‌کنی.\n\n"
+        f"افراد در شبکه:\n{nodes_text}\n\n"
+        f"روابط:\n{rels_text}\n\n"
+        f"اطلاعات ثبت‌شده:\n{info_text}\n\n"
+        "بر اساس این داده‌ها به فارسی و مختصر پاسخ بده."
+    )
+
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key:
+        return JsonResponse({'error': 'ANTHROPIC_API_KEY تنظیم نشده'}, status=500)
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}]
+        )
+        reply = response.content[0].text
+        return JsonResponse({'reply': reply})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 def graph_all_api(request):
