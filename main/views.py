@@ -149,8 +149,7 @@ class InformationCreateView(CreateView):
     template_name = 'informations/information_form.html'
     success_url = reverse_lazy('information_list')
 
-
-def form_valid(self, form):
+    def form_valid(self, form):
         if not form.instance.visibility:
             form.instance.visibility = 'private'
         messages.success(
