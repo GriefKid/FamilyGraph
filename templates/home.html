@@ -13,6 +13,116 @@ height:calc(100vh - 54px);
 position:relative;
 overflow:hidden;
 background:var(--bg);
+display:flex;
+}
+
+/* ─── FILTER PANEL ─── */
+#filter-panel{
+width:220px;
+flex-shrink:0;
+background:var(--surface);
+border-left:1px solid var(--border);
+display:flex;
+flex-direction:column;
+z-index:10;
+overflow:hidden;
+transition:width .22s ease;
+}
+
+#filter-panel.collapsed{ width:0; border-left:none; }
+
+.fp-head{
+padding:14px 16px 10px;
+border-bottom:1px solid var(--border);
+font-size:12px;
+font-weight:600;
+color:var(--text-soft);
+display:flex;
+align-items:center;
+justify-content:space-between;
+flex-shrink:0;
+}
+
+.fp-reset{
+font-size:11px;
+color:var(--primary);
+cursor:pointer;
+border:none;
+background:none;
+font-family:'Vazirmatn',sans-serif;
+padding:0;
+}
+
+.fp-reset:hover{ text-decoration:underline; }
+
+.fp-section-label{
+font-size:10px;
+color:var(--text-muted);
+text-transform:uppercase;
+letter-spacing:.6px;
+padding:10px 16px 4px;
+flex-shrink:0;
+}
+
+.fp-list{
+flex:1;
+overflow-y:auto;
+padding:4px 10px 12px;
+}
+
+.fp-item{
+display:flex;
+align-items:center;
+gap:9px;
+padding:7px 8px;
+border-radius:7px;
+cursor:pointer;
+transition:.15s;
+user-select:none;
+}
+
+.fp-item:hover{ background:var(--primary-glow); }
+
+.fp-swatch{
+width:10px;
+height:10px;
+border-radius:50%;
+flex-shrink:0;
+}
+
+.fp-label{
+font-size:12px;
+color:var(--text-soft);
+flex:1;
+}
+
+.fp-count{
+font-size:10px;
+color:var(--text-muted);
+background:var(--border);
+padding:1px 7px;
+border-radius:10px;
+}
+
+.fp-item input[type=checkbox]{
+accent-color:var(--primary);
+width:13px;
+height:13px;
+cursor:pointer;
+flex-shrink:0;
+}
+
+.fp-divider{
+border:none;
+border-top:1px solid var(--border);
+margin:8px 0;
+}
+
+/* ─── SVG AREA ─── */
+#svg-area{
+flex:1;
+position:relative;
+overflow:hidden;
 }
 
 #graph-svg{
@@ -28,10 +138,10 @@ display:block;
 .edge-line{
 stroke:#252540;
 stroke-width:1.5;
-transition:stroke .2s;
+transition:stroke .2s, opacity .2s;
 }
 
-.edge-line.highlighted{ stroke:#6366f1; stroke-width:2.5; }
+.edge-line.faded{ opacity:.07; }
 
 .edge-label{
 fill:#3a3a5c;
@@ -40,50 +150,45 @@ font-size:10px;
 text-anchor:middle;
 pointer-events:none;
 user-select:none;
+transition:opacity .2s;
 }
 
 /* ─── NODES ─── */
 .node-group{ cursor:pointer; }
 
 .node-bg{
-fill:#111120;
-stroke:#252540;
 stroke-width:1.5;
-transition:fill .18s, stroke .18s, stroke-width .18s;
+transition:fill .18s, stroke .18s, stroke-width .18s, opacity .2s;
 }
 
-.node-group:hover .node-bg{
-fill:#1e1e3a;
-stroke:#6366f1;
-stroke-width:2;
-}
+.node-group.faded .node-bg{ opacity:.1; }
+.node-group.faded text { opacity:.1; }
 
 .node-group.pinned .node-bg{
-stroke:#f59e0b;
-stroke-width:2;
+stroke:#f59e0b !important;
+stroke-width:2.5;
 }
 
 .node-glow{
 fill:none;
-stroke:#6366f1;
 stroke-width:0;
 opacity:0;
 transition:stroke-width .18s, opacity .18s;
 }
 
-.node-group:hover .node-glow{
-stroke-width:8;
-opacity:.18;
+.node-group:not(.faded):hover .node-glow{
+stroke-width:10;
+opacity:.2;
 }
 
 .node-label{
-fill:#c8caf0;
 font-family:'Vazirmatn',sans-serif;
 font-size:11px;
 text-anchor:middle;
 dominant-baseline:middle;
 pointer-events:none;
 user-select:none;
+fill:#d0d2f0;
 }
 
 /* ─── TOOLTIP ─── */
@@ -104,20 +209,16 @@ z-index:200;
 min-width:130px;
 }
 
-#tooltip.show{
-opacity:1;
-transform:translateY(0);
-}
-
-.tt-name{ font-weight:700; font-size:13px; margin-bottom:5px; color:#818cf8; }
-.tt-row{ color:#6060a0; font-size:11px; margin-top:2px; }
+#tooltip.show{ opacity:1; transform:translateY(0); }
+.tt-name{ font-weight:700; font-size:13px; margin-bottom:5px; }
+.tt-row{ color:#5a5a80; font-size:11px; margin-top:2px; }
 .tt-row span{ color:#a0a0c8; }
 
 /* ─── CONTROLS ─── */
 .graph-controls{
 position:absolute;
-top:16px;
-left:16px;
+top:14px;
+left:14px;
 display:flex;
 flex-direction:column;
 gap:6px;
@@ -147,26 +248,32 @@ border-color:rgba(99,102,241,.5);
 color:#e8eaf6;
 }
 
+.ctrl-btn.active{
+background:rgba(99,102,241,.25);
+border-color:rgba(99,102,241,.6);
+color:#818cf8;
+}
+
 /* ─── INFO OVERLAY ─── */
 .graph-info{
 position:absolute;
-bottom:20px;
-right:20px;
+bottom:18px;
+right:16px;
 background:rgba(11,11,22,.88);
 border:1px solid #1c1c30;
 border-radius:10px;
-padding:10px 16px;
+padding:9px 14px;
 font-size:12px;
 color:#4a4a72;
 backdrop-filter:blur(10px);
-line-height:1.8;
+line-height:1.9;
 }
 
 .graph-info b{ color:#6366f1; font-weight:600; }
 
 .pin-hint{
 position:absolute;
-bottom:22px;
+bottom:20px;
 left:16px;
 font-size:11px;
 color:#2a2a44;
@@ -176,45 +283,67 @@ color:#2a2a44;
 
 {% block content %}
 <div id="graph-wrap">
-  <svg id="graph-svg"></svg>
 
-  <div id="tooltip">
-    <div class="tt-name" id="tt-name"></div>
-    <div class="tt-row">روابط: <span id="tt-rels">—</span></div>
-    <div class="tt-row" id="tt-career-row" style="display:none">شغل: <span id="tt-career"></span></div>
+  <!-- FILTER PANEL -->
+  <div id="filter-panel">
+    <div class="fp-head">
+      <span>فیلتر</span>
+      <button class="fp-reset" id="btn-reset-filter">پاک‌کردن</button>
+    </div>
+    <div class="fp-section-label">نوع رابطه</div>
+    <div class="fp-list" id="rel-filter-list"></div>
   </div>
 
-  <div class="graph-controls">
-    <button class="ctrl-btn" id="btn-zi" title="بزرگ‌نمایی">+</button>
-    <button class="ctrl-btn" id="btn-zo" title="کوچک‌نمایی">−</button>
-    <button class="ctrl-btn" id="btn-fit" title="نمای کامل">⊙</button>
-  </div>
+  <!-- SVG AREA -->
+  <div id="svg-area">
+    <svg id="graph-svg"></svg>
 
-  <div class="graph-info">
-    نودها: <b id="nodeCount">—</b> &emsp; روابط: <b id="edgeCount">—</b>
-  </div>
+    <div id="tooltip">
+      <div class="tt-name" id="tt-name"></div>
+      <div class="tt-row">روابط: <span id="tt-rels">—</span></div>
+      <div class="tt-row" id="tt-career-row" style="display:none">شغل: <span id="tt-career"></span></div>
+    </div>
 
-  <div class="pin-hint">دابل‌کلیک روی نود = پین / آن‌پین</div>
+    <div class="graph-controls">
+      <button class="ctrl-btn active" id="btn-panel" title="پنل فیلتر">☰</button>
+      <button class="ctrl-btn" id="btn-zi" title="بزرگ‌نمایی">+</button>
+      <button class="ctrl-btn" id="btn-zo" title="کوچک‌نمایی">−</button>
+      <button class="ctrl-btn" id="btn-fit" title="نمای کامل">⊙</button>
+    </div>
+
+    <div class="graph-info">
+      نودها: <b id="nodeCount">—</b> &emsp; روابط: <b id="edgeCount">—</b>
+    </div>
+
+    <div class="pin-hint">دابل‌کلیک = پین / آن‌پین</div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script>
 (async () => {
 
-const wrap   = document.getElementById("graph-wrap")
-const svgEl  = d3.select("#graph-svg")
-const tip    = document.getElementById("tooltip")
-const W = () => wrap.clientWidth
-const H = () => wrap.clientHeight
+/* ── colour palette for rel types ── */
+const PALETTE = [
+  "#6366f1","#22d3ee","#f59e0b","#10b981","#f43f5e",
+  "#a855f7","#fb923c","#84cc16","#e879f9","#38bdf8",
+  "#4ade80","#fbbf24","#f87171","#818cf8","#34d399"
+]
+
+const wrap    = document.getElementById("graph-wrap")
+const svgArea = document.getElementById("svg-area")
+const svgEl   = d3.select("#graph-svg")
+const tip     = document.getElementById("tooltip")
+const panel   = document.getElementById("filter-panel")
+const relList = document.getElementById("rel-filter-list")
+
+const W = () => svgArea.clientWidth
+const H = () => svgArea.clientHeight
 
 /* ── fetch ── */
 let data
-try {
-  data = await fetch("/api/graph/all/").then(r => r.json())
-} catch(e) {
-  console.error(e)
-  return
-}
+try { data = await fetch("/api/graph/all/").then(r => r.json()) }
+catch(e){ console.error(e); return }
 
 const nodes = data.nodes.map(n => ({ ...n, id: String(n.id) }))
 const links = data.edges.map(e => ({
@@ -226,6 +355,67 @@ const links = data.edges.map(e => ({
 document.getElementById("nodeCount").textContent = nodes.length
 document.getElementById("edgeCount").textContent = links.length
 
+/* ── rel types & colours ── */
+const relTypes = [...new Set(links.map(l => l.label || "—"))].sort()
+const relColor = {}
+relTypes.forEach((r, i) => relColor[r] = PALETTE[i % PALETTE.length])
+
+/* map node → dominant rel colour */
+function nodeColor(d) {
+  const myLinks = links.filter(l =>
+    (l.source.id || l.source) === d.id ||
+    (l.target.id || l.target) === d.id
+  )
+  if (!myLinks.length) return "#1e1e38"
+  // pick most frequent rel type
+  const freq = {}
+  myLinks.forEach(l => { const r = l.label||"—"; freq[r]=(freq[r]||0)+1 })
+  const top = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0]
+  return relColor[top] + "28"   // very transparent fill
+}
+
+function nodeStroke(d) {
+  const myLinks = links.filter(l =>
+    (l.source.id || l.source) === d.id ||
+    (l.target.id || l.target) === d.id
+  )
+  if (!myLinks.length) return "#3a3a5c"
+  const freq = {}
+  myLinks.forEach(l => { const r = l.label||"—"; freq[r]=(freq[r]||0)+1 })
+  const top = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0][0]
+  return relColor[top]
+}
+
+/* ── build filter UI ── */
+const activeRels = new Set(relTypes) // all active by default
+
+relTypes.forEach(rel => {
+  const count = links.filter(l => (l.label||"—") === rel).length
+  const div   = document.createElement("div")
+  div.className = "fp-item"
+  div.innerHTML = `
+    <input type="checkbox" id="chk-${rel}" checked>
+    <span class="fp-swatch" style="background:${relColor[rel]}"></span>
+    <span class="fp-label">${rel}</span>
+    <span class="fp-count">${count}</span>
+  `
+  const chk = div.querySelector("input")
+  chk.addEventListener("change", () => {
+    if (chk.checked) activeRels.add(rel)
+    else             activeRels.delete(rel)
+    applyFilter()
+  })
+  relList.appendChild(div)
+})
+
+document.getElementById("btn-reset-filter").onclick = () => {
+  relTypes.forEach(r => {
+    activeRels.add(r)
+    document.getElementById("chk-" + r).checked = true
+  })
+  applyFilter()
+}
+
 /* ── zoom ── */
 const zoom = d3.zoom()
   .scaleExtent([0.15, 5])
@@ -233,18 +423,21 @@ const zoom = d3.zoom()
 
 svgEl.call(zoom).on("dblclick.zoom", null)
 
-/* ── defs: arrowhead ── */
-svgEl.append("defs").append("marker")
-  .attr("id",         "arr")
-  .attr("viewBox",    "0 -4 8 8")
-  .attr("refX",       36)
-  .attr("refY",       0)
-  .attr("markerWidth", 5)
-  .attr("markerHeight", 5)
-  .attr("orient",     "auto")
-  .append("path")
-  .attr("d",    "M0,-4L8,0L0,4")
-  .attr("fill", "#252540")
+/* ── defs ── */
+const defs = svgEl.append("defs")
+relTypes.forEach(rel => {
+  defs.append("marker")
+    .attr("id",          "arr-" + btoa(rel).replace(/=/g,""))
+    .attr("viewBox",     "0 -4 8 8")
+    .attr("refX",        34)
+    .attr("refY",        0)
+    .attr("markerWidth", 5)
+    .attr("markerHeight",5)
+    .attr("orient",      "auto")
+    .append("path")
+    .attr("d",    "M0,-4L8,0L0,4")
+    .attr("fill", relColor[rel])
+})
 
 /* ── main group ── */
 const gMain  = svgEl.append("g")
@@ -256,17 +449,19 @@ const edgeLine = gEdges.selectAll("line")
   .data(links)
   .join("line")
   .attr("class", "edge-line")
-  .attr("marker-end", "url(#arr)")
+  .style("stroke", d => relColor[d.label||"—"])
+  .attr("marker-end", d => `url(#arr-${btoa(d.label||"—").replace(/=/g,"")})`)
 
 const edgeLabelEl = gEdges.selectAll("text")
   .data(links.filter(l => l.label))
   .join("text")
   .attr("class", "edge-label")
+  .style("fill", d => relColor[d.label] + "aa")
   .text(d => d.label)
 
 /* ── nodes ── */
 const pinnedSet = new Set()
-let   dragMoved = false
+let dragMoved   = false
 
 const nodeGroup = gNodes.selectAll("g")
   .data(nodes)
@@ -305,13 +500,12 @@ const nodeGroup = gNodes.selectAll("g")
     }
   })
   .on("mouseover", (e, d) => {
-    const relCount = links.filter(l =>
-      (l.source.id || l.source) === d.id ||
-      (l.target.id || l.target) === d.id
-    ).length
+    const rels = links.filter(l =>
+      (l.source.id||l.source) === d.id || (l.target.id||l.target) === d.id
+    )
     document.getElementById("tt-name").textContent  = d.username
-    document.getElementById("tt-rels").textContent  = relCount
-
+    document.getElementById("tt-name").style.color  = nodeStroke(d)
+    document.getElementById("tt-rels").textContent  = rels.length
     const careerRow = document.getElementById("tt-career-row")
     if (d.career) {
       document.getElementById("tt-career").textContent = d.career
@@ -319,28 +513,50 @@ const nodeGroup = gNodes.selectAll("g")
     } else {
       careerRow.style.display = "none"
     }
-
     tip.classList.add("show")
   })
   .on("mousemove", e => {
-    const rect = wrap.getBoundingClientRect()
-    let tx = e.clientX - rect.left + 18
-    let ty = e.clientY - rect.top  - 14
+    const rect = svgArea.getBoundingClientRect()
+    let tx = e.clientX - rect.left + 16
+    let ty = e.clientY - rect.top  - 12
     if (tx + 160 > W()) tx -= 170
     tip.style.left = tx + "px"
     tip.style.top  = ty + "px"
   })
   .on("mouseout", () => tip.classList.remove("show"))
 
-/* glow ring */
-nodeGroup.append("circle").attr("class", "node-glow").attr("r", 28)
-/* main circle */
-nodeGroup.append("circle").attr("class", "node-bg").attr("r", 26)
-/* label */
+nodeGroup.append("circle")
+  .attr("class", "node-glow")
+  .attr("r", 30)
+  .style("stroke", d => nodeStroke(d))
+
+nodeGroup.append("circle")
+  .attr("class", "node-bg")
+  .attr("r", 26)
+  .style("fill",   d => nodeColor(d))
+  .style("stroke", d => nodeStroke(d))
+
 nodeGroup.append("text")
   .attr("class", "node-label")
   .attr("y", 0)
   .text(d => d.username.length > 11 ? d.username.slice(0,10) + "…" : d.username)
+
+/* ── filter logic ── */
+function applyFilter() {
+  // edges
+  edgeLine.classed("faded", d => !activeRels.has(d.label||"—"))
+
+  edgeLabelEl.style("opacity", d => activeRels.has(d.label) ? 1 : 0)
+
+  // nodes: fade if ALL their edges are filtered out
+  nodeGroup.classed("faded", d => {
+    const myLinks = links.filter(l =>
+      (l.source.id||l.source) === d.id || (l.target.id||l.target) === d.id
+    )
+    if (!myLinks.length) return false
+    return myLinks.every(l => !activeRels.has(l.label||"—"))
+  })
+}
 
 /* ── simulation ── */
 const sim = d3.forceSimulation(nodes)
@@ -348,30 +564,37 @@ const sim = d3.forceSimulation(nodes)
   .force("charge",    d3.forceManyBody().strength(-500))
   .force("center",    d3.forceCenter(W() / 2, H() / 2))
   .force("collision", d3.forceCollide(46))
-  .on("tick", tick)
+  .on("tick", () => {
+    edgeLine
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y)
 
-function tick() {
-  edgeLine
-    .attr("x1", d => d.source.x)
-    .attr("y1", d => d.source.y)
-    .attr("x2", d => d.target.x)
-    .attr("y2", d => d.target.y)
+    edgeLabelEl
+      .attr("x", d => (d.source.x + d.target.x) / 2)
+      .attr("y", d => (d.source.y + d.target.y) / 2 - 6)
 
-  edgeLabelEl
-    .attr("x", d => (d.source.x + d.target.x) / 2)
-    .attr("y", d => (d.source.y + d.target.y) / 2 - 6)
+    nodeGroup.attr("transform", d => `translate(${d.x},${d.y})`)
+  })
 
-  nodeGroup.attr("transform", d => `translate(${d.x},${d.y})`)
+/* ── panel toggle ── */
+const panelBtn = document.getElementById("btn-panel")
+panelBtn.onclick = () => {
+  panel.classList.toggle("collapsed")
+  panelBtn.classList.toggle("active")
+  setTimeout(() => {
+    sim.force("center", d3.forceCenter(W()/2, H()/2)).alpha(0.1).restart()
+  }, 230)
 }
 
-/* ── controls ── */
+/* ── other controls ── */
 document.getElementById("btn-zi").onclick  = () => svgEl.transition().duration(300).call(zoom.scaleBy, 1.5)
 document.getElementById("btn-zo").onclick  = () => svgEl.transition().duration(300).call(zoom.scaleBy, 0.67)
 document.getElementById("btn-fit").onclick = () => svgEl.transition().duration(400).call(zoom.transform, d3.zoomIdentity)
 
-/* ── resize ── */
 window.addEventListener("resize", () => {
-  sim.force("center", d3.forceCenter(W() / 2, H() / 2)).alpha(0.2).restart()
+  sim.force("center", d3.forceCenter(W()/2, H()/2)).alpha(0.15).restart()
 })
 
 })()
