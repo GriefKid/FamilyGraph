@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}
+حذف رابطه
+{% endblock %}
+
+{% block extra_css %}
+
+.delete-box{
+	max-width:420px;
+	margin:auto;
+	text-align:center;
+}
+
+.delete-title{
+	font-size:20px;
+	margin-bottom:10px;
+}
+
+.delete-text{
+	color:#94a3b8;
+	font-size:14px;
+	margin-bottom:25px;
+}
+
+.delete-info{
+	background:var(--card);
+	border:1px solid var(--border);
+	border-radius:8px;
+	padding:12px;
+	margin-bottom:20px;
+	font-size:14px;
+}
+
+.delete-actions{
+	display:flex;
+	justify-content:center;
+	gap:10px;
+}
+
+.btn-danger{
+	background:#ef4444;
+	color:white;
+	border:none;
+}
+
+.btn-danger:hover{
+	background:#dc2626;
+}
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card delete-box">
+
+	<div class="delete-title">
+		حذف رابطه
+	</div>
+
+	<div class="delete-text">
+		آیا مطمئن هستید که می‌خواهید این رابطه را حذف کنید؟
+	</div>
+
+	<div class="delete-info">
+		<strong>{{ relationship.rel }}</strong><br>
+		{{ relationship.father.username }}
+		→
+		{{ relationship.child.username }}
+	</div>
+
+	<form method="post">
+
+		{% csrf_token %}
+
+		<div class="delete-actions">
+
+			<button type="submit" class="btn btn-danger">
+				بله، حذف کن
+			</button>
+
+			<a href="/relationships/" class="btn">
+				انصراف
+			</a>
+
+		</div>
+
+	</form>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}
+جزئیات رابطه
+{% endblock %}
+
+{% block extra_css %}
+
+.rel-container{
+	max-width:500px;
+	margin:auto;
+}
+
+.rel-row{
+	display:flex;
+	justify-content:space-between;
+	padding:10px 0;
+	border-bottom:1px solid var(--border);
+	font-size:14px;
+}
+
+.rel-label{
+	color:#94a3b8;
+}
+
+.rel-value{
+	font-weight:500;
+}
+
+.rel-actions{
+	display:flex;
+	gap:10px;
+	margin-top:20px;
+}
+
+.back-btn{
+	margin-top:20px;
+	display:inline-block;
+}
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card rel-container">
+
+	<div class="card-title">
+		رابطه: {{ relationship.rel }}
+	</div>
+
+	<div class="rel-row">
+		<div class="rel-label">
+			ID
+		</div>
+		<div class="rel-value">
+			#{{ relationship.id }}
+		</div>
+	</div>
+
+	<div class="rel-row">
+		<div class="rel-label">
+			نوع رابطه
+		</div>
+		<div class="rel-value">
+			{{ relationship.rel }}
+		</div>
+	</div>
+
+	<div class="rel-row">
+		<div class="rel-label">
+			پدر
+		</div>
+		<div class="rel-value">
+			{{ relationship.father.username }} ({{ relationship.father.id }})
+		</div>
+	</div>
+
+	<div class="rel-row">
+		<div class="rel-label">
+			فرزند
+		</div>
+		<div class="rel-value">
+			{{ relationship.child.username }} ({{ relationship.child.id }})
+		</div>
+	</div>
+
+	<div class="rel-actions">
+
+		<a href="{% url 'relationship_update' relationship.id %}" class="btn">
+			ویرایش
+		</a>
+
+		<a href="{% url 'relationship_delete' relationship.id %}" class="btn btn-danger">
+			حذف
+		</a>
+
+	</div>
+
+</div>
+
+<a href="/relationships/" class="btn back-btn">
+	← لیست روابط
+</a>
+
+{% endblock %}

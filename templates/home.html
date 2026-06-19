@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Graph</title>
+
+<style>
+
+body{
+margin:0;
+background:#0b1020;
+font-family:system-ui;
+color:white;
+overflow:hidden;
+}
+
+#graph{
+width:100vw;
+height:100vh;
+}
+
+.node{
+fill:#3b82f6;
+stroke:#1e40af;
+stroke-width:2;
+transition:0.2s;
+cursor:pointer;
+}
+
+.node:hover{
+fill:#60a5fa;
+}
+
+.edge{
+stroke:#94a3b8;
+stroke-width:2;
+}
+
+.text{
+fill:white;
+font-size:14px;
+text-anchor:middle;
+pointer-events:none;
+user-select:none;
+}
+
+</style>
+</head>
+
+<body>
+
+<svg id="graph" viewBox="0 0 1200 800"></svg>
+
+<script>
+
+const svg = document.getElementById("graph")
+
+async function load(){
+
+const res = await fetch("/api/home/graph/")
+const json = await res.json()
+
+const nodes = json.nodes.map(n=>({
+id:n.data.id,
+label:n.data.label,
+children:[]
+}))
+
+const edges = json.edges.map(e=>({
+source:e.data.source,
+target:e.data.target
+}))
+
+const map = {}
+nodes.forEach(n=>map[n.id]=n)
+
+edges.forEach(e=>{
+if(map[e.source] && map[e.target]){
+map[e.source].children.push(map[e.target])
+}
+})
+
+const childIds = new Set(edges.map(e=>e.target))
+const root = nodes.find(n=>!childIds.has(n.id)) || nodes[0]
+
+layoutTree(root,600,120,400)
+
+draw(nodes,edges)
+
+}
+
+function layoutTree(node,x,y,width){
+
+node.x = x
+node.y = y
+
+if(!node.children.length) return
+
+const step = width / node.children.length
+let start = x - width/2 + step/2
+
+node.children.forEach(child=>{
+layoutTree(child,start,y+180,width/2)
+start += step
+})
+
+}
+
+function draw(nodes,edges){
+
+edges.forEach(e=>{
+
+const a = nodes.find(n=>n.id==e.source)
+const b = nodes.find(n=>n.id==e.target)
+
+if(!a || !b) return
+
+const line = document.createElementNS("http://www.w3.org/2000/svg","line")
+
+line.setAttribute("x1",a.x)
+line.setAttribute("y1",a.y)
+
+line.setAttribute("x2",b.x)
+line.setAttribute("y2",b.y)
+
+line.setAttribute("class","edge")
+
+svg.appendChild(line)
+
+})
+
+nodes.forEach(n=>{
+
+const circle = document.createElementNS("http://www.w3.org/2000/svg","circle")
+
+circle.setAttribute("cx",n.x)
+circle.setAttribute("cy",n.y)
+circle.setAttribute("r",40)
+
+circle.setAttribute("class","node")
+
+circle.addEventListener("click",()=>{
+window.location.href = "/nodes/" + n.id + "/"
+})
+
+svg.appendChild(circle)
+
+
+const text = document.createElementNS("http://www.w3.org/2000/svg","text")
+
+text.setAttribute("x",n.x)
+text.setAttribute("y",n.y+5)
+
+text.setAttribute("class","text")
+
+text.textContent = n.label
+
+svg.appendChild(text)
+
+})
+
+}
+
+load()
+
+</script>
+
+</body>
+</html>

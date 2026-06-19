@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}
+	حذف اطلاعات
+{% endblock %}
+
+{% block content %}
+
+<div class="container">
+
+	<div class="card">
+
+		<h2 class="title">
+			حذف Information #{{ object.id }} - {{ object.node.username }}
+		</h2>
+
+		<p class="warning">
+			مطمئنی می‌خوای این اطلاعات رو حذف کنی؟
+		</p>
+
+		<div class="info">
+
+			<div class="row">
+				<span class="label">
+					Node:
+				</span>
+
+				<span class="value">
+					{{ object.node.username }}
+				</span>
+			</div>
+
+			<div class="row">
+				<span class="label">
+					Visibility:
+				</span>
+
+				<span class="value">
+					{{ object.visibility }}
+				</span>
+			</div>
+
+		</div>
+
+		<form method="post">
+
+			{% csrf_token %}
+
+			<div class="actions">
+
+				<button
+					type="submit"
+					class="btn delete"
+				>
+					بله، حذف کن
+				</button>
+
+				<a
+					href="{% url 'information_detail' object.id %}"
+					class="btn cancel"
+				>
+					انصراف
+				</a>
+
+			</div>
+
+		</form>
+
+	</div>
+
+</div>
+
+
+<style>
+
+.container{
+	width:90%;
+	max-width:600px;
+	margin:auto;
+	margin-top:60px;
+	color:white;
+}
+
+.card{
+	background:#0f1a2e;
+	border:1px solid #1d2c4d;
+	border-radius:10px;
+	padding:30px;
+	text-align:center;
+}
+
+.title{
+	font-size:24px;
+	margin-bottom:20px;
+}
+
+.warning{
+	color:#ff9b9b;
+	margin-bottom:25px;
+}
+
+.info{
+	background:#081226;
+	border-radius:6px;
+	padding:15px;
+	margin-bottom:25px;
+}
+
+.row{
+	margin-bottom:8px;
+}
+
+.label{
+	color:#9fb3d1;
+	margin-right:6px;
+}
+
+.value{
+	color:white;
+}
+
+.actions{
+	display:flex;
+	justify-content:center;
+	gap:12px;
+}
+
+.btn{
+	padding:10px 16px;
+	border-radius:6px;
+	text-decoration:none;
+	color:white;
+	border:none;
+	cursor:pointer;
+}
+
+.delete{
+	background:#ef4444;
+}
+
+.cancel{
+	background:#555;
+}
+
+</style>
+
+{% endblock %}

@@ -1,0 +1,601 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div id="graph-wrapper">
+	<div id="graph-container">
+
+		<div id="graph-toolbar">
+			<input id="searchNode" type="text" placeholder="Search node (enter)">
+			<input id="pathA" type="text" placeholder="Node A">
+			<input id="pathB" type="text" placeholder="Node B">
+			<button id="findPathBtn">Find Path</button>
+		</div>
+
+
+		<div id="graph-stats"></div>
+
+		<canvas id="graphCanvas"></canvas>
+
+	</div>
+</div>
+
+<style>
+
+#graph-wrapper{
+	width:100%;
+	height:calc(100vh - 70px);
+	padding:20px;
+	box-sizing:border-box;
+}
+
+#graph-container{
+	position:relative;
+	width:100%;
+	height:100%;
+	background:#050f1a;
+	border-radius:10px;
+	overflow:hidden;
+	box-shadow:0 0 30px rgba(0,0,0,0.6);
+}
+
+#graphCanvas{
+	width:100%;
+	height:100%;
+	display:block;
+	cursor:grab;
+}
+
+#graphCanvas:active{
+	cursor:grabbing;
+}
+
+#graph-toolbar{
+	position:absolute;
+	top:15px;
+	left:20px;
+	z-index:20;
+	display:flex;
+	gap:8px;
+	background:rgba(0,0,0,0.5);
+	padding:10px;
+	border-radius:8px;
+}
+
+#graph-toolbar input{
+	padding:6px 10px;
+	border:none;
+	border-radius:6px;
+	background:#0d1b2a;
+	color:white;
+	font-size:13px;
+}
+
+#graph-toolbar button{
+	padding:6px 12px;
+	border:none;
+	border-radius:6px;
+	background:#2a6df4;
+	color:white;
+	cursor:pointer;
+}
+
+#graph-stats{
+	position:absolute;
+	top:15px;
+	right:20px;
+	z-index:20;
+	background:rgba(0,0,0,0.5);
+	padding:10px;
+	border-radius:8px;
+	font-size:12px;
+	color:white;
+}
+
+</style>
+
+<script>
+
+const canvas = document.getElementById("graphCanvas")
+const ctx = canvas.getContext("2d")
+
+let W,H
+
+function resize(){
+	W = canvas.parentElement.clientWidth
+	H = canvas.parentElement.clientHeight
+	canvas.width = W
+	canvas.height = H
+}
+resize()
+window.addEventListener("resize",resize)
+
+
+
+/* ---------------- DATA ---------------- */
+
+let nodes=[]
+let edges=[]
+let nodeMap={}
+let adjacency={}
+let images={}
+
+let highlightedEdges=new Set()
+
+
+
+/* ---------------- VIEW ---------------- */
+
+let offsetX=0
+let offsetY=0
+let scale=1
+
+
+
+/* ---------------- DRAG VIEW ---------------- */
+
+let dragging=false
+let lastX=0
+let lastY=0
+
+canvas.addEventListener("mousedown",e=>{
+	dragging=true
+	lastX=e.clientX
+	lastY=e.clientY
+})
+
+canvas.addEventListener("mouseup",()=>dragging=false)
+canvas.addEventListener("mouseleave",()=>dragging=false)
+
+canvas.addEventListener("mousemove",e=>{
+
+	if(!dragging) return
+
+	offsetX += e.clientX-lastX
+	offsetY += e.clientY-lastY
+
+	lastX = e.clientX
+	lastY = e.clientY
+
+})
+
+
+
+/* ---------------- ZOOM ---------------- */
+
+canvas.addEventListener("wheel",e=>{
+	e.preventDefault()
+	let zoom = e.deltaY < 0 ? 1.1 : 0.9
+	scale *= zoom
+})
+
+
+
+/* ---------------- LOAD GRAPH ---------------- */
+
+function loadGraph(){
+
+	fetch("/api/graph/all/")
+	.then(r=>r.json())
+	.then(data=>{
+
+		nodes=data.nodes
+		edges=data.edges
+
+		nodeMap={}
+		adjacency={}
+		images={}
+
+		nodes.forEach(n=>{
+
+			let id=parseInt(n.id)
+
+			nodeMap[id]=n
+			adjacency[id]=[]
+
+			if(n.image){
+				let img=new Image()
+				img.src=n.image
+				images[n.id]=img
+			}
+
+		})
+
+		edges.forEach(e=>{
+
+			let s=parseInt(e.source)
+			let t=parseInt(e.target)
+
+			if(adjacency[s]) adjacency[s].push(t)
+			if(adjacency[t]) adjacency[t].push(s)
+
+		})
+
+		randomLayout()
+
+		let root=nodes.find(n=>n.username.toLowerCase()==="root")||nodes[0]
+		centerRoot(root.id)
+
+		updateStats()
+
+	})
+
+}
+
+
+
+/* ---------------- INITIAL LAYOUT ---------------- */
+
+function randomLayout(){
+
+	nodes.forEach(n=>{
+
+		n.x = Math.random()*W
+		n.y = Math.random()*H
+
+		n.vx=0
+		n.vy=0
+
+	})
+
+}
+
+
+
+/* ---------------- PHYSICS ENGINE ---------------- */
+
+function physicsStep(){
+
+	let repulsion = 2500
+	let spring = 0.02
+	let damping = 0.85
+	let gravity = 0.005
+
+	let centerX = W/2
+	let centerY = H/2
+
+
+	/* node repulsion */
+
+	for(let i=0;i<nodes.length;i++){
+
+		for(let j=i+1;j<nodes.length;j++){
+
+			let a = nodes[i]
+			let b = nodes[j]
+
+			let dx = a.x - b.x
+			let dy = a.y - b.y
+
+			let dist = Math.sqrt(dx*dx + dy*dy) + 0.1
+
+			let force = repulsion / (dist*dist)
+
+			let fx = force * dx / dist
+			let fy = force * dy / dist
+
+			a.vx += fx
+			a.vy += fy
+
+			b.vx -= fx
+			b.vy -= fy
+		}
+	}
+
+
+	/* edge springs */
+
+	edges.forEach(e=>{
+
+		let s=nodeMap[parseInt(e.source)]
+		let t=nodeMap[parseInt(e.target)]
+
+		if(!s || !t) return
+
+		let dx=t.x-s.x
+		let dy=t.y-s.y
+
+		let dist=Math.sqrt(dx*dx+dy*dy)+0.1
+
+		let force=(dist-120)*spring
+
+		let fx=force*dx/dist
+		let fy=force*dy/dist
+
+		s.vx+=fx
+		s.vy+=fy
+
+		t.vx-=fx
+		t.vy-=fy
+
+	})
+
+
+	/* gravity to center */
+
+	nodes.forEach(n=>{
+
+		let dx = centerX - n.x
+		let dy = centerY - n.y
+
+		n.vx += dx * gravity
+		n.vy += dy * gravity
+
+	})
+
+
+	/* apply velocity */
+
+	nodes.forEach(n=>{
+
+		n.vx *= damping
+		n.vy *= damping
+
+		n.x += n.vx
+		n.y += n.vy
+
+
+		/* boundary limit */
+
+		let margin = 80
+
+		if(n.x < -margin) n.x = -margin
+		if(n.x > W + margin) n.x = W + margin
+
+		if(n.y < -margin) n.y = -margin
+		if(n.y > H + margin) n.y = H + margin
+
+	})
+
+}
+
+
+
+
+/* ---------------- CENTER ---------------- */
+
+function centerRoot(id){
+
+	let root=nodeMap[id]
+	if(!root) return
+
+	offsetX = canvas.width/2 - root.x
+	offsetY = canvas.height/3 - root.y
+
+}
+
+
+
+/* ---------------- STATS ---------------- */
+
+function updateStats(){
+
+	let s=document.getElementById("graph-stats")
+
+	let n=nodes.length
+	let e=edges.length
+	let d=(2*e)/(n*(n-1)||1)
+
+	s.innerHTML=
+	"Nodes: "+n+"<br>"+
+	"Edges: "+e+"<br>"+
+	"Density: "+d.toFixed(3)
+
+}
+
+
+
+/* ---------------- DRAW EDGES ---------------- */
+
+function drawEdges(){
+
+	edges.forEach(e=>{
+
+		let s=nodeMap[parseInt(e.source)]
+		let t=nodeMap[parseInt(e.target)]
+
+		if(!s||!t) return
+
+		let key=parseInt(e.source)+"-"+parseInt(e.target)
+
+		ctx.strokeStyle = highlightedEdges.has(key) ? "#ffd54f" : "#6aa9ff"
+		ctx.lineWidth = highlightedEdges.has(key) ? 4 : 2
+
+		ctx.beginPath()
+		ctx.moveTo(s.x,s.y)
+		ctx.lineTo(t.x,t.y)
+		ctx.stroke()
+
+	})
+
+}
+
+
+
+/* ---------------- DRAW NODES ---------------- */
+
+function drawNodes(){
+
+	nodes.forEach(n=>{
+
+		let img=images[n.id]
+
+		if(img && img.complete){
+
+			ctx.save()
+
+			ctx.beginPath()
+			ctx.arc(n.x,n.y,20,0,Math.PI*2)
+			ctx.clip()
+
+			ctx.drawImage(img,n.x-20,n.y-20,40,40)
+
+			ctx.restore()
+
+		}else{
+
+			ctx.beginPath()
+			ctx.fillStyle="#4da6ff"
+			ctx.arc(n.x,n.y,10,0,Math.PI*2)
+			ctx.fill()
+
+		}
+
+		ctx.fillStyle="white"
+		ctx.font="12px Arial"
+		ctx.textAlign="center"
+		ctx.fillText(n.username,n.x,n.y-25)
+
+	})
+
+}
+
+
+
+/* ---------------- MAIN DRAW ---------------- */
+
+function draw(){
+
+	ctx.clearRect(0,0,W,H)
+
+	physicsStep()
+
+	ctx.save()
+
+	ctx.translate(offsetX,offsetY)
+	ctx.scale(scale,scale)
+
+	drawEdges()
+	drawNodes()
+
+	ctx.restore()
+
+	requestAnimationFrame(draw)
+
+}
+
+
+
+/* ---------------- SEARCH ---------------- */
+
+function searchNode(name){
+
+	let node=nodes.find(n=>n.username.toLowerCase().trim()===name.toLowerCase().trim())
+
+	if(!node){
+		alert("Node not found")
+		return
+	}
+
+	offsetX=W/2-node.x
+	offsetY=H/2-node.y
+
+}
+
+
+
+/* ---------------- SHORTEST PATH ---------------- */
+
+function findPath(a,b){
+
+	let startNode=null
+	let endNode=null
+
+	nodes.forEach(n=>{
+		if(n.username.toLowerCase().trim()===a.toLowerCase().trim()) startNode=n
+		if(n.username.toLowerCase().trim()===b.toLowerCase().trim()) endNode=n
+	})
+
+	if(!startNode||!endNode){
+		alert("Node not found")
+		return
+	}
+
+	let start=parseInt(startNode.id)
+	let end=parseInt(endNode.id)
+
+	let queue=[start]
+	let visited=new Set([start])
+	let parent={}
+
+	while(queue.length){
+
+		let current=queue.shift()
+
+		if(current===end) break
+
+		for(let n of adjacency[current]||[]){
+
+			if(!visited.has(n)){
+				visited.add(n)
+				parent[n]=current
+				queue.push(n)
+			}
+
+		}
+
+	}
+
+	if(!visited.has(end)){
+		alert("No path found")
+		return
+	}
+
+	let path=[end]
+	let cur=end
+
+	while(parent[cur]!=undefined){
+		cur=parent[cur]
+		path.unshift(cur)
+	}
+
+	highlightPath(path)
+
+}
+
+
+
+function highlightPath(path){
+
+	highlightedEdges.clear()
+
+	for(let i=0;i<path.length-1;i++){
+
+		let a=path[i]
+		let b=path[i+1]
+
+		highlightedEdges.add(a+"-"+b)
+		highlightedEdges.add(b+"-"+a)
+
+	}
+
+}
+
+
+
+/* ---------------- EVENTS ---------------- */
+
+document.getElementById("searchNode").addEventListener("keydown",e=>{
+	if(e.key==="Enter") searchNode(e.target.value)
+})
+
+document.getElementById("findPathBtn").onclick=()=>{
+
+	let a=document.getElementById("pathA").value
+	let b=document.getElementById("pathB").value
+
+	findPath(a,b)
+
+}
+
+
+
+/* ---------------- START ---------------- */
+
+loadGraph()
+draw()
+
+</script>
+
+{% endblock %}

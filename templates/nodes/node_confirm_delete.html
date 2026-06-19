@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}
+حذف نود
+{% endblock %}
+
+{% block extra_css %}
+
+<style>
+
+	.delete-container{
+		max-width:420px;
+		margin:80px auto;
+		text-align:center;
+	}
+
+	.delete-title{
+		font-size:22px;
+		margin-bottom:10px;
+	}
+
+	.delete-text{
+		color:#94a3b8;
+		margin-bottom:25px;
+	}
+
+	.delete-actions{
+		display:flex;
+		justify-content:center;
+		gap:10px;
+	}
+
+	.btn-danger{
+		background:#ef4444;
+		color:white;
+		border:none;
+	}
+
+	.btn-danger:hover{
+		background:#dc2626;
+	}
+
+</style>
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card delete-container">
+
+	<div class="delete-title">
+		حذف {{ object.username }}؟
+	</div>
+
+	<div class="delete-text">
+		مطمئنی میخوای «{{ object.username }}» رو حذف کنی؟
+	</div>
+
+	<form method="post">
+
+		{% csrf_token %}
+
+		<div class="delete-actions">
+
+			<button type="submit" class="btn btn-danger">
+				بله حذف کن
+			</button>
+
+			<a href="/nodes/" class="btn">
+				انصراف
+			</a>
+
+		</div>
+
+	</form>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}
+روابط
+{% endblock %}
+
+{% block extra_css %}
+
+.table{
+	width:100%;
+	border-collapse:collapse;
+}
+
+.table th{
+	text-align:right;
+	font-size:13px;
+	padding:12px;
+	border-bottom:1px solid var(--border);
+	color:#94a3b8;
+}
+
+.table td{
+	padding:14px 12px;
+	border-bottom:1px solid var(--border);
+	font-size:14px;
+}
+
+.table tr:hover{
+	background:rgba(99,102,241,.08);
+}
+
+.actions{
+	display:flex;
+	gap:8px;
+}
+
+.header-row{
+	display:flex;
+	justify-content:space-between;
+	align-items:center;
+	margin-bottom:20px;
+}
+
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+
+	<div class="header-row">
+
+		<div class="card-title">
+			روابط ({{ relationships|length }})
+		</div>
+
+		<a href="{% url 'relationship_create' %}" class="btn">
+			رابطه جدید
+		</a>
+
+	</div>
+
+	<table class="table">
+
+		<thead>
+			<tr>
+				<th>ID</th>
+				<th>نوع رابطه</th>
+				<th>پدر</th>
+				<th>فرزند</th>
+				<th>عملیات</th>
+			</tr>
+		</thead>
+
+		<tbody>
+
+		{% for rel in relationships %}
+
+			<tr>
+
+				<td>#{{ rel.id }}</td>
+
+				<td>
+					{{ rel.rel }}
+				</td>
+
+				<td>
+					{{ rel.father.username }}
+				</td>
+
+				<td>
+					{{ rel.child.username }}
+				</td>
+
+				<td class="actions">
+
+					<a href="{% url 'relationship_detail' rel.id %}" class="btn">
+						مشاهده
+					</a>
+
+					<a href="{% url 'relationship_update' rel.id %}" class="btn">
+						ویرایش
+					</a>
+
+					<a href="{% url 'relationship_delete' rel.id %}" class="btn btn-danger">
+						حذف
+					</a>
+
+				</td>
+
+			</tr>
+
+		{% empty %}
+
+			<tr>
+				<td colspan="5">
+					هیچ رابطه‌ای ثبت نشده است
+				</td>
+			</tr>
+
+		{% endfor %}
+
+		</tbody>
+
+	</table>
+
+</div>
+
+{% endblock %}
