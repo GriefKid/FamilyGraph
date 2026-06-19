@@ -136,12 +136,12 @@ display:block;
 
 /* ─── EDGES ─── */
 .edge-line{
-stroke:#252540;
 stroke-width:1.5;
-transition:stroke .2s, opacity .2s;
+fill:none;
+transition:opacity .2s;
 }
 
-.edge-line.faded{ opacity:.07; }
+.edge-line.faded{ opacity:.06; }
 
 .edge-label{
 fill:#3a3a5c;
@@ -158,7 +158,7 @@ transition:opacity .2s;
 
 .node-bg{
 stroke-width:1.5;
-transition:fill .18s, stroke .18s, stroke-width .18s, opacity .2s;
+transition:stroke-width .18s, opacity .2s;
 }
 
 .node-group.faded .node-bg{ opacity:.1; }
@@ -454,14 +454,15 @@ const edgeLine = gEdges.selectAll("line")
   .data(links)
   .join("line")
   .attr("class", "edge-line")
-  .style("stroke", d => relColor[d.label])
-  .attr("marker-end", d => `url(#${mId(d.label)})`)
+  .attr("stroke",       d => relColor[d.label] || "#6366f1")
+  .attr("stroke-width", 1.5)
+  .attr("marker-end",   d => `url(#${mId(d.label)})`)
 
 const edgeLabelEl = gEdges.selectAll("text")
   .data(links)
   .join("text")
   .attr("class", "edge-label")
-  .style("fill", d => relColor[d.label] + "99")
+  .attr("fill", d => (relColor[d.label] || "#6366f1") + "99")
   .text(d => d.label !== "سایر" ? d.label : "")
 
 /* ── nodes ── */
@@ -531,15 +532,15 @@ const nodeGroup = gNodes.selectAll("g")
   .on("mouseout", () => tip.classList.remove("show"))
 
 nodeGroup.append("circle")
-  .attr("class", "node-glow")
-  .attr("r", 30)
-  .style("stroke", d => nodeStroke(d))
+  .attr("class",  "node-glow")
+  .attr("r",      30)
+  .attr("stroke", d => nodeStroke(d))
 
 nodeGroup.append("circle")
-  .attr("class", "node-bg")
-  .attr("r", 26)
-  .style("fill",   d => nodeColor(d))
-  .style("stroke", d => nodeStroke(d))
+  .attr("class",  "node-bg")
+  .attr("r",      26)
+  .attr("fill",   d => nodeColor(d))
+  .attr("stroke", d => nodeStroke(d))
 
 nodeGroup.append("text")
   .attr("class", "node-label")
