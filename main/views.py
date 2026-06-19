@@ -340,7 +340,7 @@ def graph_all_api(request):
 
     nodes = Node.objects.only("id","username","picture")
     relationships = Relationship.objects.select_related(
-        "father","child"
+        "source","target"
     )
 
     node_data=[]
