@@ -53,3 +53,4 @@ class Information(models.Model):
 
     def __str__(self):
         return f'Information #{self.id} - {self.node}'
+

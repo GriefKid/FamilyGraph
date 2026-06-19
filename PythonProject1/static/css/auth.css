@@ -1,0 +1,53 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f4f4f9;
+    margin: 0;
+    font-family: sans-serif;
+}
+
+.login-card {
+    display: flex;
+    background: white;
+    width: 900px;
+    height: 550px;
+    border-radius: 30px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.left-side {
+    flex: 1;
+    background: #d1b3ff; /* رنگ بنفش تصویر */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.right-side {
+    flex: 1;
+    padding: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+input {
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+}
+
+.sign-in-btn {
+    background-color: #ff6b6b;
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: bold;
+}

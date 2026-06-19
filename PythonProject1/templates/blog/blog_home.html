@@ -1,0 +1,36 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>All Blogs</title>
+</head>
+<body>
+    <h1>All Blog Posts</h1>
+
+    {% if user.is_authenticated %}
+        <p>
+            Hello, {{ user.username }} |
+            <a href="{% url 'user_dashboard' %}">My Dashboard</a>
+        </p>
+    {% else %}
+        <p>
+            <a href="{% url 'login' %}">Login</a> |
+            <a href="{% url 'register' %}">Register</a>
+        </p>
+    {% endif %}
+
+    <hr>
+
+    {% for post in posts %}
+        <article>
+            <h2>{{ post.title }}</h2>
+            <p>by {{ post.author.username }} on {{ post.created_at|date:"Y-m-d H:i" }}</p>
+            <p>{{ post.content }}</p>
+            <hr>
+        </article>
+    {% empty %}
+        <p>No posts yet.</p>
+    {% endfor %}
+</body>
+</html>

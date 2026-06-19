@@ -1,0 +1,17 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="{% static 'css/auth.css' %}">
+</head>
+<body>
+<div class="login-card">
+    <div class="left-side">
+        <img src="{% static 'images/login-illustration.png' %}" alt="Illustration" style="max-width: 80%;">
+    </div>
+    <div class="right-side">
+        {% block content %}{% endblock %}
+    </div>
+</div>
+</body>
+</html>
