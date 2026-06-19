@@ -16,6 +16,8 @@
 
 		<div id="graph-stats"></div>
 
+		<div id="graph-legend"></div>
+
 		<canvas id="graphCanvas"></canvas>
 
 	</div>
@@ -93,6 +95,17 @@
 	color:white;
 }
 
+#graph-legend{
+	position:absolute;
+	bottom:20px;
+	right:20px;
+	z-index:20;
+	background:rgba(0,0,0,0.55);
+	padding:10px 14px;
+	border-radius:8px;
+	min-width:110px;
+}
+
 </style>
 
 <script>
@@ -122,6 +135,14 @@ let adjacency={}
 let images={}
 
 let highlightedEdges=new Set()
+
+const PALETTE=[
+  "#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
+  "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
+  "#84cc16","#a855f7","#e11d48","#0ea5e9","#d97706"
+]
+
+let relColors={}
 
 
 
@@ -217,6 +238,8 @@ function loadGraph(){
 		let root=nodes.find(n=>n.username.toLowerCase()==="root")||nodes[0]
 		centerRoot(root.id)
 
+		buildRelColors()
+		buildLegend()
 		updateStats()
 
 	})
@@ -386,6 +409,25 @@ function updateStats(){
 
 
 
+/* ---------------- REL COLORS ---------------- */
+
+function buildRelColors(){
+	let types=[...new Set(edges.map(e=>e.label||"سایر"))].sort()
+	types.forEach((r,i)=>{ relColors[r]=PALETTE[i%PALETTE.length] })
+}
+
+function buildLegend(){
+	let el=document.getElementById("graph-legend")
+	el.innerHTML=""
+	Object.entries(relColors).forEach(([label,color])=>{
+		let item=document.createElement("div")
+		item.style.cssText="display:flex;align-items:center;gap:6px;margin-bottom:4px;"
+		item.innerHTML=`<span style="width:12px;height:12px;border-radius:50%;background:${color};flex-shrink:0"></span><span style="font-size:11px;color:#ccc">${label||"سایر"}</span>`
+		el.appendChild(item)
+	})
+}
+
+
 /* ---------------- DRAW EDGES ---------------- */
 
 function drawEdges(){
@@ -398,14 +440,31 @@ function drawEdges(){
 		if(!s||!t) return
 
 		let key=parseInt(e.source)+"-"+parseInt(e.target)
+		let label=e.label||"سایر"
+		let baseColor=relColors[label]||"#6aa9ff"
 
-		ctx.strokeStyle = highlightedEdges.has(key) ? "#ffd54f" : "#6aa9ff"
-		ctx.lineWidth = highlightedEdges.has(key) ? 4 : 2
+		if(highlightedEdges.has(key)){
+			ctx.strokeStyle="#ffd54f"
+			ctx.lineWidth=4
+		}else{
+			ctx.strokeStyle=baseColor
+			ctx.lineWidth=2
+		}
 
 		ctx.beginPath()
 		ctx.moveTo(s.x,s.y)
 		ctx.lineTo(t.x,t.y)
 		ctx.stroke()
+
+		/* edge label */
+		if(label&&label!=="سایر"){
+			let mx=(s.x+t.x)/2
+			let my=(s.y+t.y)/2
+			ctx.fillStyle=baseColor+"cc"
+			ctx.font="10px Arial"
+			ctx.textAlign="center"
+			ctx.fillText(label,mx,my-4)
+		}
 
 	})
 
