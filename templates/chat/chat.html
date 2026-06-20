@@ -320,7 +320,7 @@ async function sendMessage(){
     let data=await res.json()
     removeTyping()
     if(data.reply) appendMsg("ai",formatReply(data.reply))
-    else appendMsg("ai","<p>خطایی رخ داد.</p>")
+    else appendMsg("ai","<p style='color:#f43f5e'>خطا: "+(data.error||"نامشخص")+"</p>")
   }catch(e){
     removeTyping()
     appendMsg("ai","<p>خطا در ارتباط با سرور.</p>")

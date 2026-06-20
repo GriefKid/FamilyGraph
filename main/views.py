@@ -339,6 +339,56 @@ def home_graph_api(request):
     return JsonResponse(elements)
 
 
+def insights_view(request):
+    all_nodes = list(Node.objects.all())
+    all_rels  = list(Relationship.objects.select_related('source', 'target'))
+
+    node_count = len(all_nodes)
+    edge_count = len(all_rels)
+
+    # degree per node
+    degree = {n.id: 0 for n in all_nodes}
+    for r in all_rels:
+        degree[r.source_id] = degree.get(r.source_id, 0) + 1
+        degree[r.target_id] = degree.get(r.target_id, 0) + 1
+
+    # top nodes sorted by degree
+    node_map = {n.id: n for n in all_nodes}
+    top_nodes = sorted(degree.items(), key=lambda x: -x[1])[:8]
+    top_nodes = [(node_map[nid], deg) for nid, deg in top_nodes if nid in node_map]
+
+    # most connected
+    most_connected = top_nodes[0][0] if top_nodes else None
+    most_connected_degree = top_nodes[0][1] if top_nodes else 0
+
+    # isolated
+    isolated = [n for n in all_nodes if degree.get(n.id, 0) == 0]
+
+    # rel type distribution
+    rel_types = {}
+    for r in all_rels:
+        label = r.rel or "نامشخص"
+        rel_types[label] = rel_types.get(label, 0) + 1
+    rel_types = sorted(rel_types.items(), key=lambda x: -x[1])
+
+    # density & avg degree
+    max_edges = node_count * (node_count - 1)
+    density   = round(edge_count / max_edges, 3) if max_edges > 0 else 0
+    avg_degree= round(2 * edge_count / node_count, 2) if node_count > 0 else 0
+
+    return render(request, 'insights/insights.html', {
+        'node_count': node_count,
+        'edge_count': edge_count,
+        'density': density,
+        'avg_degree': avg_degree,
+        'most_connected': most_connected,
+        'most_connected_degree': most_connected_degree,
+        'isolated': isolated,
+        'top_nodes': top_nodes,
+        'rel_types': rel_types,
+    })
+
+
 def chat_view(request):
     return render(request, 'chat/chat.html')
 
@@ -388,21 +438,29 @@ def chat_api(request):
         "بر اساس این داده‌ها به فارسی و مختصر پاسخ بده."
     )
 
-    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    api_key = os.environ.get('OPENROUTER_API_KEY', '')
     if not api_key:
-        return JsonResponse({'error': 'ANTHROPIC_API_KEY تنظیم نشده'}, status=500)
+        return JsonResponse({'error': 'OPENROUTER_API_KEY تنظیم نشده'}, status=500)
 
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}]
+        from openai import OpenAI
+    except ImportError:
+        return JsonResponse({'error': 'پکیج openai نصب نیست. دستور: py -m pip install openai'}, status=500)
+
+    try:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
         )
-        reply = response.content[0].text
-        return JsonResponse({'reply': reply})
+        response = client.chat.completions.create(
+            model="google/gemma-4-31b-it:free",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_message},
+            ],
+            max_tokens=1024,
+        )
+        return JsonResponse({'reply': response.choices[0].message.content})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 

@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+{% block title %}بینش‌ها — FamilyGraph{% endblock %}
+{% block page_title %}بینش‌های شبکه{% endblock %}
+{% block nav_insights %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.insights-grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+gap:14px;
+margin-bottom:24px;
+}
+
+.metric-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+padding:18px 20px;
+display:flex;
+flex-direction:column;
+gap:6px;
+}
+
+.metric-label{
+font-size:11px;
+font-weight:600;
+color:var(--text-muted);
+text-transform:uppercase;
+letter-spacing:.6px;
+}
+
+.metric-value{
+font-size:28px;
+font-weight:700;
+color:var(--primary);
+line-height:1;
+}
+
+.metric-sub{
+font-size:12px;
+color:var(--text-soft);
+}
+
+/* section */
+.section-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+overflow:hidden;
+margin-bottom:16px;
+}
+
+.section-head{
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:14px 20px;
+border-bottom:1px solid var(--border);
+background:var(--surface);
+}
+
+.section-title{
+font-size:13px;
+font-weight:600;
+}
+
+.section-body{
+padding:16px 20px;
+}
+
+/* rel type bars */
+.rel-bar-wrap{
+display:flex;
+flex-direction:column;
+gap:10px;
+}
+
+.rel-bar-row{
+display:flex;
+align-items:center;
+gap:12px;
+font-size:13px;
+}
+
+.rel-bar-label{
+width:110px;
+color:var(--text-soft);
+text-align:right;
+flex-shrink:0;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis;
+}
+
+.rel-bar-track{
+flex:1;
+height:8px;
+background:var(--surface);
+border-radius:4px;
+overflow:hidden;
+}
+
+.rel-bar-fill{
+height:100%;
+background:var(--primary);
+border-radius:4px;
+transition:width .4s ease;
+}
+
+.rel-bar-count{
+font-size:12px;
+color:var(--text-muted);
+width:28px;
+text-align:left;
+flex-shrink:0;
+}
+
+/* top nodes */
+.top-node-list{
+display:flex;
+flex-direction:column;
+gap:6px;
+}
+
+.top-node-row{
+display:flex;
+align-items:center;
+gap:12px;
+padding:8px 10px;
+border-radius:8px;
+transition:var(--transition);
+}
+
+.top-node-row:hover{background:var(--primary-glow);}
+
+.rank{
+font-size:12px;
+color:var(--text-muted);
+width:20px;
+text-align:center;
+flex-shrink:0;
+}
+
+.top-node-name{
+flex:1;
+font-size:13px;
+font-weight:500;
+color:var(--text);
+text-decoration:none;
+}
+
+.top-node-name:hover{color:var(--primary);}
+
+.degree-badge{
+font-size:11px;
+background:var(--primary-glow);
+color:var(--primary);
+padding:2px 9px;
+border-radius:20px;
+border:1px solid var(--primary-border);
+}
+
+/* AI insight box */
+.ai-box{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+overflow:hidden;
+}
+
+.ai-head{
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:14px 20px;
+border-bottom:1px solid var(--border);
+background:var(--surface);
+}
+
+.ai-title{
+font-size:13px;
+font-weight:600;
+display:flex;
+align-items:center;
+gap:8px;
+}
+
+.ai-icon{color:var(--primary);}
+
+.ai-body{
+padding:20px;
+font-size:13.5px;
+line-height:1.9;
+color:var(--text-soft);
+min-height:80px;
+}
+
+.ai-body p{margin:0;}
+.ai-body p+p{margin-top:10px;}
+
+.ai-placeholder{
+color:var(--text-muted);
+font-style:italic;
+}
+
+.btn-generate{
+padding:7px 16px;
+background:var(--primary);
+color:#fff;
+border:none;
+border-radius:var(--radius);
+font-family:'Vazirmatn',sans-serif;
+font-size:12px;
+font-weight:600;
+cursor:pointer;
+transition:var(--transition);
+}
+
+.btn-generate:hover{opacity:.85;}
+.btn-generate:disabled{opacity:.4;cursor:not-allowed;}
+
+/* isolated */
+.isolated-list{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+padding:16px 20px;
+}
+
+.isolated-chip{
+padding:5px 12px;
+background:var(--surface);
+border:1px solid var(--border);
+border-radius:20px;
+font-size:12px;
+color:var(--text-soft);
+text-decoration:none;
+}
+
+.isolated-chip:hover{
+border-color:var(--primary-border);
+color:var(--primary);
+}
+
+.empty-sec{
+padding:24px 20px;
+text-align:center;
+color:var(--text-muted);
+font-size:13px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- METRIC CARDS -->
+<div class="insights-grid">
+  <div class="metric-card">
+    <div class="metric-label">تعداد افراد</div>
+    <div class="metric-value">{{ node_count }}</div>
+    <div class="metric-sub">نود در شبکه</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">تعداد روابط</div>
+    <div class="metric-value">{{ edge_count }}</div>
+    <div class="metric-sub">یال در گراف</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">تراکم شبکه</div>
+    <div class="metric-value">{{ density }}</div>
+    <div class="metric-sub">از ۱.۰ (شبکه کامل)</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">میانگین ارتباط</div>
+    <div class="metric-value">{{ avg_degree }}</div>
+    <div class="metric-sub">رابطه به ازای هر نفر</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">پرارتباط‌ترین</div>
+    <div class="metric-value" style="font-size:18px">{{ most_connected.username|default:"—" }}</div>
+    <div class="metric-sub">{{ most_connected_degree }} رابطه</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">نودهای منزوی</div>
+    <div class="metric-value" style="color:{% if isolated %}#f59e0b{% else %}#10b981{% endif %}">{{ isolated|length }}</div>
+    <div class="metric-sub">بدون هیچ رابطه‌ای</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+  <!-- TOP NODES -->
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-title">پرارتباط‌ترین افراد</span>
+    </div>
+    <div class="section-body">
+      <div class="top-node-list">
+        {% for node, deg in top_nodes %}
+        <div class="top-node-row">
+          <span class="rank">{{ forloop.counter }}</span>
+          <a href="{% url 'node_detail' node.id %}" class="top-node-name">{{ node.username }}</a>
+          <span class="degree-badge">{{ deg }} رابطه</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- REL TYPE DIST -->
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-title">توزیع نوع روابط</span>
+    </div>
+    <div class="section-body">
+      {% if rel_types %}
+      <div class="rel-bar-wrap">
+        {% for label, count in rel_types %}
+        <div class="rel-bar-row">
+          <span class="rel-bar-label">{{ label }}</span>
+          <div class="rel-bar-track">
+            <div class="rel-bar-fill" style="width:{{ count|floatformat:0 }}%"
+                 data-count="{{ count }}" data-max="{{ rel_types.0.1 }}"></div>
+          </div>
+          <span class="rel-bar-count">{{ count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-sec">رابطه‌ای ثبت نشده</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ISOLATED NODES -->
+{% if isolated %}
+<div class="section-card" style="margin-bottom:16px">
+  <div class="section-head">
+    <span class="section-title">نودهای منزوی</span>
+    <span style="font-size:11px;color:var(--text-muted)">هیچ رابطه‌ای ندارند</span>
+  </div>
+  <div class="isolated-list">
+    {% for node in isolated %}
+    <a href="{% url 'node_detail' node.id %}" class="isolated-chip">{{ node.username }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- AI INSIGHTS -->
+<div class="ai-box">
+  <div class="ai-head">
+    <span class="ai-title"><span class="ai-icon">✦</span> تحلیل هوش مصنوعی</span>
+    <button class="btn-generate" id="genBtn" onclick="generateInsight()">تولید تحلیل</button>
+  </div>
+  <div class="ai-body" id="aiBody">
+    <span class="ai-placeholder">روی «تولید تحلیل» کلیک کن تا AI شبکه‌ات رو بررسی کنه.</span>
+  </div>
+</div>
+
+<script>
+/* fix bar widths */
+document.querySelectorAll(".rel-bar-fill").forEach(el=>{
+  let count=parseInt(el.dataset.count)
+  let max=parseInt(el.dataset.max)
+  el.style.width=Math.round(count/max*100)+"%"
+})
+
+async function generateInsight(){
+  let btn=document.getElementById("genBtn")
+  let body=document.getElementById("aiBody")
+  btn.disabled=true
+  btn.textContent="در حال تحلیل..."
+  body.innerHTML='<span class="ai-placeholder">لحظه‌ای صبر کن...</span>'
+
+  try{
+    let res=await fetch("/api/chat/",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
+      body:JSON.stringify({message:`یک تحلیل کامل و مفید از شبکه روابط من بنویس. روی این موارد تمرکز کن:
+۱. ساختار کلی شبکه (چقدر متراکمه، آیا سالمه)
+۲. مهم‌ترین افراد و نقش‌شان
+۳. نقاط ضعف یا فرصت‌های بهبود رابطه
+۴. یک توصیه عملی برای تقویت شبکه
+پاسخ رو به فارسی و در ۴-۵ پاراگراف کوتاه بنویس.`})
+    })
+    let data=await res.json()
+    if(data.reply){
+      body.innerHTML=data.reply.split(/\n\n+/).map(p=>"<p>"+p.replace(/\n/g,"<br>")+"</p>").join("")
+    }else{
+      body.innerHTML='<span style="color:#f43f5e">خطا: '+(data.error||"نامشخص")+'</span>'
+    }
+  }catch(e){
+    body.innerHTML='<span style="color:#f43f5e">خطا در ارتباط با سرور</span>'
+  }finally{
+    btn.disabled=false
+    btn.textContent="تولید دوباره"
+  }
+}
+
+function getCookie(name){
+  let v=document.cookie.match("(^|;)\\s*"+name+"\\s*=\\s*([^;]+)")
+  return v?v.pop():""
+}
+</script>
+{% endblock %}

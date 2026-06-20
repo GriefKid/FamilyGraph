@@ -51,6 +51,7 @@ urlpatterns = [
     # ======================
     # CHAT AI
     # ======================
+    path('insights/', views.insights_view, name='insights'),
     path('chat/', views.chat_view, name='chat'),
     path('api/chat/', views.chat_api, name='chat_api'),
 
