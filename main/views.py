@@ -339,6 +339,57 @@ def home_graph_api(request):
     return JsonResponse(elements)
 
 
+COMMUNITY_PALETTE = [
+    "#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
+    "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
+]
+
+def communities_view(request):
+    try:
+        import networkx as nx
+        from networkx.algorithms.community import louvain_communities
+    except ImportError:
+        return render(request, 'communities/communities.html', {'error': 'networkx نصب نیست. دستور: py -m pip install networkx'})
+
+    all_nodes = list(Node.objects.all())
+    all_rels  = list(Relationship.objects.select_related('source', 'target'))
+    node_map  = {n.id: n for n in all_nodes}
+
+    G = nx.Graph()
+    for n in all_nodes:
+        G.add_node(n.id)
+    for r in all_rels:
+        G.add_edge(r.source_id, r.target_id)
+
+    if G.number_of_nodes() == 0:
+        return render(request, 'communities/communities.html', {'communities': [], 'node_community': {}})
+
+    try:
+        raw = louvain_communities(G, seed=42)
+    except Exception:
+        # fallback: هر connected component یه community
+        raw = list(nx.connected_components(G))
+
+    # sort communities by size desc
+    raw = sorted(raw, key=lambda s: -len(s))
+
+    communities = []
+    node_community = {}  # node_id -> community_index
+    for i, group in enumerate(raw):
+        members = [node_map[nid] for nid in group if nid in node_map]
+        color   = COMMUNITY_PALETTE[i % len(COMMUNITY_PALETTE)]
+        communities.append({'index': i+1, 'color': color, 'members': members, 'size': len(members)})
+        for nid in group:
+            node_community[nid] = i
+
+    return render(request, 'communities/communities.html', {
+        'communities': communities,
+        'total': len(communities),
+        'node_count': len(all_nodes),
+        'edge_count': len(all_rels),
+    })
+
+
 def insights_view(request):
     all_nodes = list(Node.objects.all())
     all_rels  = list(Relationship.objects.select_related('source', 'target'))
