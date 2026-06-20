@@ -238,6 +238,28 @@ color:var(--text-muted);
 font-size:13px;
 }
 
+.ai-summary-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+overflow:hidden;
+}
+.ai-summary-head{
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:14px 20px;
+border-bottom:1px solid var(--border);
+background:var(--surface);
+}
+.ai-summary-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--primary);}
+.ai-summary-body{padding:18px 20px;font-size:13.5px;line-height:1.9;color:var(--text-soft);min-height:56px;}
+.ai-summary-body p{margin:0;}
+.ai-summary-body p+p{margin-top:10px;}
+.btn-ai{padding:6px 14px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius);font-family:'Vazirmatn',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:var(--transition);}
+.btn-ai:hover{opacity:.85;}
+.btn-ai:disabled{opacity:.4;cursor:not-allowed;}
+
 </style>
 {% endblock %}
 
@@ -326,5 +348,44 @@ font-size:13px;
     {% endif %}
   </div>
 
+  <!-- AI SUMMARY -->
+  <div class="ai-summary-card">
+    <div class="ai-summary-head">
+      <span class="ai-summary-title">✦ تحلیل AI</span>
+      <button class="btn-ai" id="aiBtn" onclick="loadSummary()">تولید خلاصه</button>
+    </div>
+    <div class="ai-summary-body" id="aiBody">
+      <span style="color:var(--text-muted);font-style:italic">روی «تولید خلاصه» کلیک کن</span>
+    </div>
+  </div>
+
 </div>
+
+<script>
+async function loadSummary(){
+  let btn=document.getElementById("aiBtn")
+  let body=document.getElementById("aiBody")
+  btn.disabled=true
+  btn.textContent="در حال تحلیل..."
+  body.innerHTML='<span style="color:var(--text-muted)">لحظه‌ای صبر کن...</span>'
+  try{
+    let res=await fetch("/api/node/{{ node.id }}/summary/",{
+      method:"POST",
+      headers:{"X-CSRFToken":getCookie("csrftoken")}
+    })
+    let data=await res.json()
+    if(data.summary){
+      body.innerHTML=data.summary.split(/\n\n+/).map(p=>"<p>"+p.replace(/\n/g,"<br>")+"</p>").join("")
+    }else{
+      body.innerHTML='<span style="color:#f43f5e">خطا: '+(data.error||"نامشخص")+'</span>'
+    }
+  }catch(e){
+    body.innerHTML='<span style="color:#f43f5e">خطا در ارتباط با سرور</span>'
+  }finally{
+    btn.disabled=false
+    btn.textContent="تولید دوباره"
+  }
+}
+function getCookie(n){let v=document.cookie.match("(^|;)\\s*"+n+"\\s*=\\s*([^;]+)");return v?v.pop():""}
+</script>
 {% endblock %}

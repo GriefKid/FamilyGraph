@@ -52,6 +52,7 @@ urlpatterns = [
     # CHAT AI
     # ======================
     path('insights/', views.insights_view, name='insights'),
+    path('api/node/<int:pk>/summary/', views.node_ai_summary, name='node_ai_summary'),
     path('chat/', views.chat_view, name='chat'),
     path('api/chat/', views.chat_api, name='chat_api'),
 

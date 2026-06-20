@@ -389,6 +389,52 @@ def insights_view(request):
     })
 
 
+def node_ai_summary(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    node = get_object_or_404(Node, pk=pk)
+    rels = Relationship.objects.filter(
+        Q(source=node) | Q(target=node)
+    ).select_related('source', 'target')
+    infos = Information.objects.filter(node=node)
+
+    rels_text = "\n".join(
+        f"- {'خروجی به' if r.source == node else 'ورودی از'} {r.target.username if r.source == node else r.source.username}"
+        + (f" [{r.rel}]" if r.rel else "")
+        for r in rels
+    ) or "هیچ رابطه‌ای ندارد"
+
+    info_text = "\n".join(f"- {i.data}" for i in infos) or "اطلاعات اضافه‌ای ثبت نشده"
+
+    prompt = (
+        f"یک خلاصه تحلیلی از این شخص بنویس:\n\n"
+        f"نام کاربری: {node.username}\n"
+        f"نام: {node.name or '—'}\n"
+        f"شغل: {node.career or '—'}\n"
+        f"تولد: {node.birth_day or '—'}\n\n"
+        f"روابط:\n{rels_text}\n\n"
+        f"اطلاعات:\n{info_text}\n\n"
+        "در ۲-۳ پاراگراف کوتاه فارسی بنویس: این شخص کیه، چه نقشی در شبکه داره، و چه نکته مهمی درباره‌اش هست."
+    )
+
+    api_key = os.environ.get('OPENROUTER_API_KEY', '')
+    if not api_key:
+        return JsonResponse({'error': 'OPENROUTER_API_KEY تنظیم نشده'}, status=500)
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        response = client.chat.completions.create(
+            model="google/gemma-4-31b-it:free",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+        )
+        return JsonResponse({'summary': response.choices[0].message.content})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 def chat_view(request):
     return render(request, 'chat/chat.html')
 
