@@ -51,6 +51,9 @@ urlpatterns = [
     # ======================
     # CHAT AI
     # ======================
+    path('events/',            views.events_list,   name='events_list'),
+    path('events/create/',     views.event_create,  name='event_create'),
+    path('events/<int:pk>/delete/', views.event_delete, name='event_delete'),
     path('communities/', views.communities_view, name='communities'),
     path('insights/', views.insights_view, name='insights'),
     path('api/node/<int:pk>/summary/', views.node_ai_summary, name='node_ai_summary'),

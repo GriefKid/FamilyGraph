@@ -8,13 +8,13 @@ from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 
-from .forms import NodeForm, RelationshipForm
+from .forms import NodeForm, RelationshipForm, EventForm
 from .models import Relationship
 from django.core.cache import cache
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
-from .models import Node, Information
+from .models import Node, Information, Event
 from django.views.generic import ListView
 from .models import Node
 from django.views.generic import TemplateView
@@ -344,6 +344,28 @@ COMMUNITY_PALETTE = [
     "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
 ]
 
+def events_list(request):
+    events = Event.objects.prefetch_related('participants').all()
+    return render(request, 'events/events_list.html', {'events': events})
+
+def event_create(request):
+    if request.method == 'POST':
+        form = EventForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('events_list')
+    else:
+        form = EventForm()
+    return render(request, 'events/event_form.html', {'form': form})
+
+def event_delete(request, pk):
+    event = get_object_or_404(Event, pk=pk)
+    if request.method == 'POST':
+        event.delete()
+        return redirect('events_list')
+    return render(request, 'events/event_confirm_delete.html', {'event': event})
+
+
 def communities_view(request):
     try:
         import networkx as nx
@@ -396,6 +418,7 @@ def insights_view(request):
 
     node_count = len(all_nodes)
     edge_count = len(all_rels)
+    node_map   = {n.id: n for n in all_nodes}
 
     # degree per node
     degree = {n.id: 0 for n in all_nodes}
@@ -404,39 +427,76 @@ def insights_view(request):
         degree[r.target_id] = degree.get(r.target_id, 0) + 1
 
     # top nodes sorted by degree
-    node_map = {n.id: n for n in all_nodes}
     top_nodes = sorted(degree.items(), key=lambda x: -x[1])[:8]
     top_nodes = [(node_map[nid], deg) for nid, deg in top_nodes if nid in node_map]
 
-    # most connected
-    most_connected = top_nodes[0][0] if top_nodes else None
+    most_connected        = top_nodes[0][0] if top_nodes else None
     most_connected_degree = top_nodes[0][1] if top_nodes else 0
+    isolated              = [n for n in all_nodes if degree.get(n.id, 0) == 0]
 
-    # isolated
-    isolated = [n for n in all_nodes if degree.get(n.id, 0) == 0]
-
-    # rel type distribution
     rel_types = {}
     for r in all_rels:
         label = r.rel or "نامشخص"
         rel_types[label] = rel_types.get(label, 0) + 1
     rel_types = sorted(rel_types.items(), key=lambda x: -x[1])
 
-    # density & avg degree
-    max_edges = node_count * (node_count - 1)
-    density   = round(edge_count / max_edges, 3) if max_edges > 0 else 0
-    avg_degree= round(2 * edge_count / node_count, 2) if node_count > 0 else 0
+    max_edges  = node_count * (node_count - 1)
+    density    = round(edge_count / max_edges, 3) if max_edges > 0 else 0
+    avg_degree = round(2 * edge_count / node_count, 2) if node_count > 0 else 0
+
+    # ── Centrality (Task 8) ──
+    centrality_rows = []
+    try:
+        import networkx as nx
+        G = nx.Graph()
+        for n in all_nodes: G.add_node(n.id)
+        for r in all_rels:  G.add_edge(r.source_id, r.target_id)
+
+        deg_c  = nx.degree_centrality(G)
+        bet_c  = nx.betweenness_centrality(G)
+        clo_c  = nx.closeness_centrality(G)
+
+        for n in all_nodes:
+            centrality_rows.append({
+                'node':        n,
+                'degree_c':    round(deg_c.get(n.id, 0), 3),
+                'between_c':   round(bet_c.get(n.id, 0), 3),
+                'closeness_c': round(clo_c.get(n.id, 0), 3),
+            })
+        centrality_rows.sort(key=lambda x: -x['degree_c'])
+    except ImportError:
+        centrality_rows = []
+
+    # ── Network Health Score (Task 9) ──
+    isolated_ratio  = len(isolated) / node_count if node_count else 1
+    avg_strength    = 0
+    if all_rels:
+        avg_strength = sum(r.strength for r in all_rels) / len(all_rels)
+    active_ratio    = sum(1 for r in all_rels if r.status == 'active') / len(all_rels) if all_rels else 0
+
+    density_score   = min(density * 200, 40)          # max 40
+    isolation_score = max(0, 20 - isolated_ratio * 20) # max 20
+    strength_score  = (avg_strength / 5) * 20          # max 20
+    active_score    = active_ratio * 20                 # max 20
+
+    health_score = round(density_score + isolation_score + strength_score + active_score)
+    health_color = "#10b981" if health_score >= 70 else "#f59e0b" if health_score >= 40 else "#ef4444"
+    health_label = "سالم" if health_score >= 70 else "متوسط" if health_score >= 40 else "نیاز به توجه"
 
     return render(request, 'insights/insights.html', {
-        'node_count': node_count,
-        'edge_count': edge_count,
-        'density': density,
-        'avg_degree': avg_degree,
-        'most_connected': most_connected,
-        'most_connected_degree': most_connected_degree,
-        'isolated': isolated,
-        'top_nodes': top_nodes,
-        'rel_types': rel_types,
+        'node_count':             node_count,
+        'edge_count':             edge_count,
+        'density':                density,
+        'avg_degree':             avg_degree,
+        'most_connected':         most_connected,
+        'most_connected_degree':  most_connected_degree,
+        'isolated':               isolated,
+        'top_nodes':              top_nodes,
+        'rel_types':              rel_types,
+        'centrality_rows':        centrality_rows,
+        'health_score':           health_score,
+        'health_color':           health_color,
+        'health_label':           health_label,
     })
 
 

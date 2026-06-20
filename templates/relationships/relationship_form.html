@@ -137,6 +137,30 @@ margin-top:8px;
         </select>
       </div>
 
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+        <div class="form-group">
+          <label class="form-label">قدرت رابطه (۱-۵)</label>
+          <select name="strength" class="form-select">
+            {% for v in "12345" %}
+            <option value="{{ v }}" {% if form.instance.strength|stringformat:"s" == v %}selected{% endif %}>{{ v }} ستاره</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">وضعیت</label>
+          <select name="status" class="form-select">
+            <option value="active"   {% if form.instance.status == "active"   %}selected{% endif %}>فعال</option>
+            <option value="distant"  {% if form.instance.status == "distant"  %}selected{% endif %}>دور شده</option>
+            <option value="inactive" {% if form.instance.status == "inactive" %}selected{% endif %}>غیرفعال</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">تاریخ آشنایی</label>
+          <input name="met_at" type="date" class="form-input"
+                 value="{{ form.instance.met_at|date:'Y-m-d'|default:'' }}">
+        </div>
+      </div>
+
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">ذخیره</button>
         <a href="{% url 'relationship_list' %}" class="btn">انصراف</a>

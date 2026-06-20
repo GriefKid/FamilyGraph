@@ -15,12 +15,21 @@ class Node(models.Model):
         ordering = ['username']
 
 class Relationship(models.Model):
-    rel = models.CharField(max_length=100, blank=True, null=True)
-    source = models.ForeignKey(Node, related_name='as_source', on_delete=models.PROTECT)
-    target = models.ForeignKey(Node, related_name='as_target', on_delete=models.PROTECT)
+    STATUS_CHOICES = [
+        ('active',    'فعال'),
+        ('distant',   'دور شده'),
+        ('inactive',  'غیرفعال'),
+    ]
+
+    rel      = models.CharField(max_length=100, blank=True, null=True)
+    source   = models.ForeignKey(Node, related_name='as_source', on_delete=models.PROTECT)
+    target   = models.ForeignKey(Node, related_name='as_target', on_delete=models.PROTECT)
+    strength = models.IntegerField(default=3, choices=[(i, i) for i in range(1, 6)])  # 1-5
+    status   = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
+    met_at   = models.DateField(blank=True, null=True, verbose_name='تاریخ آشنایی')
 
     def __str__(self):
-        return self.rel
+        return self.rel or f"{self.source} → {self.target}"
 
     def clean(self):
         if self.source == self.target:
@@ -28,6 +37,19 @@ class Relationship(models.Model):
 
     class Meta:
         unique_together = ('source', 'target', 'rel')
+
+class Event(models.Model):
+    title        = models.CharField(max_length=200)
+    date         = models.DateField()
+    description  = models.TextField(blank=True)
+    participants = models.ManyToManyField(Node, blank=True, related_name='events')
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        ordering = ['-date']
+
 
 class Information(models.Model):
 

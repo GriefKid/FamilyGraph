@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}رویدادها — FamilyGraph{% endblock %}
+{% block page_title %}رویدادها{% endblock %}
+{% block nav_events %}active{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'event_create' %}" class="btn btn-primary btn-sm">+ رویداد جدید</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.timeline{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  position:relative;
+  padding-right:24px;
+}
+.timeline::before{
+  content:'';
+  position:absolute;
+  right:7px;
+  top:0;
+  bottom:0;
+  width:2px;
+  background:var(--border);
+}
+.tl-item{
+  position:relative;
+  padding-right:28px;
+  padding-bottom:24px;
+}
+.tl-dot{
+  position:absolute;
+  right:-9px;
+  top:4px;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:var(--primary);
+  border:3px solid var(--bg);
+  z-index:1;
+}
+.tl-card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px 18px;
+}
+.tl-date{
+  font-size:11px;
+  color:var(--text-muted);
+  margin-bottom:6px;
+}
+.tl-title{
+  font-size:14px;
+  font-weight:700;
+  margin-bottom:8px;
+}
+.tl-desc{
+  font-size:13px;
+  color:var(--text-soft);
+  margin-bottom:10px;
+  line-height:1.6;
+}
+.tl-participants{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.participant-chip{
+  font-size:11px;
+  padding:3px 10px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:20px;
+  color:var(--text-soft);
+  text-decoration:none;
+}
+.participant-chip:hover{color:var(--primary);border-color:var(--primary-border);}
+.tl-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:10px;
+}
+.empty-state{
+  text-align:center;
+  padding:60px 20px;
+  color:var(--text-muted);
+  font-size:14px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% if not events %}
+  <div class="empty-state">
+    هیچ رویدادی ثبت نشده —
+    <a href="{% url 'event_create' %}" style="color:var(--primary)">اولین رویداد رو اضافه کن</a>
+  </div>
+{% else %}
+  <div class="timeline">
+    {% for event in events %}
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-card">
+        <div class="tl-date">{{ event.date|date:"j F Y" }}</div>
+        <div class="tl-title">{{ event.title }}</div>
+        {% if event.description %}
+        <div class="tl-desc">{{ event.description }}</div>
+        {% endif %}
+        {% if event.participants.all %}
+        <div class="tl-participants">
+          {% for p in event.participants.all %}
+          <a href="{% url 'node_detail' p.id %}" class="participant-chip">{{ p.username }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="tl-actions">
+          <form method="post" action="{% url 'event_delete' event.id %}" onsubmit="return confirm('حذف شود؟')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-danger">حذف</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}
