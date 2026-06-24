@@ -155,11 +155,29 @@ body{
 /* ─── NAV ─── */
 .nav{ padding:10px 8px; flex:1; overflow-y:auto; }
 
+/* Collapsible section header */
+.nav-section-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 10px 5px; cursor:pointer; user-select:none;
+}
+.nav-section-header:hover .nav-section-arrow{ color:var(--primary-light); }
 .nav-section, .nav-label{
   font-size:10px; font-weight:700;
   color:var(--text-muted);
   letter-spacing:1.1px; text-transform:uppercase;
-  padding:12px 10px 5px;
+}
+.nav-section-arrow{
+  font-size:9px; color:var(--text-muted); transition:transform .2s;
+}
+.nav-section-header.collapsed .nav-section-arrow{
+  transform:rotate(-90deg);
+}
+.nav-section-items{
+  overflow:hidden; transition:max-height .25s ease, opacity .2s;
+  max-height:600px; opacity:1;
+}
+.nav-section-items.collapsed{
+  max-height:0; opacity:0;
 }
 
 .nav-item{
@@ -336,17 +354,41 @@ input:focus, textarea:focus, select:focus{
   </div>
 
   <nav class="nav">
-    <div class="nav-section">فضای کاری</div>
-    <a href="/"              class="nav-item {% block nav_home  %}{% endblock %}"><span class="nav-icon">◈</span> گراف</a>
-    <a href="/nodes/"        class="nav-item {% block nav_nodes %}{% endblock %}"><span class="nav-icon">◉</span> نودها</a>
-    <a href="/relationships/"class="nav-item {% block nav_rels  %}{% endblock %}"><span class="nav-icon">⟶</span> روابط</a>
-    <a href="/informations/" class="nav-item {% block nav_info  %}{% endblock %}"><span class="nav-icon">≡</span> اطلاعات</a>
-    <a href="/events/"       class="nav-item {% block nav_events %}{% endblock %}"><span class="nav-icon">◷</span> رویدادها</a>
 
-    <div class="nav-section">تحلیل</div>
-    <a href="/communities/"  class="nav-item {% block nav_communities %}{% endblock %}"><span class="nav-icon">⬡</span> گروه‌ها</a>
-    <a href="/insights/"     class="nav-item {% block nav_insights %}{% endblock %}"><span class="nav-icon">◎</span> بینش‌ها</a>
-    <a href="/chat/"         class="nav-item {% block nav_chat  %}{% endblock %}"><span class="nav-icon">✦</span> چت AI</a>
+    <!-- Section: فضای کاری -->
+    <div class="nav-section-header" id="sec1-hdr" onclick="toggleSection('sec1')">
+      <span class="nav-section">فضای کاری</span>
+      <span class="nav-section-arrow">▾</span>
+    </div>
+    <div class="nav-section-items" id="sec1-items">
+      <a href="/"              class="nav-item {% block nav_home  %}{% endblock %}"><span class="nav-icon">◈</span> گراف</a>
+      <a href="/nodes/"        class="nav-item {% block nav_nodes %}{% endblock %}"><span class="nav-icon">◉</span> نودها</a>
+      <a href="/relationships/"class="nav-item {% block nav_rels  %}{% endblock %}"><span class="nav-icon">⟶</span> روابط</a>
+      <a href="/informations/" class="nav-item {% block nav_info  %}{% endblock %}"><span class="nav-icon">≡</span> اطلاعات</a>
+      <a href="/events/"       class="nav-item {% block nav_events %}{% endblock %}"><span class="nav-icon">◷</span> رویدادها</a>
+      <a href="/journal/"      class="nav-item {% block nav_journal %}{% endblock %}"><span class="nav-icon">✎</span> دفترچه خاطرات</a>
+    </div>
+
+    <!-- Section: تحلیل -->
+    <div class="nav-section-header" id="sec2-hdr" onclick="toggleSection('sec2')">
+      <span class="nav-section">تحلیل</span>
+      <span class="nav-section-arrow">▾</span>
+    </div>
+    <div class="nav-section-items" id="sec2-items">
+      <a href="/communities/"  class="nav-item {% block nav_communities %}{% endblock %}"><span class="nav-icon">⬡</span> گروه‌ها</a>
+      <a href="/insights/"     class="nav-item {% block nav_insights %}{% endblock %}"><span class="nav-icon">◎</span> بینش‌ها</a>
+      <a href="/chat/"         class="nav-item {% block nav_chat  %}{% endblock %}"><span class="nav-icon">✦</span> چت AI</a>
+    </div>
+
+    <!-- Section: تنظیمات -->
+    <div class="nav-section-header" id="sec3-hdr" onclick="toggleSection('sec3')">
+      <span class="nav-section">تنظیمات</span>
+      <span class="nav-section-arrow">▾</span>
+    </div>
+    <div class="nav-section-items" id="sec3-items">
+      <a href="/settings/"     class="nav-item {% block nav_settings %}{% endblock %}"><span class="nav-icon">⚙</span> تنظیمات برنامه</span></a>
+    </div>
+
   </nav>
 
   <div class="sidebar-bottom">
@@ -366,17 +408,44 @@ input:focus, textarea:focus, select:focus{
 </div>
 
 <script>
+// ── Theme ─────────────────────────────────────────────────────
 function toggleTheme(){
-  const on = document.body.classList.toggle("light")
-  localStorage.setItem("theme", on?"light":"dark")
-  document.getElementById("themeIcon").textContent  = on ? "☾" : "☀"
-  document.getElementById("themeLabel").textContent = on ? "تم تاریک" : "تم روشن"
+  const on = document.body.classList.toggle("light");
+  localStorage.setItem("theme", on?"light":"dark");
+  document.getElementById("themeIcon").textContent  = on ? "☾" : "☀";
+  document.getElementById("themeLabel").textContent = on ? "تم تاریک" : "تم روشن";
 }
 if(localStorage.getItem("theme")==="light"){
-  document.body.classList.add("light")
-  document.getElementById("themeIcon").textContent  = "☾"
-  document.getElementById("themeLabel").textContent = "تم تاریک"
+  document.body.classList.add("light");
+  document.getElementById("themeIcon").textContent  = "☾";
+  document.getElementById("themeLabel").textContent = "تم تاریک";
 }
+
+// ── Collapsible sidebar sections ─────────────────────────────
+function toggleSection(id){
+  const hdr   = document.getElementById(id+"-hdr");
+  const items = document.getElementById(id+"-items");
+  const collapsed = items.classList.toggle("collapsed");
+  hdr.classList.toggle("collapsed", collapsed);
+  // Persist
+  const state = JSON.parse(localStorage.getItem("nav-sections")||"{}");
+  state[id] = collapsed;
+  localStorage.setItem("nav-sections", JSON.stringify(state));
+}
+// Restore state on load
+(function(){
+  const state = JSON.parse(localStorage.getItem("nav-sections")||"{}");
+  Object.entries(state).forEach(([id, collapsed])=>{
+    if(collapsed){
+      const hdr   = document.getElementById(id+"-hdr");
+      const items = document.getElementById(id+"-items");
+      if(hdr && items){
+        hdr.classList.add("collapsed");
+        items.classList.add("collapsed");
+      }
+    }
+  });
+})();
 </script>
 </body>
 </html>

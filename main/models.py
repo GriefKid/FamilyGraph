@@ -2,15 +2,28 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 class Node(models.Model):
-    username = models.CharField(max_length=100, unique=True)
-    picture = models.ImageField(upload_to="media/", blank=True, null=True)
-    name = models.CharField(max_length=200, blank=True)
-    birth_day = models.DateField(blank=True, null=True)
-    career = models.CharField(max_length=200, blank=True)
+    username   = models.CharField(max_length=100, unique=True)
+    first_name = models.CharField(max_length=100, blank=True, verbose_name='نام')
+    last_name  = models.CharField(max_length=100, blank=True, verbose_name='نام خانوادگی')
+    nickname   = models.CharField(max_length=100, blank=True, verbose_name='لقب / اسم مستعار')
+    picture    = models.ImageField(upload_to="media/", blank=True, null=True)
+    name       = models.CharField(max_length=200, blank=True)   # legacy — kept for compat
+    birth_day  = models.DateField(blank=True, null=True)
+    career     = models.CharField(max_length=200, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
+
+    def display_name(self):
+        """Best human-readable name for this node."""
+        if self.nickname:
+            return self.nickname
+        full = f"{self.first_name} {self.last_name}".strip()
+        if full:
+            return full
+        return self.name or self.username
 
     def __str__(self):
         return self.username or f"Node {self.pk}"
+
     class Meta:
         ordering = ['username']
 
@@ -75,4 +88,41 @@ class Information(models.Model):
 
     def __str__(self):
         return f'Information #{self.id} - {self.node}'
+
+
+class AppSettings(models.Model):
+    """Singleton: stores app-wide settings like which node is 'me'."""
+    root_node = models.ForeignKey(
+        Node,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='as_root',
+        verbose_name='نود اصلی (من)',
+    )
+
+    def __str__(self):
+        return f"تنظیمات (root: {self.root_node})"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    class Meta:
+        verbose_name = 'تنظیمات'
+        verbose_name_plural = 'تنظیمات'
+
+
+class JournalEntry(models.Model):
+    """Raw diary text saved when user submits journal."""
+    text       = models.TextField(verbose_name='متن')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"یادداشت {self.created_at.date()}: {self.text[:50]}"
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'یادداشت روزانه'
+        verbose_name_plural = 'یادداشت‌های روزانه'
 

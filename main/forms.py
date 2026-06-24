@@ -6,7 +6,19 @@ class NodeForm(forms.ModelForm):
 
     class Meta:
         model = Node
-        fields = "__all__"
+        fields = ['username', 'first_name', 'last_name', 'nickname',
+                  'picture', 'birth_day', 'career', 'phone_number', 'name']
+        widgets = {
+            'username':    forms.TextInput(attrs={'class': 'form-control'}),
+            'first_name':  forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name':   forms.TextInput(attrs={'class': 'form-control'}),
+            'nickname':    forms.TextInput(attrs={'class': 'form-control'}),
+            'birth_day':   forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'career':      forms.TextInput(attrs={'class': 'form-control'}),
+            'phone_number':forms.TextInput(attrs={'class': 'form-control'}),
+            'name':        forms.TextInput(attrs={'class': 'form-control',
+                                                  'placeholder': 'نام قدیمی (اختیاری)'}),
+        }
 
 class RelationshipForm(forms.ModelForm):
 

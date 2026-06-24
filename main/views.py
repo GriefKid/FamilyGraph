@@ -9,15 +9,46 @@ from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 
 from .forms import NodeForm, RelationshipForm, EventForm
-from .models import Relationship
+from .models import Relationship, AppSettings, JournalEntry
 from django.core.cache import cache
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from .models import Node, Information, Event
 from django.views.generic import ListView
-from .models import Node
 from django.views.generic import TemplateView
+
+COMMUNITY_PALETTE = [
+    "#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
+    "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
+]
+
+def _build_graph():
+    """Build a networkx Graph from DB. Returns (G, nodes_list, rels_list)."""
+    import networkx as nx
+    all_nodes = list(Node.objects.all())
+    all_rels  = list(Relationship.objects.select_related('source', 'target'))
+    G = nx.Graph()
+    for n in all_nodes:
+        G.add_node(n.id)
+    for r in all_rels:
+        G.add_edge(r.source_id, r.target_id, strength=r.strength, status=r.status)
+    return G, all_nodes, all_rels
+
+def _community_map(G):
+    """Return {node_id: community_index}."""
+    try:
+        from networkx.algorithms.community import louvain_communities
+        raw = louvain_communities(G, seed=42)
+    except Exception:
+        import networkx as nx
+        raw = list(nx.connected_components(G))
+    raw = sorted(raw, key=lambda s: -len(s))
+    result = {}
+    for i, group in enumerate(raw):
+        for nid in group:
+            result[nid] = i
+    return result
 
 
 class GraphView(TemplateView):
@@ -96,11 +127,36 @@ def node_detail(request, pk):
     ).select_related('source', 'target')
 
     informations = Information.objects.filter(node=node)
+    events = node.events.order_by('-date')[:10]
+
+    # ── community + centrality for this node ──
+    community_idx = None
+    community_color = None
+    degree_centrality = None
+    betweenness_centrality = None
+    try:
+        import networkx as nx
+        G, all_nodes, all_rels = _build_graph()
+        if G.number_of_nodes() > 1:
+            deg_c  = nx.degree_centrality(G)
+            bet_c  = nx.betweenness_centrality(G)
+            com_map = _community_map(G)
+            community_idx   = com_map.get(node.id, 0)
+            community_color = COMMUNITY_PALETTE[community_idx % len(COMMUNITY_PALETTE)]
+            degree_centrality     = round(deg_c.get(node.id, 0), 3)
+            betweenness_centrality = round(bet_c.get(node.id, 0), 3)
+    except Exception:
+        pass
 
     context = {
         'node': node,
         'relationships': relationships,
         'informations': informations,
+        'events': events,
+        'community_idx':   community_idx,
+        'community_color': community_color,
+        'degree_centrality': degree_centrality,
+        'betweenness_centrality': betweenness_centrality,
     }
     return render(request, 'nodes/node_detail.html', context)
 
@@ -339,11 +395,6 @@ def home_graph_api(request):
     return JsonResponse(elements)
 
 
-COMMUNITY_PALETTE = [
-    "#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
-    "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
-]
-
 def events_list(request):
     events = Event.objects.prefetch_related('participants').all()
     return render(request, 'events/events_list.html', {'events': events})
@@ -426,7 +477,6 @@ def insights_view(request):
         degree[r.source_id] = degree.get(r.source_id, 0) + 1
         degree[r.target_id] = degree.get(r.target_id, 0) + 1
 
-    # top nodes sorted by degree
     top_nodes = sorted(degree.items(), key=lambda x: -x[1])[:8]
     top_nodes = [(node_map[nid], deg) for nid, deg in top_nodes if nid in node_map]
 
@@ -444,59 +494,97 @@ def insights_view(request):
     density    = round(edge_count / max_edges, 3) if max_edges > 0 else 0
     avg_degree = round(2 * edge_count / node_count, 2) if node_count > 0 else 0
 
-    # ── Centrality (Task 8) ──
+    # ── Centrality ──────────────────────────────────────────────────────
     centrality_rows = []
+    clustering_coef = 0.0
+    structural_holes_count = 0  # nodes bridging communities
+    strong_tie_pct  = 0.0
+    weak_tie_pct    = 0.0
+
     try:
         import networkx as nx
-        G = nx.Graph()
-        for n in all_nodes: G.add_node(n.id)
-        for r in all_rels:  G.add_edge(r.source_id, r.target_id)
+        G, _, _ = _build_graph()
 
-        deg_c  = nx.degree_centrality(G)
-        bet_c  = nx.betweenness_centrality(G)
-        clo_c  = nx.closeness_centrality(G)
+        if G.number_of_nodes() > 1:
+            deg_c  = nx.degree_centrality(G)
+            bet_c  = nx.betweenness_centrality(G)
+            clo_c  = nx.closeness_centrality(G)
 
-        for n in all_nodes:
-            centrality_rows.append({
-                'node':        n,
-                'degree_c':    round(deg_c.get(n.id, 0), 3),
-                'between_c':   round(bet_c.get(n.id, 0), 3),
-                'closeness_c': round(clo_c.get(n.id, 0), 3),
-            })
-        centrality_rows.sort(key=lambda x: -x['degree_c'])
+            for n in all_nodes:
+                centrality_rows.append({
+                    'node':        n,
+                    'degree_c':    round(deg_c.get(n.id, 0), 3),
+                    'between_c':   round(bet_c.get(n.id, 0), 3),
+                    'closeness_c': round(clo_c.get(n.id, 0), 3),
+                })
+            centrality_rows.sort(key=lambda x: -x['degree_c'])
+
+            # Clustering coefficient (0-1): how tightly knit neighbourhoods are
+            clustering_coef = round(nx.average_clustering(G), 3)
+
+            # Structural holes: nodes with high betweenness relative to degree
+            structural_holes_count = sum(
+                1 for n in all_nodes
+                if bet_c.get(n.id, 0) > 0.15
+            )
+
     except ImportError:
-        centrality_rows = []
+        pass
 
-    # ── Network Health Score (Task 9) ──
-    isolated_ratio  = len(isolated) / node_count if node_count else 1
-    avg_strength    = 0
+    # Strong / weak tie balance
     if all_rels:
-        avg_strength = sum(r.strength for r in all_rels) / len(all_rels)
-    active_ratio    = sum(1 for r in all_rels if r.status == 'active') / len(all_rels) if all_rels else 0
+        strong = sum(1 for r in all_rels if r.strength >= 4)
+        weak   = sum(1 for r in all_rels if r.strength <= 2)
+        strong_tie_pct = round(strong / len(all_rels) * 100, 1)
+        weak_tie_pct   = round(weak   / len(all_rels) * 100, 1)
 
-    density_score   = min(density * 200, 40)          # max 40
-    isolation_score = max(0, 20 - isolated_ratio * 20) # max 20
-    strength_score  = (avg_strength / 5) * 20          # max 20
-    active_score    = active_ratio * 20                 # max 20
+    # ── Enhanced Health Score (100 points) ──────────────────────────────
+    isolated_ratio = len(isolated) / node_count if node_count else 1
+    avg_strength   = (sum(r.strength for r in all_rels) / len(all_rels)) if all_rels else 0
+    active_ratio   = (sum(1 for r in all_rels if r.status == 'active') / len(all_rels)) if all_rels else 0
 
-    health_score = round(density_score + isolation_score + strength_score + active_score)
+    # 1. Density (max 20): well-connected but not clique
+    density_score     = min(density * 300, 20)
+    # 2. Isolation (max 20): fewer isolated nodes is better
+    isolation_score   = max(0, 20 - isolated_ratio * 20)
+    # 3. Clustering (max 20): tight social circles
+    clustering_score  = round(clustering_coef * 20, 1)
+    # 4. Strength (max 20): quality of relationships
+    strength_score    = round((avg_strength / 5) * 20, 1)
+    # 5. Stability (max 20): active vs inactive
+    stability_score   = round(active_ratio * 20, 1)
+
+    health_score = round(density_score + isolation_score + clustering_score + strength_score + stability_score)
     health_color = "#10b981" if health_score >= 70 else "#f59e0b" if health_score >= 40 else "#ef4444"
     health_label = "سالم" if health_score >= 70 else "متوسط" if health_score >= 40 else "نیاز به توجه"
 
+    health_components = [
+        {'name': 'تراکم شبکه',    'score': round(density_score, 1),   'max': 20, 'desc': 'چقدر شبکه‌ات به‌هم وصله'},
+        {'name': 'کاهش انزوا',    'score': round(isolation_score, 1), 'max': 20, 'desc': 'چقدر کم نودهای بدون ارتباط داری'},
+        {'name': 'خوشه‌بندی',     'score': clustering_score,          'max': 20, 'desc': 'چقدر دوستانت با هم آشنا هستند'},
+        {'name': 'کیفیت روابط',   'score': strength_score,            'max': 20, 'desc': 'میانگین قدرت روابطت'},
+        {'name': 'پایداری شبکه',  'score': stability_score,           'max': 20, 'desc': '٪ روابط فعال'},
+    ]
+
     return render(request, 'insights/insights.html', {
-        'node_count':             node_count,
-        'edge_count':             edge_count,
-        'density':                density,
-        'avg_degree':             avg_degree,
-        'most_connected':         most_connected,
-        'most_connected_degree':  most_connected_degree,
-        'isolated':               isolated,
-        'top_nodes':              top_nodes,
-        'rel_types':              rel_types,
-        'centrality_rows':        centrality_rows,
-        'health_score':           health_score,
-        'health_color':           health_color,
-        'health_label':           health_label,
+        'node_count':              node_count,
+        'edge_count':              edge_count,
+        'density':                 density,
+        'avg_degree':              avg_degree,
+        'most_connected':          most_connected,
+        'most_connected_degree':   most_connected_degree,
+        'isolated':                isolated,
+        'top_nodes':               top_nodes,
+        'rel_types':               rel_types,
+        'centrality_rows':         centrality_rows,
+        'health_score':            health_score,
+        'health_color':            health_color,
+        'health_label':            health_label,
+        'health_components':       health_components,
+        'clustering_coef':         clustering_coef,
+        'structural_holes_count':  structural_holes_count,
+        'strong_tie_pct':          strong_tie_pct,
+        'weak_tie_pct':            weak_tie_pct,
     })
 
 
@@ -623,32 +711,208 @@ def chat_api(request):
 
 
 def graph_all_api(request):
+    """Return all nodes+edges with community and centrality data for D3 graph."""
+    try:
+        import networkx as nx
+        G, all_nodes, all_rels = _build_graph()
 
-    nodes = Node.objects.only("id","username","picture")
-    relationships = Relationship.objects.select_related(
-        "source","target"
-    )
+        if G.number_of_nodes() > 0:
+            deg_c   = nx.degree_centrality(G)
+            com_map = _community_map(G)
+        else:
+            deg_c   = {}
+            com_map = {}
+    except ImportError:
+        all_nodes = list(Node.objects.all())
+        all_rels  = list(Relationship.objects.select_related('source', 'target'))
+        deg_c   = {}
+        com_map = {}
 
-    node_data=[]
-    edge_data=[]
+    # Root node
+    settings = AppSettings.get()
+    root_id = str(settings.root_node_id) if settings.root_node_id else None
 
-    for n in nodes:
-
+    node_data = []
+    for n in all_nodes:
+        c_idx = com_map.get(n.id, 0)
         node_data.append({
-            "id":str(n.id),
-            "username":n.username,
-            "image":n.picture.url if n.picture else None
+            "id":         str(n.id),
+            "username":   n.username,
+            "label":      n.display_name() if hasattr(n, 'display_name') else n.username,
+            "image":      n.picture.url if n.picture else None,
+            "centrality": round(deg_c.get(n.id, 0), 4),
+            "community":  c_idx,
+            "color":      COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)],
         })
 
-    for r in relationships:
-
-        edge_data.append({
-            "source":str(r.source_id),
-            "target":str(r.target_id),
-            "label":r.rel or ""
-        })
+    edge_data = [
+        {
+            "source":   str(r.source_id),
+            "target":   str(r.target_id),
+            "label":    r.rel or "",
+            "strength": r.strength,
+        }
+        for r in all_rels
+    ]
 
     return JsonResponse({
-        "nodes":node_data,
-        "edges":edge_data
+        "nodes":   node_data,
+        "edges":   edge_data,
+        "root_id": root_id,
     })
+
+
+# ════════════════════════════════════════════════════════════════
+# Settings (root node)
+# ════════════════════════════════════════════════════════════════
+
+def settings_view(request):
+    app_settings = AppSettings.get()
+    nodes = Node.objects.order_by('username')
+    if request.method == 'POST':
+        root_id = request.POST.get('root_node')
+        if root_id:
+            app_settings.root_node = get_object_or_404(Node, pk=root_id)
+        else:
+            app_settings.root_node = None
+        app_settings.save()
+        messages.success(request, 'تنظیمات ذخیره شد.')
+        return redirect('settings')
+    return render(request, 'settings/settings.html', {
+        'settings': app_settings,
+        'nodes':    nodes,
+    })
+
+
+# ════════════════════════════════════════════════════════════════
+# Journal
+# ════════════════════════════════════════════════════════════════
+
+def journal_view(request):
+    entries = JournalEntry.objects.all()[:20]
+    return render(request, 'journal/journal.html', {'entries': entries})
+
+
+@csrf_exempt
+def journal_analyze_api(request):
+    """Send diary text to AI → get back structured entities."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        text = data.get('text', '').strip()
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    if not text:
+        return JsonResponse({'error': 'متن خالی است'}, status=400)
+
+    api_key = os.environ.get('OPENROUTER_API_KEY', '')
+    if not api_key:
+        return JsonResponse({'error': 'OPENROUTER_API_KEY تنظیم نشده'}, status=500)
+
+    existing = ', '.join(Node.objects.values_list('username', flat=True)[:50])
+
+    prompt = f"""متن خاطره زیر را تحلیل کن و اطلاعات را استخراج کن.
+
+متن:
+{text}
+
+نودهای موجود در شبکه: {existing or 'هیچ'}
+
+دقیقاً یک JSON با این ساختار برگردان (بدون توضیح اضافه):
+{{
+  "nodes": [
+    {{"username": "نام_کاربری_انگلیسی_بدون_فاصله", "name": "نام کامل فارسی"}}
+  ],
+  "relationships": [
+    {{"from": "username_الف", "to": "username_ب", "type": "نوع رابطه مثل دوست یا همکار"}}
+  ],
+  "events": [
+    {{"title": "عنوان رویداد", "date": "YYYY-MM-DD یا null", "description": "توضیح مختصر"}}
+  ],
+  "summary": "یک جمله خلاصه از این خاطره"
+}}
+
+قوانین: فقط افراد واقعی ذکر شده در متن را استخراج کن. اگر چیزی موجود نیست آرایه خالی برگردان."""
+
+    try:
+        from openai import OpenAI
+        import re
+        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        response = client.chat.completions.create(
+            model="google/gemma-4-31b-it:free",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
+        )
+        content = response.choices[0].message.content
+        match = re.search(r'\{[\s\S]*\}', content)
+        result = json.loads(match.group() if match else content)
+        # Save raw journal entry
+        JournalEntry.objects.create(text=text)
+        return JsonResponse({'result': result})
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'AI پاسخ معتبر JSON نداد', 'raw': content}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@csrf_exempt
+def journal_apply_api(request):
+    """Apply extracted entities (nodes/rels/events) to DB."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    created = {'nodes': [], 'relationships': [], 'events': []}
+    from datetime import date as today_date
+
+    for nd in data.get('nodes', []):
+        username = (nd.get('username') or '').strip()
+        if not username:
+            continue
+        node, is_new = Node.objects.get_or_create(
+            username=username,
+            defaults={'name': nd.get('name', '')}
+        )
+        if is_new:
+            created['nodes'].append(username)
+
+    app_settings = AppSettings.get()
+    for rd in data.get('relationships', []):
+        frm = (rd.get('from') or '').strip()
+        to  = (rd.get('to')   or '').strip()
+        rel_type = rd.get('type', '')
+        try:
+            src = Node.objects.get(username=frm)
+            tgt = Node.objects.get(username=to)
+            _, is_new = Relationship.objects.get_or_create(
+                source=src, target=tgt, rel=rel_type
+            )
+            if is_new:
+                created['relationships'].append(f"{frm}→{to}")
+        except Node.DoesNotExist:
+            pass
+
+    for ed in data.get('events', []):
+        title = (ed.get('title') or '').strip()
+        if not title:
+            continue
+        date_str = ed.get('date')
+        try:
+            from datetime import date
+            event_date = date.fromisoformat(date_str) if date_str else today_date.today()
+        except Exception:
+            event_date = today_date.today()
+        Event.objects.create(
+            title=title,
+            date=event_date,
+            description=ed.get('description', '')
+        )
+        created['events'].append(title)
+
+    return JsonResponse({'created': created})

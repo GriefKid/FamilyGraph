@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}دفترچه خاطرات — FamilyGraph{% endblock %}
+{% block page_title %}دفترچه خاطرات{% endblock %}
+{% block nav_journal %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.journal-layout{
+  display:grid;
+  grid-template-columns:1fr 340px;
+  gap:20px;
+}
+
+@media(max-width:900px){ .journal-layout{ grid-template-columns:1fr; } }
+
+/* ── Write panel ── */
+.write-card{
+  background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
+}
+.write-head{
+  padding:14px 20px;border-bottom:1px solid var(--border);
+  background:var(--surface);display:flex;align-items:center;justify-content:space-between;
+}
+.write-head h3{font-size:13px;font-weight:700;color:var(--text);}
+.write-body{padding:18px;}
+
+textarea#journalText{
+  width:100%;min-height:180px;resize:vertical;
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13.5px;line-height:1.8;
+  padding:14px 16px;
+}
+textarea#journalText:focus{
+  border-color:var(--primary-border);
+  box-shadow:0 0 0 3px rgba(99,102,241,.1);outline:none;
+}
+textarea#journalText::placeholder{color:var(--text-muted);}
+
+.action-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;}
+.char-count{font-size:11px;color:var(--text-muted);margin-right:auto;}
+
+/* ── Result card ── */
+.result-card{
+  background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border-accent);border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,.4),0 0 40px rgba(99,102,241,.06);
+  display:none;
+}
+.result-card.show{display:block;}
+.result-head{
+  padding:12px 18px;border-bottom:1px solid var(--border);
+  background:var(--surface);display:flex;align-items:center;justify-content:space-between;
+}
+.result-head h3{font-size:13px;font-weight:700;color:var(--primary-light);display:flex;align-items:center;gap:7px;}
+
+.result-body{padding:16px;}
+.result-summary{
+  background:rgba(99,102,241,.08);border:1px solid var(--primary-border);
+  border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text-soft);
+  margin-bottom:14px;line-height:1.7;
+}
+
+.entity-section{margin-bottom:14px;}
+.entity-section h4{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;}
+
+.entity-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:20px;padding:4px 10px;font-size:12px;color:var(--text-soft);
+  margin:3px;
+}
+.entity-chip.node{border-color:rgba(99,102,241,.3);color:#a5b4fc;}
+.entity-chip.rel{border-color:rgba(236,72,153,.3);color:#f9a8d4;}
+.entity-chip.event{border-color:rgba(245,158,11,.3);color:#fcd34d;}
+
+.apply-row{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+
+/* ── History ── */
+.history-card{
+  background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border);border-radius:14px;overflow:hidden;
+}
+.history-head{
+  padding:12px 18px;border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.history-head h3{font-size:13px;font-weight:700;}
+.history-list{padding:8px;}
+.history-item{
+  padding:10px 12px;border-radius:8px;cursor:pointer;
+  transition:var(--transition);margin-bottom:2px;
+}
+.history-item:hover{background:var(--primary-glow);}
+.history-date{font-size:11px;color:var(--text-muted);margin-bottom:3px;}
+.history-preview{font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.empty-history{padding:20px;text-align:center;font-size:13px;color:var(--text-muted);}
+
+/* Loading */
+.spinner{
+  display:inline-block;width:14px;height:14px;border-radius:50%;
+  border:2px solid rgba(165,180,252,.3);border-top-color:#a5b4fc;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="journal-layout">
+
+  <!-- Main: Write + Result -->
+  <div>
+
+    <!-- Write -->
+    <div class="write-card" style="margin-bottom:16px;">
+      <div class="write-head">
+        <h3>✎ یادداشت جدید</h3>
+        <span style="font-size:11px;color:var(--text-muted);">AI اتوماتیک موجودیت‌ها را استخراج می‌کند</span>
+      </div>
+      <div class="write-body">
+        <textarea id="journalText" placeholder="امروز با آرش قهوه خوردم. بهم گفت که با سارا ازدواج کرده. از کارش در شرکت فناوری هم گفت..." oninput="updateCount()"></textarea>
+        <div class="action-row">
+          <span class="char-count" id="charCount">۰ کاراکتر</span>
+          <button class="btn" onclick="clearText()">پاک کردن</button>
+          <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">
+            ✦ تحلیل با AI
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div class="result-card" id="resultCard">
+      <div class="result-head">
+        <h3>✦ نتایج استخراج</h3>
+        <button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;" onclick="closeResult()">✕</button>
+      </div>
+      <div class="result-body" id="resultBody"></div>
+    </div>
+
+  </div>
+
+  <!-- Sidebar: History -->
+  <div>
+    <div class="history-card">
+      <div class="history-head">
+        <h3>تاریخچه یادداشت‌ها</h3>
+      </div>
+      {% if entries %}
+      <div class="history-list">
+        {% for entry in entries %}
+        <div class="history-item" onclick="loadHistory(`{{ entry.text|escapejs }}`)">
+          <div class="history-date">{{ entry.created_at|date:"Y/m/d H:i" }}</div>
+          <div class="history-preview">{{ entry.text|truncatechars:60 }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-history">هنوز یادداشتی نیست</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+function updateCount(){
+  const len = document.getElementById("journalText").value.length;
+  document.getElementById("charCount").textContent = len + " کاراکتر";
+}
+function clearText(){
+  document.getElementById("journalText").value = "";
+  updateCount();
+}
+function loadHistory(text){
+  document.getElementById("journalText").value = text;
+  updateCount();
+}
+function closeResult(){
+  document.getElementById("resultCard").classList.remove("show");
+}
+
+async function analyzeJournal(){
+  const text = document.getElementById("journalText").value.trim();
+  if(!text){ alert("متنی بنویس!"); return; }
+
+  const btn = document.getElementById("analyzeBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> در حال تحلیل...';
+
+  try{
+    const res = await fetch("/api/journal/analyze/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken")
+      },
+      body: JSON.stringify({ text })
+    });
+    const data = await res.json();
+
+    if(data.error){
+      alert("خطا: " + data.error);
+      return;
+    }
+
+    renderResult(data.result);
+
+  }catch(e){
+    alert("خطا در ارتباط با سرور");
+  }finally{
+    btn.disabled = false;
+    btn.innerHTML = '✦ تحلیل دوباره';
+  }
+}
+
+function renderResult(r){
+  const card = document.getElementById("resultCard");
+  const body = document.getElementById("resultBody");
+
+  let html = "";
+
+  // Summary
+  if(r.summary){
+    html += `<div class="result-summary">${r.summary}</div>`;
+  }
+
+  // Nodes
+  if(r.nodes && r.nodes.length){
+    html += `<div class="entity-section">
+      <h4>افراد (${r.nodes.length})</h4>
+      ${r.nodes.map(n=>`<span class="entity-chip node">◉ ${n.name||n.username}</span>`).join("")}
+    </div>`;
+  }
+
+  // Relationships
+  if(r.relationships && r.relationships.length){
+    html += `<div class="entity-section">
+      <h4>روابط (${r.relationships.length})</h4>
+      ${r.relationships.map(rel=>`<span class="entity-chip rel">⟶ ${rel.from} → ${rel.to}: ${rel.type}</span>`).join("")}
+    </div>`;
+  }
+
+  // Events
+  if(r.events && r.events.length){
+    html += `<div class="entity-section">
+      <h4>رویدادها (${r.events.length})</h4>
+      ${r.events.map(ev=>`<span class="entity-chip event">◷ ${ev.title}${ev.date?" ("+ev.date+")":""}</span>`).join("")}
+    </div>`;
+  }
+
+  // If nothing found
+  if(!r.nodes?.length && !r.relationships?.length && !r.events?.length){
+    html += `<p style="font-size:13px;color:var(--text-muted);text-align:center;">موجودیت مهمی یافت نشد</p>`;
+  }
+
+  // Store result for apply
+  window._lastResult = r;
+
+  html += `<div class="apply-row">
+    <button class="btn btn-primary" onclick="applyResult()">✓ ذخیره در شبکه</button>
+    <button class="btn" onclick="closeResult()">انصراف</button>
+  </div>`;
+
+  body.innerHTML = html;
+  card.classList.add("show");
+  card.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+async function applyResult(){
+  if(!window._lastResult) return;
+  const res = await fetch("/api/journal/apply/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": getCookie("csrftoken")
+    },
+    body: JSON.stringify(window._lastResult)
+  });
+  const data = await res.json();
+  const created = data.created || {};
+  const summary = [
+    created.nodes?.length ? `${created.nodes.length} نود جدید` : "",
+    created.relationships?.length ? `${created.relationships.length} رابطه جدید` : "",
+    created.events?.length ? `${created.events.length} رویداد جدید` : "",
+  ].filter(Boolean).join("، ") || "تغییری اعمال نشد";
+
+  alert(`✓ ذخیره شد: ${summary}`);
+  closeResult();
+  location.reload();
+}
+
+function getCookie(n){
+  const v = document.cookie.match("(^|;)\\s*"+n+"\\s*=\\s*([^;]+)");
+  return v ? v.pop() : "";
+}
+</script>
+{% endblock %}

@@ -1,10 +1,20 @@
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-7qj7fqbte&&b_-odt2@cg#h$jk86e6i5)1+1hc*q3bc#10ynar'
 
-DEBUG = True
+# Load .env file if it exists
+load_dotenv(BASE_DIR.parent / '.env')
 
-ALLOWED_HOSTS = []
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-7qj7fqbte&&b_-odt2@cg#h$jk86e6i5)1+1hc*q3bc#10ynar'
+)
+
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+ALLOWED_HOSTS = ['*'] if DEBUG else []
 
 INSTALLED_APPS = [
     'jazzmin',

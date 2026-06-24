@@ -61,6 +61,18 @@ urlpatterns = [
     path('api/chat/', views.chat_api, name='chat_api'),
 
     # ======================
+    # SETTINGS
+    # ======================
+    path('settings/', views.settings_view, name='settings'),
+
+    # ======================
+    # JOURNAL
+    # ======================
+    path('journal/', views.journal_view, name='journal'),
+    path('api/journal/analyze/', views.journal_analyze_api, name='journal_analyze'),
+    path('api/journal/apply/',   views.journal_apply_api,   name='journal_apply'),
+
+    # ======================
     # LEGACY / API
     # ======================
     path('api/home/graph/', views.home_graph_api, name='home_graph_api'),
