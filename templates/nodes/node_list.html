@@ -15,10 +15,12 @@ margin-bottom:22px;
 
 .stat{
 background:var(--card);
+backdrop-filter:blur(10px);
 border:1px solid var(--border);
-border-radius:var(--radius);
-padding:16px 20px;
-min-width:130px;
+border-radius:14px;
+padding:18px 22px;
+min-width:140px;
+box-shadow:0 4px 20px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.05);
 }
 
 .stat-n{
@@ -84,9 +86,11 @@ gap:14px;
 }
 
 .node-card{
-background:var(--surface);
+background:var(--card);
+backdrop-filter:blur(8px);
+-webkit-backdrop-filter:blur(8px);
 border:1px solid var(--border);
-border-radius:12px;
+border-radius:14px;
 padding:22px 16px 18px;
 display:flex;
 flex-direction:column;
@@ -94,15 +98,16 @@ align-items:center;
 gap:8px;
 text-decoration:none;
 color:var(--text);
-transition:var(--transition);
+transition:all .2s ease;
 cursor:pointer;
+box-shadow:0 2px 12px rgba(0,0,0,.4);
 }
 
 .node-card:hover{
 border-color:var(--primary-border);
-background:var(--card);
-transform:translateY(-3px);
-box-shadow:0 8px 28px rgba(99,102,241,.12);
+background:rgba(99,102,241,.08);
+transform:translateY(-4px);
+box-shadow:0 12px 32px rgba(0,0,0,.5), 0 0 24px rgba(99,102,241,.12);
 }
 
 .avatar-ring{
