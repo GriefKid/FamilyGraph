@@ -117,6 +117,9 @@ class JournalEntry(models.Model):
     """Raw diary text saved when user submits journal."""
     text            = models.TextField(verbose_name='متن')
     entry_date      = models.DateField(null=True, blank=True, verbose_name='تاریخ رویداد')
+    tags            = models.JSONField(default=list, blank=True, verbose_name='تگ‌ها')
+    mood            = models.CharField(max_length=100, blank=True, verbose_name='خلق‌وخو')
+    ai_analyzed     = models.BooleanField(default=False, verbose_name='آنالیز AI')
     mentioned_nodes = models.ManyToManyField('Node', blank=True, related_name='journal_entries')
     created_at      = models.DateTimeField(auto_now_add=True)
 

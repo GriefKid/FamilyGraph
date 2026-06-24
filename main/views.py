@@ -798,11 +798,29 @@ def settings_view(request):
 
 def journal_view(request):
     entries = JournalEntry.objects.prefetch_related('images', 'mentioned_nodes').all()[:20]
-    # Load all node names/usernames for @mention autocomplete
     nodes_for_mention = list(Node.objects.values('username', 'name', 'first_name', 'last_name', 'nickname'))
+
+    # Collect all unique tags from all entries
+    all_tags = []
+    for e in JournalEntry.objects.values_list('tags', flat=True):
+        if e:
+            all_tags.extend(e)
+    all_tags = sorted(set(all_tags))
+
+    # All node usernames for people filter
+    all_node_usernames = list(Node.objects.values_list('username', flat=True))
+
+    # All distinct moods
+    all_moods = list(
+        JournalEntry.objects.exclude(mood='').values_list('mood', flat=True).distinct()[:20]
+    )
+
     return render(request, 'journal/journal.html', {
         'entries': entries,
         'nodes_json': json.dumps(nodes_for_mention, ensure_ascii=False),
+        'all_tags_json': json.dumps(all_tags, ensure_ascii=False),
+        'all_nodes_json': json.dumps(all_node_usernames, ensure_ascii=False),
+        'all_moods_json': json.dumps(all_moods, ensure_ascii=False),
     })
 
 
@@ -832,6 +850,9 @@ def journal_analyze_api(request):
 
     if not text:
         return JsonResponse({'error': 'متن خالی است'}, status=400)
+
+    # If existing entry_id passed, analyze an already-saved entry
+    existing_entry_id = body.get('entry_id')
 
     api_key = os.environ.get('OPENROUTER_API_KEY', '')
     if not api_key:
@@ -927,7 +948,12 @@ def journal_analyze_api(request):
         result = json.loads(match.group() if match else content)
         result['_root_username'] = root_username
 
-        # Save entry (with optional date)
+        # Parse tags from body
+        raw_tags = body.get('tags', [])
+        if isinstance(raw_tags, str):
+            raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
+
+        # Save/update entry
         entry_date_str = body.get('entry_date', '').strip()
         entry_date = None
         if entry_date_str:
@@ -936,7 +962,25 @@ def journal_analyze_api(request):
                 entry_date = date.fromisoformat(entry_date_str)
             except Exception:
                 pass
-        entry = JournalEntry.objects.create(text=text, entry_date=entry_date)
+
+        if existing_entry_id:
+            try:
+                entry = JournalEntry.objects.get(id=existing_entry_id)
+                entry.ai_analyzed = True
+                entry.mood = result.get('my_mood', '')
+                if raw_tags:
+                    entry.tags = raw_tags
+                entry.save(update_fields=['ai_analyzed', 'mood', 'tags'])
+            except JournalEntry.DoesNotExist:
+                entry = JournalEntry.objects.create(
+                    text=text, entry_date=entry_date, tags=raw_tags,
+                    mood=result.get('my_mood', ''), ai_analyzed=True
+                )
+        else:
+            entry = JournalEntry.objects.create(
+                text=text, entry_date=entry_date, tags=raw_tags,
+                mood=result.get('my_mood', ''), ai_analyzed=True
+            )
         result['_entry_id'] = entry.id
 
         # Link any pre-uploaded images to this entry
