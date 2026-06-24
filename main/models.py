@@ -115,14 +115,27 @@ class AppSettings(models.Model):
 
 class JournalEntry(models.Model):
     """Raw diary text saved when user submits journal."""
-    text       = models.TextField(verbose_name='متن')
-    created_at = models.DateTimeField(auto_now_add=True)
+    text            = models.TextField(verbose_name='متن')
+    entry_date      = models.DateField(null=True, blank=True, verbose_name='تاریخ رویداد')
+    mentioned_nodes = models.ManyToManyField('Node', blank=True, related_name='journal_entries')
+    created_at      = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"یادداشت {self.created_at.date()}: {self.text[:50]}"
 
     class Meta:
         ordering = ['-created_at']
+
+
+class JournalImage(models.Model):
+    """Image attached to a journal entry."""
+    entry       = models.ForeignKey(JournalEntry, on_delete=models.CASCADE,
+                                    related_name='images', null=True, blank=True)
+    image       = models.ImageField(upload_to='journal/', verbose_name='تصویر')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['uploaded_at']
         verbose_name = 'یادداشت روزانه'
         verbose_name_plural = 'یادداشت‌های روزانه'
 

@@ -69,8 +69,9 @@ urlpatterns = [
     # JOURNAL
     # ======================
     path('journal/', views.journal_view, name='journal'),
-    path('api/journal/analyze/', views.journal_analyze_api, name='journal_analyze'),
-    path('api/journal/apply/',   views.journal_apply_api,   name='journal_apply'),
+    path('api/journal/analyze/',      views.journal_analyze_api,      name='journal_analyze'),
+    path('api/journal/apply/',        views.journal_apply_api,        name='journal_apply'),
+    path('api/journal/upload-image/', views.journal_image_upload_api, name='journal_image_upload'),
 
     # ======================
     # LEGACY / API

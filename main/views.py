@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 
 from .forms import NodeForm, RelationshipForm, EventForm
-from .models import Relationship, AppSettings, JournalEntry
+from .models import Relationship, AppSettings, JournalEntry, JournalImage
 from django.core.cache import cache
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
@@ -148,6 +148,9 @@ def node_detail(request, pk):
     except Exception:
         pass
 
+    # Journal entries that mention this node
+    journal_entries = node.journal_entries.prefetch_related('images').order_by('-created_at')[:10]
+
     context = {
         'node': node,
         'relationships': relationships,
@@ -157,6 +160,7 @@ def node_detail(request, pk):
         'community_color': community_color,
         'degree_centrality': degree_centrality,
         'betweenness_centrality': betweenness_centrality,
+        'journal_entries': journal_entries,
     }
     return render(request, 'nodes/node_detail.html', context)
 
@@ -793,8 +797,25 @@ def settings_view(request):
 # ════════════════════════════════════════════════════════════════
 
 def journal_view(request):
-    entries = JournalEntry.objects.all()[:20]
-    return render(request, 'journal/journal.html', {'entries': entries})
+    entries = JournalEntry.objects.prefetch_related('images', 'mentioned_nodes').all()[:20]
+    # Load all node names/usernames for @mention autocomplete
+    nodes_for_mention = list(Node.objects.values('username', 'name', 'first_name', 'last_name', 'nickname'))
+    return render(request, 'journal/journal.html', {
+        'entries': entries,
+        'nodes_json': json.dumps(nodes_for_mention, ensure_ascii=False),
+    })
+
+
+@csrf_exempt
+def journal_image_upload_api(request):
+    """Upload an image for a journal entry (before or after entry creation)."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    image_file = request.FILES.get('image')
+    if not image_file:
+        return JsonResponse({'error': 'فایلی ارسال نشد'}, status=400)
+    img = JournalImage.objects.create(image=image_file)
+    return JsonResponse({'id': img.id, 'url': img.image.url})
 
 
 @csrf_exempt
@@ -904,8 +925,25 @@ def journal_analyze_api(request):
         content = response.choices[0].message.content
         match = re.search(r'\{[\s\S]*\}', content)
         result = json.loads(match.group() if match else content)
-        result['_root_username'] = root_username  # pass forward to apply_api
-        JournalEntry.objects.create(text=text)
+        result['_root_username'] = root_username
+
+        # Save entry (with optional date)
+        entry_date_str = body.get('entry_date', '').strip()
+        entry_date = None
+        if entry_date_str:
+            try:
+                from datetime import date
+                entry_date = date.fromisoformat(entry_date_str)
+            except Exception:
+                pass
+        entry = JournalEntry.objects.create(text=text, entry_date=entry_date)
+        result['_entry_id'] = entry.id
+
+        # Link any pre-uploaded images to this entry
+        image_ids = body.get('image_ids', [])
+        if image_ids:
+            JournalImage.objects.filter(id__in=image_ids, entry__isnull=True).update(entry=entry)
+
         return JsonResponse({'result': result})
     except json.JSONDecodeError:
         return JsonResponse({'error': 'AI پاسخ معتبر JSON نداد', 'raw': content[:600]}, status=500)
@@ -1034,5 +1072,30 @@ def journal_apply_api(request):
             Information.objects.create(node=node, visibility='private', data=stored)
 
         created['attributes'].append(node.username)
+
+    # ── Link mentioned nodes to JournalEntry ──────────────
+    entry_id = data.get('_entry_id')
+    if entry_id:
+        try:
+            entry = JournalEntry.objects.get(id=entry_id)
+            # Collect all node usernames that appeared in relationships
+            mentioned = set()
+            for rd in data.get('relationships', []):
+                for side in ('from', 'to'):
+                    u = (rd.get(side) or '').strip()
+                    if u and u not in ('me', 'من', root_username):
+                        mentioned.add(u)
+            for nd in data.get('nodes', []):
+                u = (nd.get('username') or '').strip()
+                if u:
+                    mentioned.add(u)
+            for uname in mentioned:
+                n = resolve_node(uname)
+                if n:
+                    entry.mentioned_nodes.add(n)
+            if root_node:
+                entry.mentioned_nodes.add(root_node)
+        except JournalEntry.DoesNotExist:
+            pass
 
     return JsonResponse({'created': created})

@@ -234,6 +234,53 @@
   </div>
   {% endif %}
 
+  <!-- JOURNAL ENTRIES -->
+  {% if journal_entries %}
+  <div class="section-card">
+    <div class="section-head">
+      <span class="section-head-title">📓 یادداشت‌های مرتبط</span>
+      <span class="chip">{{ journal_entries|length }}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;padding:4px 0;">
+      {% for entry in journal_entries %}
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;"
+           onclick="var ef=this.querySelector('.entry-full');ef.style.display=ef.style.display==='none'?'block':'none'">
+        <!-- Thumbnail row -->
+        <div style="display:flex;gap:10px;padding:10px 14px;align-items:flex-start;">
+          {% with first_img=entry.images.first %}
+          {% if first_img %}
+          <img src="{{ first_img.image.url }}" style="width:52px;height:52px;border-radius:7px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);" alt="">
+          {% endif %}
+          {% endwith %}
+          <div style="flex:1;overflow:hidden;">
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">
+              {% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}
+            </div>
+            <div style="font-size:13px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.text|truncatechars:70 }}</div>
+          </div>
+          <span style="color:var(--text-muted);font-size:12px;flex-shrink:0;margin-top:2px;">▾</span>
+        </div>
+        <!-- Full text (expandable) -->
+        <div class="entry-full" style="display:none;border-top:1px solid var(--border);padding:12px 14px;">
+          <p style="font-size:13px;color:var(--text-soft);line-height:1.8;margin:0 0 8px;">{{ entry.text }}</p>
+          {% with imgs=entry.images.all %}
+          {% if imgs %}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            {% for img in imgs %}
+            <a href="{{ img.image.url }}" target="_blank">
+              <img src="{{ img.image.url }}" style="height:80px;border-radius:7px;object-fit:cover;border:1px solid var(--border);" alt="">
+            </a>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- INFO -->
   <div class="section-card">
     <div class="section-head">

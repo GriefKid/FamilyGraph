@@ -5,39 +5,101 @@
 
 {% block extra_css %}
 <style>
+/* ── Layout ── */
 .journal-layout{
-  display:grid; grid-template-columns:1fr 320px; gap:20px;
+  display:grid;grid-template-columns:1fr 300px;gap:20px;
 }
-@media(max-width:860px){ .journal-layout{ grid-template-columns:1fr; } }
+@media(max-width:860px){.journal-layout{grid-template-columns:1fr;}}
 
-/* ── Write card ── */
-.write-card{
+/* ── Cards ── */
+.jcard{
   background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   border:1px solid var(--border);border-radius:14px;overflow:hidden;
   box-shadow:0 4px 20px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
   margin-bottom:16px;
 }
-.card-head{
-  padding:13px 18px;border-bottom:1px solid var(--border);
-  background:var(--surface);display:flex;align-items:center;justify-content:space-between;
+.jcard-head{
+  padding:11px 18px;border-bottom:1px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;justify-content:space-between;
 }
-.card-head h3{ font-size:13px;font-weight:700; }
-.card-head .hint{ font-size:11px;color:var(--text-muted); }
-.card-body{ padding:16px; }
+.jcard-head h3{font-size:13px;font-weight:700;}
+.jcard-head .hint{font-size:11px;color:var(--text-muted);}
+.jcard-body{padding:16px;}
 
-textarea#journalText{
-  width:100%;min-height:180px;resize:vertical;
+/* ── Textarea with mention support ── */
+.textarea-wrap{position:relative;}
+#journalText{
+  width:100%;min-height:160px;resize:vertical;
   background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;
   color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13.5px;line-height:1.85;
-  padding:13px 15px;
+  padding:13px 15px;box-sizing:border-box;
 }
-textarea#journalText:focus{
+#journalText:focus{
   border-color:var(--primary-border);box-shadow:0 0 0 3px rgba(99,102,241,.1);outline:none;
 }
-textarea#journalText::placeholder{ color:var(--text-muted); }
+#journalText::placeholder{color:var(--text-muted);}
 
-.action-row{ display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap; }
-.char-count{ font-size:11px;color:var(--text-muted);margin-right:auto; }
+/* @mention dropdown */
+#mentionDropdown{
+  position:absolute;z-index:100;background:var(--surface);
+  border:1px solid var(--primary-border);border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;
+  min-width:200px;display:none;
+}
+.mention-item{
+  padding:8px 14px;cursor:pointer;font-size:12.5px;display:flex;align-items:center;gap:8px;
+  transition:background .12s;
+}
+.mention-item:hover,.mention-item.active{background:var(--primary-glow);}
+.mention-existing{color:#6ee7b7;}
+.mention-new{color:var(--text-muted);}
+.mention-badge{
+  font-size:10px;padding:1px 6px;border-radius:10px;
+}
+.mention-badge.ex{background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);}
+.mention-badge.nw{background:var(--surface);color:var(--text-muted);border:1px solid var(--border);}
+
+/* ── Toolbar row ── */
+.toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;
+}
+.date-input{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:6px 10px;font-family:'Vazirmatn',sans-serif;font-size:12px;
+  cursor:pointer;
+}
+.date-input:focus{border-color:var(--primary-border);outline:none;}
+.date-label{font-size:11px;color:var(--text-muted);}
+
+/* ── Image upload zone ── */
+.img-drop-zone{
+  border:2px dashed var(--border);border-radius:10px;
+  padding:16px;text-align:center;cursor:pointer;
+  color:var(--text-muted);font-size:12px;transition:var(--transition);
+  margin-bottom:10px;
+}
+.img-drop-zone:hover,.img-drop-zone.drag-over{
+  border-color:var(--primary-border);background:var(--primary-glow);color:var(--text-soft);
+}
+#imgInput{display:none;}
+.img-previews{
+  display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;
+}
+.img-thumb{
+  position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;
+  border:1px solid var(--border);
+}
+.img-thumb img{width:100%;height:100%;object-fit:cover;}
+.img-thumb .remove-img{
+  position:absolute;top:2px;right:2px;background:rgba(0,0,0,.7);
+  color:#fff;border:none;border-radius:50%;width:18px;height:18px;
+  font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  line-height:1;
+}
+
+/* ── Action row ── */
+.action-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.char-count{font-size:11px;color:var(--text-muted);margin-right:auto;}
 
 /* ── Result card ── */
 .result-card{
@@ -46,102 +108,75 @@ textarea#journalText::placeholder{ color:var(--text-muted); }
   box-shadow:0 4px 24px rgba(0,0,0,.4),0 0 40px rgba(99,102,241,.07);
   display:none;
 }
-.result-card.show{ display:block; }
+.result-card.show{display:block;}
 .result-head{
   padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);
   display:flex;align-items:center;justify-content:space-between;
 }
-.result-head h3{ font-size:13px;font-weight:700;color:var(--primary-light);display:flex;align-items:center;gap:7px; }
-
-/* Result sections */
-.result-body{ padding:16px;display:flex;flex-direction:column;gap:14px; }
-
-.r-section{ }
+.result-head h3{font-size:13px;font-weight:700;color:var(--primary-light);}
+.result-body{padding:16px;display:flex;flex-direction:column;gap:14px;}
 .r-section-title{
   font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
   color:var(--text-muted);margin-bottom:8px;
 }
-
-/* Summary banner */
 .summary-box{
   background:rgba(99,102,241,.08);border:1px solid var(--primary-border);
-  border-radius:9px;padding:10px 14px;font-size:13px;color:var(--text-soft);
-  line-height:1.75;
+  border-radius:9px;padding:10px 14px;font-size:13px;color:var(--text-soft);line-height:1.75;
 }
-.mood-row{
-  display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;
-}
+.mood-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
 .mood-badge{
   font-size:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);
   color:#fcd34d;border-radius:20px;padding:3px 11px;
 }
+.chip-group{display:flex;flex-wrap:wrap;gap:6px;}
+.ec{display:inline-flex;align-items:center;gap:5px;font-size:12px;border-radius:20px;padding:4px 11px;}
+.ec-node{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);color:#a5b4fc;}
+.ec-node.exists{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.2);color:#6ee7b7;}
+.ec-rel{background:rgba(236,72,153,.1);border:1px solid rgba(236,72,153,.2);color:#f9a8d4;}
+.ec-event{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:#fcd34d;}
+.attr-person{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px;}
+.attr-person-head{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border);background:rgba(99,102,241,.06);font-size:13px;font-weight:700;}
+.attr-person-body{padding:10px 14px;display:flex;flex-direction:column;gap:7px;}
+.attr-row{display:flex;gap:8px;align-items:flex-start;}
+.attr-key{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);min-width:90px;flex-shrink:0;padding-top:3px;}
+.attr-vals{display:flex;flex-wrap:wrap;gap:4px;}
+.attr-val{font-size:11.5px;background:var(--card);border:1px solid var(--border);color:var(--text-soft);border-radius:14px;padding:2px 9px;}
+.attr-val-str{font-size:12px;color:var(--text-soft);}
+.apply-row{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border);background:var(--surface);}
 
-/* Entity chips */
-.chip-group{ display:flex;flex-wrap:wrap;gap:6px; }
-
-.ec{ /* entity chip */
-  display:inline-flex;align-items:center;gap:5px;
-  font-size:12px;border-radius:20px;padding:4px 11px;
-}
-.ec-node { background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.25); color:#a5b4fc; }
-.ec-rel  { background:rgba(236,72,153,.10); border:1px solid rgba(236,72,153,.2);  color:#f9a8d4; }
-.ec-event{ background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.2);  color:#fcd34d; }
-
-/* Attribute cards per person */
-.attr-person{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:10px;overflow:hidden;
-}
-.attr-person-head{
-  display:flex;align-items:center;gap:8px;padding:9px 14px;
-  border-bottom:1px solid var(--border);background:rgba(99,102,241,.06);
-  font-size:13px;font-weight:700;
-}
-.attr-person-body{ padding:10px 14px;display:flex;flex-direction:column;gap:8px; }
-
-.attr-row{ display:flex;gap:8px;align-items:flex-start; }
-.attr-key{
-  font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
-  color:var(--text-muted);min-width:90px;flex-shrink:0;padding-top:3px;
-}
-.attr-vals{ display:flex;flex-wrap:wrap;gap:4px; }
-.attr-val{
-  font-size:11.5px;background:var(--card);border:1px solid var(--border);
-  color:var(--text-soft);border-radius:14px;padding:2px 9px;
-}
-.attr-val-str{ font-size:12px;color:var(--text-soft); }
-
-/* Apply row */
-.apply-row{
-  display:flex;gap:8px;padding:14px 16px;
-  border-top:1px solid var(--border);background:var(--surface);
-}
-
-/* Spinner */
-.spinner{
-  display:inline-block;width:13px;height:13px;border-radius:50%;
-  border:2px solid rgba(165,180,252,.25);border-top-color:#a5b4fc;
-  animation:spin .7s linear infinite;vertical-align:middle;
-}
-@keyframes spin{ to{transform:rotate(360deg)} }
+/* ── Spinner ── */
+.spinner{display:inline-block;width:13px;height:13px;border-radius:50%;
+border:2px solid rgba(165,180,252,.25);border-top-color:#a5b4fc;
+animation:spin .7s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── History sidebar ── */
 .history-card{
   background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border:1px solid var(--border);border-radius:14px;overflow:hidden;
-  position:sticky;top:72px;
+  border:1px solid var(--border);border-radius:14px;overflow:hidden;position:sticky;top:72px;
 }
-.history-list{ padding:6px; }
+.history-list{padding:6px;}
 .history-item{
   padding:9px 12px;border-radius:8px;cursor:pointer;
-  transition:var(--transition);margin-bottom:2px;
+  transition:var(--transition);margin-bottom:2px;display:flex;gap:8px;align-items:flex-start;
 }
-.history-item:hover{ background:var(--primary-glow); }
-.history-date{ font-size:11px;color:var(--text-muted);margin-bottom:2px; }
-.history-preview{ font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.empty-state{ padding:24px;text-align:center;font-size:13px;color:var(--text-muted); }
+.history-item:hover{background:var(--primary-glow);}
+.history-thumb{
+  width:44px;height:44px;border-radius:6px;object-fit:cover;
+  flex-shrink:0;border:1px solid var(--border);
+}
+.history-thumb-ph{
+  width:44px;height:44px;border-radius:6px;background:var(--surface);
+  border:1px solid var(--border);flex-shrink:0;
+}
+.history-meta{flex:1;overflow:hidden;}
+.history-date{font-size:11px;color:var(--text-muted);margin-bottom:2px;}
+.history-preview{font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.history-mentions{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;}
+.history-mention{font-size:10px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#a5b4fc;border-radius:10px;padding:1px 7px;}
+.empty-state{padding:24px;text-align:center;font-size:13px;color:var(--text-muted);}
 
-/* Warning banner */
+/* ── No root warning ── */
 .no-root-warn{
   background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);
   border-radius:9px;padding:9px 14px;font-size:12px;color:#fcd34d;
@@ -153,28 +188,48 @@ textarea#journalText::placeholder{ color:var(--text-muted); }
 {% block content %}
 <div class="journal-layout">
 
-  <!-- Main column -->
+  <!-- ── Main column ── -->
   <div>
-
-    <!-- Root warning if not set -->
     <div class="no-root-warn" id="rootWarn" style="display:none;">
       ⚠ نود اصلی تنظیم نشده — بدون آن "من" در متن شناسایی نمی‌شود.
       <a href="/settings/" style="color:#fcd34d;font-weight:700;margin-right:auto;">تنظیم کن ←</a>
     </div>
 
     <!-- Write card -->
-    <div class="write-card">
-      <div class="card-head">
+    <div class="jcard">
+      <div class="jcard-head">
         <h3>✎ یادداشت جدید</h3>
         <span class="hint">AI اتوماتیک همه اطلاعات را استخراج می‌کند</span>
       </div>
-      <div class="card-body">
-        <textarea id="journalText"
-          placeholder="امروز با رضا قهوه خوردیم. گفت تیم لیدش آقای کریمی خیلی سخت‌گیره و به موسیقی جاز علاقه داره. رضا خودش اهداف بزرگی داره و میخواد استارتاپ بزنه..."
-          oninput="updateCount()"></textarea>
+      <div class="jcard-body">
+
+        <!-- Toolbar: date -->
+        <div class="toolbar">
+          <span class="date-label">تاریخ رویداد:</span>
+          <input type="date" id="entryDate" class="date-input" />
+          <span class="date-label" style="margin-right:8px;">برای @mention از @ استفاده کن</span>
+        </div>
+
+        <!-- Textarea with @mention -->
+        <div class="textarea-wrap">
+          <textarea id="journalText"
+            placeholder="امروز با @رضا قهوه خوردیم. گفت تیم‌لیدش آقای کریمی خیلی سخت‌گیره ..."
+            oninput="onTextInput(event)" onkeydown="onTextKeydown(event)"></textarea>
+          <div id="mentionDropdown"></div>
+        </div>
+
+        <!-- Image upload zone -->
+        <div class="img-drop-zone" id="dropZone"
+             onclick="document.getElementById('imgInput').click()"
+             ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFiles(event)">
+          📎 عکس بکش اینجا یا کلیک کن برای انتخاب
+        </div>
+        <input type="file" id="imgInput" multiple accept="image/*" onchange="uploadImages(this.files)" />
+        <div class="img-previews" id="imgPreviews"></div>
+
         <div class="action-row">
           <span class="char-count" id="charCount">۰ کاراکتر</span>
-          <button class="btn btn-sm" onclick="clearText()">پاک کردن</button>
+          <button class="btn btn-sm" onclick="clearAll()">پاک کردن</button>
           <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">
             ✦ تحلیل با AI
           </button>
@@ -194,24 +249,41 @@ textarea#journalText::placeholder{ color:var(--text-muted); }
         <button class="btn" onclick="closeResult()">انصراف</button>
       </div>
     </div>
-
   </div>
 
-  <!-- History sidebar -->
+  <!-- ── History sidebar ── -->
   <div>
     <div class="history-card">
-      <div class="card-head"><h3>تاریخچه</h3></div>
+      <div class="jcard-head"><h3>تاریخچه</h3></div>
       {% if entries %}
-        <div class="history-list">
-          {% for entry in entries %}
-          <div class="history-item" onclick="loadText(`{{ entry.text|escapejs }}`)">
-            <div class="history-date">{{ entry.created_at|date:"Y/m/d — H:i" }}</div>
-            <div class="history-preview">{{ entry.text|truncatechars:55 }}</div>
+      <div class="history-list">
+        {% for entry in entries %}
+        <div class="history-item" onclick="loadEntry('{{ entry.text|escapejs }}','{{ entry.entry_date|default:'' }}')">
+          {% with first_img=entry.images.first %}
+          {% if first_img %}
+          <img class="history-thumb" src="{{ first_img.image.url }}" alt="">
+          {% else %}
+          <div class="history-thumb-ph"></div>
+          {% endif %}
+          {% endwith %}
+          <div class="history-meta">
+            <div class="history-date">
+              {% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}
+            </div>
+            <div class="history-preview">{{ entry.text|truncatechars:50 }}</div>
+            {% if entry.mentioned_nodes.exists %}
+            <div class="history-mentions">
+              {% for node in entry.mentioned_nodes.all|slice:":4" %}
+              <span class="history-mention">{{ node.username }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
           </div>
-          {% endfor %}
         </div>
+        {% endfor %}
+      </div>
       {% else %}
-        <div class="empty-state">هنوز یادداشتی نوشته نشده</div>
+      <div class="empty-state">هنوز یادداشتی نوشته نشده</div>
       {% endif %}
     </div>
   </div>
@@ -219,60 +291,237 @@ textarea#journalText::placeholder{ color:var(--text-muted); }
 </div>
 
 <script>
+// ── Node data for @mention ──────────────────────────────
+const ALL_NODES = {{ nodes_json|safe }};
+const nodeUsernames = new Set(ALL_NODES.map(n => n.username));
+
+function nodeDisplay(n){
+  if(n.nickname) return n.nickname;
+  const full = [n.first_name, n.last_name].filter(Boolean).join(' ');
+  if(full) return full;
+  return n.name || n.username;
+}
+
+// ── State ───────────────────────────────────────────────
 let lastResult = null;
+let uploadedImages = [];  // [{id, url}]
+let mentionState = null;  // {start, query}
+let activeMentionIdx = 0;
 
 // ── Init ────────────────────────────────────────────────
 checkRootStatus();
+document.getElementById('entryDate').valueAsDate = new Date();
 
 async function checkRootStatus(){
   try{
-    const r = await fetch("/api/graph/all/");
+    const r = await fetch('/api/graph/all/');
     const d = await r.json();
-    if(!d.root_id){ document.getElementById("rootWarn").style.display="flex"; }
+    if(!d.root_id) document.getElementById('rootWarn').style.display = 'flex';
   }catch(e){}
 }
 
+// ── @mention logic ──────────────────────────────────────
+function onTextInput(e){
+  updateCount();
+  const ta = document.getElementById('journalText');
+  const val = ta.value;
+  const pos = ta.selectionStart;
+
+  // Find @ before cursor
+  let atIdx = -1;
+  for(let i = pos-1; i >= 0; i--){
+    if(val[i] === '@'){ atIdx = i; break; }
+    if(val[i] === ' ' || val[i] === '\n') break;
+  }
+
+  if(atIdx >= 0){
+    const query = val.slice(atIdx+1, pos);
+    showMentionDropdown(ta, atIdx, query);
+  } else {
+    hideMention();
+  }
+}
+
+function showMentionDropdown(ta, atIdx, query){
+  const q = query.toLowerCase();
+  const dd = document.getElementById('mentionDropdown');
+
+  let matches = ALL_NODES.filter(n =>
+    nodeDisplay(n).toLowerCase().includes(q) || n.username.toLowerCase().includes(q)
+  ).slice(0, 8);
+
+  // Maybe suggest creating new node
+  if(query && !nodeUsernames.has(query)){
+    matches.push({_new: true, username: query});
+  }
+
+  if(!matches.length){ hideMention(); return; }
+
+  mentionState = {start: atIdx, query};
+  activeMentionIdx = 0;
+
+  dd.innerHTML = matches.map((n, i) => {
+    if(n._new) return `<div class="mention-item mention-new" data-idx="${i}" data-username="${n.username}" onmousedown="pickMention('${n.username}')">
+      <span>+ نود جدید:</span> <span>${n.username}</span>
+      <span class="mention-badge nw">جدید</span>
+    </div>`;
+    const exists = nodeUsernames.has(n.username);
+    const disp = nodeDisplay(n);
+    return `<div class="mention-item ${exists?'mention-existing':''}" data-idx="${i}" data-username="${n.username}" onmousedown="pickMention('${n.username}')">
+      <span>${disp}</span>
+      <span style="color:var(--text-muted);font-size:11px;">@${n.username}</span>
+      ${exists ? '<span class="mention-badge ex">موجود</span>' : ''}
+    </div>`;
+  }).join('');
+
+  // Position dropdown below textarea (simple approach)
+  const rect = ta.getBoundingClientRect();
+  dd.style.cssText = `display:block;top:${ta.scrollHeight}px;right:0;left:0;`;
+  updateMentionActive();
+}
+
+function hideMention(){
+  mentionState = null;
+  document.getElementById('mentionDropdown').style.display = 'none';
+}
+
+function pickMention(username){
+  if(!mentionState) return;
+  const ta = document.getElementById('journalText');
+  const val = ta.value;
+  const {start, query} = mentionState;
+  const before = val.slice(0, start);
+  const after  = val.slice(start + 1 + query.length);
+  ta.value = before + '@' + username + ' ' + after;
+  ta.setSelectionRange(before.length + username.length + 2, before.length + username.length + 2);
+  hideMention();
+  updateCount();
+}
+
+function onTextKeydown(e){
+  if(!mentionState) return;
+  const dd = document.getElementById('mentionDropdown');
+  const items = dd.querySelectorAll('.mention-item');
+  if(e.key === 'ArrowDown'){
+    e.preventDefault();
+    activeMentionIdx = Math.min(activeMentionIdx+1, items.length-1);
+    updateMentionActive();
+  } else if(e.key === 'ArrowUp'){
+    e.preventDefault();
+    activeMentionIdx = Math.max(activeMentionIdx-1, 0);
+    updateMentionActive();
+  } else if(e.key === 'Enter' || e.key === 'Tab'){
+    if(items[activeMentionIdx]){
+      e.preventDefault();
+      pickMention(items[activeMentionIdx].dataset.username);
+    }
+  } else if(e.key === 'Escape'){
+    hideMention();
+  }
+}
+
+function updateMentionActive(){
+  document.querySelectorAll('#mentionDropdown .mention-item').forEach((el, i) => {
+    el.classList.toggle('active', i === activeMentionIdx);
+  });
+}
+
+// ── Image upload ────────────────────────────────────────
+function dragOver(e){ e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function dragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+function dropFiles(e){
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  uploadImages(e.dataTransfer.files);
+}
+
+async function uploadImages(files){
+  for(const file of files){
+    if(!file.type.startsWith('image/')) continue;
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+    try{
+      const r = await fetch('/api/journal/upload-image/', {method:'POST', body:fd});
+      const d = await r.json();
+      if(d.id){
+        uploadedImages.push({id: d.id, url: d.url});
+        renderPreviews();
+      }
+    }catch(e){ console.error(e); }
+  }
+}
+
+function renderPreviews(){
+  const container = document.getElementById('imgPreviews');
+  container.innerHTML = uploadedImages.map((img, i) => `
+    <div class="img-thumb">
+      <img src="${img.url}" alt="">
+      <button class="remove-img" onclick="removeImg(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function removeImg(idx){
+  uploadedImages.splice(idx, 1);
+  renderPreviews();
+}
+
+// ── Helpers ─────────────────────────────────────────────
 function updateCount(){
-  document.getElementById("charCount").textContent =
-    document.getElementById("journalText").value.length + " کاراکتر";
+  const n = document.getElementById('journalText').value.length;
+  document.getElementById('charCount').textContent = n + ' کاراکتر';
 }
-function clearText(){
-  document.getElementById("journalText").value = ""; updateCount();
+function clearAll(){
+  document.getElementById('journalText').value = '';
+  uploadedImages = [];
+  renderPreviews();
+  updateCount();
 }
-function loadText(t){
-  document.getElementById("journalText").value = t; updateCount();
+function loadEntry(text, date){
+  document.getElementById('journalText').value = text;
+  if(date) document.getElementById('entryDate').value = date;
+  updateCount();
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 function closeResult(){
-  document.getElementById("resultCard").classList.remove("show");
+  document.getElementById('resultCard').classList.remove('show');
+}
+function getCookie(n){
+  const v = document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)');
+  return v ? v.pop() : '';
 }
 
 // ── Analyze ─────────────────────────────────────────────
 async function analyzeJournal(){
-  const text = document.getElementById("journalText").value.trim();
-  if(!text){ alert("متنی بنویس!"); return; }
-  const btn = document.getElementById("analyzeBtn");
+  const text = document.getElementById('journalText').value.trim();
+  if(!text){ alert('متنی بنویس!'); return; }
+  const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> در حال تحلیل...';
-  document.getElementById("resultBody").innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)"><span class="spinner"></span> AI در حال خواندن خاطره...</div>';
-  document.getElementById("resultCard").classList.add("show");
-  document.getElementById("applyRow").style.display = "none";
+  document.getElementById('resultBody').innerHTML =
+    '<div style="padding:20px;text-align:center;color:var(--text-muted)"><span class="spinner"></span> AI در حال خواندن خاطره...</div>';
+  document.getElementById('resultCard').classList.add('show');
+  document.getElementById('applyRow').style.display = 'none';
+
+  const entry_date = document.getElementById('entryDate').value;
+  const image_ids  = uploadedImages.map(i => i.id);
 
   try{
-    const res = await fetch("/api/journal/analyze/", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
-      body: JSON.stringify({text})
+    const res = await fetch('/api/journal/analyze/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({text, entry_date, image_ids})
     });
     const data = await res.json();
     if(data.error){
-      document.getElementById("resultBody").innerHTML =
+      document.getElementById('resultBody').innerHTML =
         `<div style="padding:16px;color:#f43f5e;">خطا: ${data.error}</div>`;
       return;
     }
     lastResult = data.result;
     renderResult(data.result);
   }catch(e){
-    document.getElementById("resultBody").innerHTML =
+    document.getElementById('resultBody').innerHTML =
       '<div style="padding:16px;color:#f43f5e;">خطا در ارتباط با سرور</div>';
   }finally{
     btn.disabled = false;
@@ -280,141 +529,96 @@ async function analyzeJournal(){
   }
 }
 
-// ── Render extracted result ──────────────────────────────
+// ── Render result ───────────────────────────────────────
 function renderResult(r){
-  const body = document.getElementById("resultBody");
-  let html = "";
+  const existingUsernames = new Set(ALL_NODES.map(n => n.username));
+  let html = '';
 
-  // Summary + mood
   if(r.summary || r.my_mood){
     html += `<div class="r-section">
       <div class="r-section-title">خلاصه</div>
-      <div class="summary-box">${r.summary||""}`;
-    if(r.my_mood)
-      html += `<div class="mood-row"><span class="mood-badge">خلق‌وخوی من: ${r.my_mood}</span></div>`;
-    if(r.my_insights && r.my_insights.length)
-      html += `<div class="mood-row">${r.my_insights.map(i=>`<span class="mood-badge" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#a5b4fc;">💡 ${i}</span>`).join("")}</div>`;
+      <div class="summary-box">${r.summary||''}`;
+    if(r.my_mood) html += `<div class="mood-row"><span class="mood-badge">خلق‌وخوی من: ${r.my_mood}</span></div>`;
+    if(r.my_insights?.length)
+      html += `<div class="mood-row">${r.my_insights.map(i=>`<span class="mood-badge" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#a5b4fc;">💡 ${i}</span>`).join('')}</div>`;
     html += `</div></div>`;
   }
 
-  // Nodes found
-  if(r.nodes && r.nodes.length){
-    html += `<div class="r-section">
-      <div class="r-section-title">افراد جدید (${r.nodes.length})</div>
-      <div class="chip-group">
-        ${r.nodes.map(n=>`<span class="ec ec-node">◉ ${n.name||n.username}</span>`).join("")}
-      </div></div>`;
+  if(r.nodes?.length){
+    html += `<div class="r-section"><div class="r-section-title">افراد (${r.nodes.length})</div>
+      <div class="chip-group">${r.nodes.map(n => {
+        const ex = existingUsernames.has(n.username);
+        return `<span class="ec ec-node${ex?' exists':''}">◉ ${n.name||n.username} ${ex?'<small>(موجود)</small>':''}</span>`;
+      }).join('')}</div></div>`;
   }
 
-  // Relationships
-  if(r.relationships && r.relationships.length){
-    html += `<div class="r-section">
-      <div class="r-section-title">روابط (${r.relationships.length})</div>
-      <div class="chip-group">
-        ${r.relationships.map(rel=>{
-          const str = rel.strength ? ` · ${rel.strength}/5` : "";
-          return `<span class="ec ec-rel">⟶ ${rel.from} → ${rel.to}: ${rel.type}${str}</span>`;
-        }).join("")}
-      </div></div>`;
+  if(r.relationships?.length){
+    html += `<div class="r-section"><div class="r-section-title">روابط (${r.relationships.length})</div>
+      <div class="chip-group">${r.relationships.map(rel =>
+        `<span class="ec ec-rel">⟶ ${rel.from} → ${rel.to}: ${rel.type}${rel.strength ? ' · '+rel.strength+'/5' : ''}</span>`
+      ).join('')}</div></div>`;
   }
 
-  // Events
-  if(r.events && r.events.length){
-    html += `<div class="r-section">
-      <div class="r-section-title">رویدادها (${r.events.length})</div>
-      <div class="chip-group">
-        ${r.events.map(ev=>`<span class="ec ec-event">◷ ${ev.title}${ev.date?" ("+ev.date+")":""}</span>`).join("")}
-      </div></div>`;
+  if(r.events?.length){
+    html += `<div class="r-section"><div class="r-section-title">رویدادها (${r.events.length})</div>
+      <div class="chip-group">${r.events.map(ev =>
+        `<span class="ec ec-event">◷ ${ev.title}${ev.date?' ('+ev.date+')':''}</span>`
+      ).join('')}</div></div>`;
   }
 
-  // Rich attributes per person
-  if(r.attributes && r.attributes.length){
-    const LABELS = {
-      personality:          "شخصیت",
-      mood:                 "خلق‌وخو",
-      interests:            "علایق",
-      preferences:          "سلایق",
-      strengths:            "نقاط قوت",
-      weaknesses:           "نقاط ضعف",
-      goals:                "اهداف",
-      values:               "ارزش‌ها",
-      communication_style:  "شیوه ارتباط",
-      relationship_quality: "کیفیت رابطه",
-      notable_facts:        "نکات مهم",
-    };
-
-    html += `<div class="r-section">
-      <div class="r-section-title">اطلاعات عمیق افراد</div>`;
-
+  const LABELS = {personality:'شخصیت',mood:'خلق‌وخو',interests:'علایق',preferences:'سلایق',strengths:'نقاط قوت',weaknesses:'نقاط ضعف',goals:'اهداف',values:'ارزش‌ها',communication_style:'شیوه ارتباط',relationship_quality:'کیفیت رابطه',notable_facts:'نکات مهم'};
+  if(r.attributes?.length){
+    html += `<div class="r-section"><div class="r-section-title">اطلاعات عمیق افراد</div>`;
     for(const attr of r.attributes){
-      let rows = "";
+      let rows = '';
       for(const [key, label] of Object.entries(LABELS)){
         const val = attr[key];
         if(!val || (Array.isArray(val) && !val.length)) continue;
-        if(Array.isArray(val)){
-          rows += `<div class="attr-row">
-            <div class="attr-key">${label}</div>
-            <div class="attr-vals">${val.map(v=>`<span class="attr-val">${v}</span>`).join("")}</div>
-          </div>`;
-        } else {
-          rows += `<div class="attr-row">
-            <div class="attr-key">${label}</div>
-            <span class="attr-val-str">${val}</span>
-          </div>`;
-        }
+        if(Array.isArray(val))
+          rows += `<div class="attr-row"><div class="attr-key">${label}</div><div class="attr-vals">${val.map(v=>`<span class="attr-val">${v}</span>`).join('')}</div></div>`;
+        else
+          rows += `<div class="attr-row"><div class="attr-key">${label}</div><span class="attr-val-str">${val}</span></div>`;
       }
-      if(rows){
-        html += `<div class="attr-person" style="margin-bottom:8px;">
-          <div class="attr-person-head">🧑 ${attr.username}</div>
-          <div class="attr-person-body">${rows}</div>
-        </div>`;
-      }
+      if(rows) html += `<div class="attr-person"><div class="attr-person-head">🧑 ${attr.username}</div><div class="attr-person-body">${rows}</div></div>`;
     }
     html += `</div>`;
   }
 
-  if(!r.nodes?.length && !r.relationships?.length && !r.events?.length && !r.attributes?.length){
+  if(!r.nodes?.length && !r.relationships?.length && !r.events?.length && !r.attributes?.length)
     html += `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:8px 0;">موجودیت مهمی یافت نشد</div>`;
-  }
 
-  body.innerHTML = html;
-  document.getElementById("applyRow").style.display = "flex";
-  document.getElementById("resultCard").scrollIntoView({behavior:"smooth",block:"nearest"});
+  document.getElementById('resultBody').innerHTML = html;
+  document.getElementById('applyRow').style.display = 'flex';
+  document.getElementById('resultCard').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 // ── Apply ────────────────────────────────────────────────
 async function applyResult(){
   if(!lastResult) return;
-  const btn = document.querySelector("#applyRow .btn-primary");
-  btn.disabled = true; btn.textContent = "در حال ذخیره...";
-
+  const btn = document.querySelector('#applyRow .btn-primary');
+  btn.disabled = true; btn.textContent = 'در حال ذخیره...';
   try{
-    const res = await fetch("/api/journal/apply/", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
+    const res = await fetch('/api/journal/apply/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
       body: JSON.stringify(lastResult)
     });
     const data = await res.json();
     const c = data.created || {};
     const parts = [
-      c.nodes?.length        ? `${c.nodes.length} نود جدید`         : "",
-      c.relationships?.length? `${c.relationships.length} رابطه جدید`: "",
-      c.events?.length       ? `${c.events.length} رویداد جدید`      : "",
-      c.attributes?.length   ? `${c.attributes.length} پروفایل آپدیت`: "",
+      c.nodes?.length?`${c.nodes.length} نود جدید`:'',
+      c.relationships?.length?`${c.relationships.length} رابطه جدید`:'',
+      c.events?.length?`${c.events.length} رویداد جدید`:'',
+      c.attributes?.length?`${c.attributes.length} پروفایل آپدیت`:'',
     ].filter(Boolean);
-    alert(`✓ ذخیره شد:\n${parts.join("\n") || "تغییری اعمال نشد"}`);
+    alert(`✓ ذخیره شد:\n${parts.join('\n') || 'تغییری اعمال نشد'}`);
     closeResult();
     location.reload();
   }catch(e){
-    alert("خطا در ذخیره‌سازی");
+    alert('خطا در ذخیره‌سازی');
   }finally{
-    btn.disabled = false; btn.textContent = "✓ ذخیره همه در شبکه";
+    btn.disabled = false; btn.textContent = '✓ ذخیره همه در شبکه';
   }
-}
-
-function getCookie(n){
-  const v = document.cookie.match("(^|;)\\s*"+n+"\\s*=\\s*([^;]+)");
-  return v ? v.pop() : "";
 }
 </script>
 {% endblock %}
