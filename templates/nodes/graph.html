@@ -60,6 +60,24 @@
 .leg-row{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }
 .leg-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
 
+/* ── Hop filter buttons ── */
+.hop-btn{ padding:4px 10px !important; font-size:11px !important; }
+.hop-btn.active{
+  background:rgba(99,102,241,.55) !important;
+  border-color:rgba(99,102,241,.9) !important;
+  color:#fff !important;
+}
+.deg-slider{
+  -webkit-appearance:none; appearance:none;
+  width:70px; height:4px; border-radius:2px;
+  background:rgba(99,102,241,.3); outline:none; cursor:pointer;
+}
+.deg-slider::-webkit-slider-thumb{
+  -webkit-appearance:none; width:12px; height:12px;
+  border-radius:50%; background:#a5b4fc; cursor:pointer;
+}
+.tb-sep{ width:1px; height:18px; background:rgba(255,255,255,.08); margin:0 2px; }
+
 /* ── Tooltip ── */
 #tooltip{
   position:fixed; pointer-events:none; z-index:999;
@@ -99,16 +117,34 @@
 
   <!-- Toolbar -->
   <div id="toolbar">
+    <!-- Search -->
     <div class="tb-glass">
       <svg width="13" height="13" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
       <input id="searchInput" type="text" placeholder="جستجوی نود..." oninput="highlightSearch(this.value)">
     </div>
+    <!-- Hop filter -->
+    <div class="tb-glass">
+      <span style="font-size:11px;color:#64748b;">عمق:</span>
+      <button class="tb-btn hop-btn active" data-hop="0" onclick="setHop(0)">همه</button>
+      <button class="tb-btn hop-btn" data-hop="1" onclick="setHop(1)">۱</button>
+      <button class="tb-btn hop-btn" data-hop="2" onclick="setHop(2)">۲</button>
+      <button class="tb-btn hop-btn" data-hop="3" onclick="setHop(3)">۳</button>
+    </div>
+    <!-- Degree filter -->
+    <div class="tb-glass">
+      <span style="font-size:11px;color:#64748b;">Min links:</span>
+      <input type="range" class="deg-slider" min="0" max="10" value="0" id="degSlider"
+             oninput="setMinDegree(+this.value)">
+      <span id="degLabel" style="font-size:11px;color:#a5b4fc;min-width:14px;">0</span>
+    </div>
+    <!-- Layout + reset -->
     <div class="tb-glass">
       <span class="mode-badge" id="layoutMode">ego-network</span>
+      <div class="tb-sep"></div>
       <button class="tb-btn" onclick="toggleLayout()">تغییر layout</button>
-      <button class="tb-btn" onclick="resetView()">بازنشانی نما</button>
+      <button class="tb-btn" onclick="fitAll()">Fit</button>
     </div>
   </div>
 
@@ -186,6 +222,7 @@ const PAL = ["#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#8b5cf
 const MIN_R = 10, MAX_R = 26;
 
 let gData = null, sim = null, useEgo = true, panelId = null;
+let hopFilter = 0, hiddenComs = new Set(), minDegFilter = 0;
 
 const svgEl  = d3.select("#graph-svg");
 const gRoot  = svgEl.select("#graph-root");
@@ -207,9 +244,64 @@ async function loadGraph(){
     const r = await fetch("/api/graph/all/");
     gData = await r.json();
     draw();
+    // Auto-fit after layout settles
+    setTimeout(fitAll, 80);
   } catch(e) {
     console.error("Graph load error:", e);
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Filter helpers
+// ═══════════════════════════════════════════════════════════
+function bfsLevels(nodes, edges, rootId){
+  const adj = {};
+  nodes.forEach(n => adj[n.id] = []);
+  edges.forEach(e => {
+    if(adj[e.source]) adj[e.source].push(e.target);
+    if(adj[e.target]) adj[e.target].push(e.source);
+  });
+  const levels = {};
+  if(!rootId) return levels;
+  const q = [[rootId, 0]], vis = new Set([rootId]);
+  levels[rootId] = 0;
+  while(q.length){
+    const [id, lv] = q.shift();
+    (adj[id]||[]).forEach(nb => {
+      if(!vis.has(nb)){ vis.add(nb); levels[nb] = lv+1; q.push([nb, lv+1]); }
+    });
+  }
+  return levels;
+}
+
+function getFilteredData(){
+  const { nodes, edges, root_id } = gData;
+  const deg = {};
+  edges.forEach(e => {
+    deg[e.source] = (deg[e.source]||0)+1;
+    deg[e.target] = (deg[e.target]||0)+1;
+  });
+  const levels = bfsLevels(nodes, edges, root_id);
+
+  let fn = nodes.filter(n => {
+    if(hiddenComs.has(n.community)) return false;
+    if(minDegFilter > 0 && n.id !== root_id && (deg[n.id]||0) < minDegFilter) return false;
+    if(hopFilter > 0 && n.id !== root_id){
+      const lv = levels[n.id];
+      if(lv === undefined || lv > hopFilter) return false;
+    }
+    return true;
+  });
+
+  // Always keep root
+  if(root_id && !fn.find(n => n.id === root_id)){
+    const rn = nodes.find(n => n.id === root_id);
+    if(rn) fn = [rn, ...fn];
+  }
+
+  const vis = new Set(fn.map(n => n.id));
+  const fe = edges.filter(e => vis.has(e.source) && vis.has(e.target));
+  return { nodes: fn, edges: fe, root_id };
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -220,7 +312,7 @@ function draw(){
   nLayer.selectAll("*").remove();
   if(sim){ sim.stop(); sim = null; }
 
-  const { nodes, edges, root_id } = gData;
+  const { nodes, edges, root_id } = getFilteredData();
   if(!nodes || !nodes.length) return;
 
   const nMap = Object.fromEntries(nodes.map(n => [n.id, n]));
@@ -256,34 +348,34 @@ function draw(){
 // ═══════════════════════════════════════════════════════════
 function assignEgo(nodes, edges, rootId){
   const cx = W()/2, cy = H()/2;
-  const RINGS = [0, 170, 310, 440, 560, 670];
+  const BASE_RINGS = [0, 180, 340, 510, 680, 860];
 
-  // Adjacency list
-  const adj = {};
-  nodes.forEach(n => adj[n.id] = []);
-  edges.forEach(e => {
-    if(adj[e.source]) adj[e.source].push(e.target);
-    if(adj[e.target]) adj[e.target].push(e.source);
-  });
-
-  // BFS from root
-  const levels = {}, q = [[rootId, 0]], vis = new Set([rootId]);
-  while(q.length){
-    const [id, lv] = q.shift();
-    levels[id] = lv;
-    (adj[id] || []).forEach(nb => {
-      if(!vis.has(nb)){ vis.add(nb); q.push([nb, lv+1]); }
-    });
-  }
-  // Disconnected nodes: outermost ring
-  nodes.forEach(n => { if(levels[n.id] === undefined) levels[n.id] = RINGS.length - 1; });
+  const levels = bfsLevels(nodes, edges, rootId);
+  // Disconnected → outermost
+  const MAX_LV = BASE_RINGS.length - 1;
+  nodes.forEach(n => { if(levels[n.id] === undefined) levels[n.id] = MAX_LV; });
 
   // Group by level
   const byLevel = {};
   nodes.forEach(n => {
-    const l = Math.min(levels[n.id], RINGS.length - 1);
+    const l = Math.min(levels[n.id], MAX_LV);
     (byLevel[l] = byLevel[l] || []).push(n);
   });
+
+  // Cumulative radius: each ring starts where previous ended + gap
+  let prevR = 0;
+  const ringR = {};
+  for(let l = 0; l <= MAX_LV; l++){
+    const grp = byLevel[l] || [];
+    if(l === 0){ ringR[0] = 0; prevR = 0; continue; }
+    const base = BASE_RINGS[l] || l * 170;
+    // min radius so nodes don't overlap: circumference >= count × (diameter + gap)
+    const minR = grp.length > 1
+      ? (grp.length * (MAX_R * 2 + 20)) / (2 * Math.PI)
+      : base;
+    ringR[l] = Math.max(base, prevR + 130, minR);
+    prevR = ringR[l];
+  }
 
   // Assign positions
   Object.entries(byLevel).forEach(([lv, grp]) => {
@@ -291,7 +383,7 @@ function assignEgo(nodes, edges, rootId){
     if(l === 0){
       grp[0].x = cx; grp[0].y = cy;
     } else {
-      const r = RINGS[l] || l * 130;
+      const r = ringR[l];
       grp.forEach((n, i) => {
         const a = (2 * Math.PI * i / grp.length) - Math.PI / 2;
         n.x = cx + r * Math.cos(a);
@@ -448,9 +540,58 @@ function buildLegend(commSet, nodes){
     const cnt = nodes.filter(n => n.community === ci).length;
     const row = document.createElement("div");
     row.className = "leg-row";
-    row.innerHTML = `<div class="leg-dot" style="background:${color};box-shadow:0 0 5px ${color}88;"></div><span>گروه ${ci+1} <span style="color:${color};font-weight:700">(${cnt})</span></span>`;
+    row.style.cursor = "pointer";
+    row.title = "کلیک برای مخفی/نمایش";
+    const hidden = hiddenComs.has(ci);
+    row.innerHTML = `
+      <div class="leg-dot" style="background:${color};box-shadow:0 0 5px ${color}88;opacity:${hidden?.3:1};"></div>
+      <span style="opacity:${hidden?.4:1};">گروه ${ci+1} <span style="color:${color};font-weight:700">(${cnt})</span></span>
+    `;
+    row.onclick = () => toggleCommunity(ci);
     c.appendChild(row);
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// fitAll — zoom to fit all visible nodes
+// ═══════════════════════════════════════════════════════════
+function fitAll(){
+  const nodes = nLayer.selectAll(".ng").data();
+  if(!nodes.length) return;
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  nodes.forEach(n => {
+    const r = nr(n);
+    x0 = Math.min(x0, n.x-r); y0 = Math.min(y0, n.y-r);
+    x1 = Math.max(x1, n.x+r); y1 = Math.max(y1, n.y+r);
+  });
+  const pad = 48;
+  const dx = x1-x0+pad*2, dy = y1-y0+pad*2;
+  const scale = Math.min(0.95, Math.min(W()/dx, H()/dy));
+  const tx = W()/2 - scale*(x0+x1)/2;
+  const ty = H()/2 - scale*(y0+y1)/2;
+  svgEl.transition().duration(600)
+    .call(zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(scale));
+}
+
+// ═══════════════════════════════════════════════════════════
+// Filter controls
+// ═══════════════════════════════════════════════════════════
+function setHop(h){
+  hopFilter = h;
+  document.querySelectorAll(".hop-btn").forEach(b => {
+    b.classList.toggle("active", +b.dataset.hop === h);
+  });
+  draw(); fitAll();
+}
+function setMinDegree(v){
+  minDegFilter = v;
+  document.getElementById("degLabel").textContent = v;
+  draw(); fitAll();
+}
+function toggleCommunity(ci){
+  if(hiddenComs.has(ci)) hiddenComs.delete(ci);
+  else hiddenComs.add(ci);
+  draw(); fitAll();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -512,9 +653,7 @@ function toggleLayout(){
   document.getElementById("layoutMode").textContent = useEgo ? "ego-network" : "force-directed";
   draw();
 }
-function resetView(){
-  svgEl.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
-}
+function resetView(){ fitAll(); }
 function setRoot(){
   if(!panelId) return;
   fetch("/settings/", {
