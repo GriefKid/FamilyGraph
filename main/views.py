@@ -722,15 +722,19 @@ def graph_all_api(request):
         else:
             deg_c   = {}
             com_map = {}
-    except ImportError:
+    except Exception:
         all_nodes = list(Node.objects.all())
         all_rels  = list(Relationship.objects.select_related('source', 'target'))
         deg_c   = {}
         com_map = {}
 
-    # Root node
-    settings = AppSettings.get()
-    root_id = str(settings.root_node_id) if settings.root_node_id else None
+    # Root node — graceful fallback if AppSettings table doesn't exist yet
+    root_id = None
+    try:
+        settings = AppSettings.get()
+        root_id = str(settings.root_node_id) if settings.root_node_id else None
+    except Exception:
+        pass
 
     node_data = []
     for n in all_nodes:
@@ -795,13 +799,13 @@ def journal_view(request):
 
 @csrf_exempt
 def journal_analyze_api(request):
-    """Send diary text to AI → get back structured entities."""
+    """Diary text → rich structured extraction with root-node awareness."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
 
     try:
-        data = json.loads(request.body)
-        text = data.get('text', '').strip()
+        body = json.loads(request.body)
+        text = body.get('text', '').strip()
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
 
@@ -812,30 +816,81 @@ def journal_analyze_api(request):
     if not api_key:
         return JsonResponse({'error': 'OPENROUTER_API_KEY تنظیم نشده'}, status=500)
 
-    existing = ', '.join(Node.objects.values_list('username', flat=True)[:50])
+    # ── Who is "me"? ─────────────────────────────────────────
+    root_username = None
+    root_display  = None
+    try:
+        app_settings = AppSettings.get()
+        if app_settings.root_node:
+            root_username = app_settings.root_node.username
+            root_display  = app_settings.root_node.display_name()
+    except Exception:
+        pass
 
-    prompt = f"""متن خاطره زیر را تحلیل کن و اطلاعات را استخراج کن.
+    me_info = (
+        f'نویسنده این خاطره "{root_display}" با username "{root_username}" است. '
+        f'هر جا "من" یا اول شخص مفرد آمد یعنی همین شخص. '
+        f'برای نویسنده نود جدید نساز — روابط را به username "{root_username}" وصل کن.'
+        if root_username else
+        'نویسنده مشخص نیست — اگر "من" آمد، username آن را "me" بگذار.'
+    )
 
-متن:
+    existing_nodes = ', '.join(Node.objects.values_list('username', flat=True)[:80]) or 'هیچ'
+
+    prompt = f"""تو یک تحلیلگر هوشمند خاطرات شخصی هستی.
+
+{me_info}
+نودهای موجود در شبکه: {existing_nodes}
+
+متن خاطره:
+\"\"\"
 {text}
+\"\"\"
 
-نودهای موجود در شبکه: {existing or 'هیچ'}
+دقیقاً یک JSON برگردان. هیچ متنی خارج از JSON ننویس:
 
-دقیقاً یک JSON با این ساختار برگردان (بدون توضیح اضافه):
 {{
   "nodes": [
-    {{"username": "نام_کاربری_انگلیسی_بدون_فاصله", "name": "نام کامل فارسی"}}
+    {{"username": "نام_انگلیسی_بدون_فاصله", "name": "نام کامل فارسی"}}
   ],
   "relationships": [
-    {{"from": "username_الف", "to": "username_ب", "type": "نوع رابطه مثل دوست یا همکار"}}
+    {{
+      "from": "username_الف",
+      "to": "username_ب",
+      "type": "نوع رابطه (دوست، همکار، تیم‌لید، برادر، ...)",
+      "strength": 3
+    }}
   ],
   "events": [
-    {{"title": "عنوان رویداد", "date": "YYYY-MM-DD یا null", "description": "توضیح مختصر"}}
+    {{"title": "عنوان", "date": "YYYY-MM-DD یا null", "description": "توضیح"}}
   ],
-  "summary": "یک جمله خلاصه از این خاطره"
+  "attributes": [
+    {{
+      "username": "نام_کاربری",
+      "personality":          ["ویژگی شخصیتی"],
+      "mood":                 "خلق‌وخو در این خاطره",
+      "interests":            ["علایق"],
+      "preferences":          ["سلایق و ترجیحات"],
+      "strengths":            ["نقاط قوت"],
+      "weaknesses":           ["نقاط ضعف"],
+      "goals":                ["اهداف"],
+      "values":               ["ارزش‌ها و باورها"],
+      "communication_style":  "شیوه ارتباطی",
+      "relationship_quality": "کیفیت رابطه با نویسنده",
+      "notable_facts":        ["نکات مهم دیگر"]
+    }}
+  ],
+  "my_mood": "خلق‌وخوی نویسنده در این خاطره",
+  "my_insights": ["چیزی که نویسنده فهمیده یا احساس کرده"],
+  "summary": "یک جمله خلاصه"
 }}
 
-قوانین: فقط افراد واقعی ذکر شده در متن را استخراج کن. اگر چیزی موجود نیست آرایه خالی برگردان."""
+قوانین:
+1. فقط افراد واقعی ذکر شده در متن — نه حدس
+2. نویسنده (من) نود جدید نمی‌شود — روابط از "{root_username or 'me'}" شروع می‌شود
+3. attributes فقط برای افراد دیگر (نه نویسنده) — مگر نویسنده چیزی درباره خودش گفته
+4. strength: عدد ۱ تا ۵ — ۵ خیلی قوی
+5. هر آرایه بدون اطلاعات را [] بگذار"""
 
     try:
         from openai import OpenAI
@@ -844,23 +899,23 @@ def journal_analyze_api(request):
         response = client.chat.completions.create(
             model="google/gemma-4-31b-it:free",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
+            max_tokens=2048,
         )
         content = response.choices[0].message.content
         match = re.search(r'\{[\s\S]*\}', content)
         result = json.loads(match.group() if match else content)
-        # Save raw journal entry
+        result['_root_username'] = root_username  # pass forward to apply_api
         JournalEntry.objects.create(text=text)
         return JsonResponse({'result': result})
     except json.JSONDecodeError:
-        return JsonResponse({'error': 'AI پاسخ معتبر JSON نداد', 'raw': content}, status=500)
+        return JsonResponse({'error': 'AI پاسخ معتبر JSON نداد', 'raw': content[:600]}, status=500)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
 
 @csrf_exempt
 def journal_apply_api(request):
-    """Apply extracted entities (nodes/rels/events) to DB."""
+    """Apply extracted entities + rich attributes to DB."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     try:
@@ -868,12 +923,34 @@ def journal_apply_api(request):
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
 
-    created = {'nodes': [], 'relationships': [], 'events': []}
     from datetime import date as today_date
 
+    created = {'nodes': [], 'relationships': [], 'events': [], 'attributes': []}
+
+    # ── Resolve root node ──────────────────────────────────
+    root_node     = None
+    root_username = (data.get('_root_username') or '').strip()
+    try:
+        app_settings = AppSettings.get()
+        root_node = app_settings.root_node
+        if root_node and not root_username:
+            root_username = root_node.username
+    except Exception:
+        pass
+
+    def resolve_node(uname):
+        uname = (uname or '').strip()
+        if uname in ('me', 'من', root_username) and root_node:
+            return root_node
+        try:
+            return Node.objects.get(username=uname)
+        except Node.DoesNotExist:
+            return None
+
+    # ── Create nodes (never create root) ──────────────────
     for nd in data.get('nodes', []):
         username = (nd.get('username') or '').strip()
-        if not username:
+        if not username or username == root_username:
             continue
         node, is_new = Node.objects.get_or_create(
             username=username,
@@ -882,22 +959,24 @@ def journal_apply_api(request):
         if is_new:
             created['nodes'].append(username)
 
-    app_settings = AppSettings.get()
+    # ── Relationships ──────────────────────────────────────
     for rd in data.get('relationships', []):
-        frm = (rd.get('from') or '').strip()
-        to  = (rd.get('to')   or '').strip()
+        frm      = (rd.get('from') or '').strip()
+        to       = (rd.get('to')   or '').strip()
         rel_type = rd.get('type', '')
-        try:
-            src = Node.objects.get(username=frm)
-            tgt = Node.objects.get(username=to)
-            _, is_new = Relationship.objects.get_or_create(
-                source=src, target=tgt, rel=rel_type
-            )
-            if is_new:
-                created['relationships'].append(f"{frm}→{to}")
-        except Node.DoesNotExist:
-            pass
+        strength = int(rd.get('strength') or 3)
+        src = resolve_node(frm)
+        tgt = resolve_node(to)
+        if not src or not tgt or src == tgt:
+            continue
+        _, is_new = Relationship.objects.get_or_create(
+            source=src, target=tgt, rel=rel_type,
+            defaults={'strength': min(5, max(1, strength))}
+        )
+        if is_new:
+            created['relationships'].append(f"{src.username}→{tgt.username}")
 
+    # ── Events ────────────────────────────────────────────
     for ed in data.get('events', []):
         title = (ed.get('title') or '').strip()
         if not title:
@@ -908,11 +987,52 @@ def journal_apply_api(request):
             event_date = date.fromisoformat(date_str) if date_str else today_date.today()
         except Exception:
             event_date = today_date.today()
-        Event.objects.create(
-            title=title,
-            date=event_date,
+        ev = Event.objects.create(
+            title=title, date=event_date,
             description=ed.get('description', '')
         )
+        if root_node:
+            ev.participants.add(root_node)
         created['events'].append(title)
+
+    # ── Rich attributes → Information model ───────────────
+    LIST_KEYS = ['personality', 'interests', 'preferences', 'strengths',
+                 'weaknesses', 'goals', 'values', 'notable_facts']
+    STR_KEYS  = ['mood', 'communication_style', 'relationship_quality']
+
+    for attr in data.get('attributes', []):
+        uname = (attr.get('username') or '').strip()
+        node  = resolve_node(uname)
+        if not node:
+            continue
+
+        info_qs = Information.objects.filter(node=node, data__has_key='_journal_attributes')
+        if info_qs.exists():
+            info   = info_qs.first()
+            stored = dict(info.data or {})
+        else:
+            stored = {'_journal_attributes': True}
+
+        for key in LIST_KEYS:
+            new_vals = attr.get(key) or []
+            if new_vals:
+                existing = stored.get(key) or []
+                stored[key] = list(dict.fromkeys(existing + new_vals))
+
+        for key in STR_KEYS:
+            if attr.get(key):
+                stored[key] = attr[key]
+
+        if attr.get('notes'):
+            prev = stored.get('notes', '')
+            stored['notes'] = (prev + '\n' + attr['notes']).strip() if prev else attr['notes']
+
+        if info_qs.exists():
+            info.data = stored
+            info.save()
+        else:
+            Information.objects.create(node=node, visibility='private', data=stored)
+
+        created['attributes'].append(node.username)
 
     return JsonResponse({'created': created})

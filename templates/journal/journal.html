@@ -6,125 +6,175 @@
 {% block extra_css %}
 <style>
 .journal-layout{
-  display:grid;
-  grid-template-columns:1fr 340px;
-  gap:20px;
+  display:grid; grid-template-columns:1fr 320px; gap:20px;
 }
+@media(max-width:860px){ .journal-layout{ grid-template-columns:1fr; } }
 
-@media(max-width:900px){ .journal-layout{ grid-template-columns:1fr; } }
-
-/* ── Write panel ── */
+/* ── Write card ── */
 .write-card{
   background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   border:1px solid var(--border);border-radius:14px;overflow:hidden;
   box-shadow:0 4px 20px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
+  margin-bottom:16px;
 }
-.write-head{
-  padding:14px 20px;border-bottom:1px solid var(--border);
+.card-head{
+  padding:13px 18px;border-bottom:1px solid var(--border);
   background:var(--surface);display:flex;align-items:center;justify-content:space-between;
 }
-.write-head h3{font-size:13px;font-weight:700;color:var(--text);}
-.write-body{padding:18px;}
+.card-head h3{ font-size:13px;font-weight:700; }
+.card-head .hint{ font-size:11px;color:var(--text-muted); }
+.card-body{ padding:16px; }
 
 textarea#journalText{
   width:100%;min-height:180px;resize:vertical;
-  background:rgba(255,255,255,.03);
-  border:1px solid var(--border);border-radius:10px;
-  color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13.5px;line-height:1.8;
-  padding:14px 16px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13.5px;line-height:1.85;
+  padding:13px 15px;
 }
 textarea#journalText:focus{
-  border-color:var(--primary-border);
-  box-shadow:0 0 0 3px rgba(99,102,241,.1);outline:none;
+  border-color:var(--primary-border);box-shadow:0 0 0 3px rgba(99,102,241,.1);outline:none;
 }
-textarea#journalText::placeholder{color:var(--text-muted);}
+textarea#journalText::placeholder{ color:var(--text-muted); }
 
-.action-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;}
-.char-count{font-size:11px;color:var(--text-muted);margin-right:auto;}
+.action-row{ display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap; }
+.char-count{ font-size:11px;color:var(--text-muted);margin-right:auto; }
 
 /* ── Result card ── */
 .result-card{
   background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   border:1px solid var(--border-accent);border-radius:14px;overflow:hidden;
-  box-shadow:0 4px 20px rgba(0,0,0,.4),0 0 40px rgba(99,102,241,.06);
+  box-shadow:0 4px 24px rgba(0,0,0,.4),0 0 40px rgba(99,102,241,.07);
   display:none;
 }
-.result-card.show{display:block;}
+.result-card.show{ display:block; }
 .result-head{
-  padding:12px 18px;border-bottom:1px solid var(--border);
-  background:var(--surface);display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;justify-content:space-between;
 }
-.result-head h3{font-size:13px;font-weight:700;color:var(--primary-light);display:flex;align-items:center;gap:7px;}
+.result-head h3{ font-size:13px;font-weight:700;color:var(--primary-light);display:flex;align-items:center;gap:7px; }
 
-.result-body{padding:16px;}
-.result-summary{
+/* Result sections */
+.result-body{ padding:16px;display:flex;flex-direction:column;gap:14px; }
+
+.r-section{ }
+.r-section-title{
+  font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--text-muted);margin-bottom:8px;
+}
+
+/* Summary banner */
+.summary-box{
   background:rgba(99,102,241,.08);border:1px solid var(--primary-border);
-  border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text-soft);
-  margin-bottom:14px;line-height:1.7;
+  border-radius:9px;padding:10px 14px;font-size:13px;color:var(--text-soft);
+  line-height:1.75;
+}
+.mood-row{
+  display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;
+}
+.mood-badge{
+  font-size:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);
+  color:#fcd34d;border-radius:20px;padding:3px 11px;
 }
 
-.entity-section{margin-bottom:14px;}
-.entity-section h4{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;}
+/* Entity chips */
+.chip-group{ display:flex;flex-wrap:wrap;gap:6px; }
 
-.entity-chip{
+.ec{ /* entity chip */
   display:inline-flex;align-items:center;gap:5px;
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:20px;padding:4px 10px;font-size:12px;color:var(--text-soft);
-  margin:3px;
+  font-size:12px;border-radius:20px;padding:4px 11px;
 }
-.entity-chip.node{border-color:rgba(99,102,241,.3);color:#a5b4fc;}
-.entity-chip.rel{border-color:rgba(236,72,153,.3);color:#f9a8d4;}
-.entity-chip.event{border-color:rgba(245,158,11,.3);color:#fcd34d;}
+.ec-node { background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.25); color:#a5b4fc; }
+.ec-rel  { background:rgba(236,72,153,.10); border:1px solid rgba(236,72,153,.2);  color:#f9a8d4; }
+.ec-event{ background:rgba(245,158,11,.10); border:1px solid rgba(245,158,11,.2);  color:#fcd34d; }
 
-.apply-row{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+/* Attribute cards per person */
+.attr-person{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;overflow:hidden;
+}
+.attr-person-head{
+  display:flex;align-items:center;gap:8px;padding:9px 14px;
+  border-bottom:1px solid var(--border);background:rgba(99,102,241,.06);
+  font-size:13px;font-weight:700;
+}
+.attr-person-body{ padding:10px 14px;display:flex;flex-direction:column;gap:8px; }
 
-/* ── History ── */
+.attr-row{ display:flex;gap:8px;align-items:flex-start; }
+.attr-key{
+  font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--text-muted);min-width:90px;flex-shrink:0;padding-top:3px;
+}
+.attr-vals{ display:flex;flex-wrap:wrap;gap:4px; }
+.attr-val{
+  font-size:11.5px;background:var(--card);border:1px solid var(--border);
+  color:var(--text-soft);border-radius:14px;padding:2px 9px;
+}
+.attr-val-str{ font-size:12px;color:var(--text-soft); }
+
+/* Apply row */
+.apply-row{
+  display:flex;gap:8px;padding:14px 16px;
+  border-top:1px solid var(--border);background:var(--surface);
+}
+
+/* Spinner */
+.spinner{
+  display:inline-block;width:13px;height:13px;border-radius:50%;
+  border:2px solid rgba(165,180,252,.25);border-top-color:#a5b4fc;
+  animation:spin .7s linear infinite;vertical-align:middle;
+}
+@keyframes spin{ to{transform:rotate(360deg)} }
+
+/* ── History sidebar ── */
 .history-card{
   background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   border:1px solid var(--border);border-radius:14px;overflow:hidden;
+  position:sticky;top:72px;
 }
-.history-head{
-  padding:12px 18px;border-bottom:1px solid var(--border);
-  background:var(--surface);
-}
-.history-head h3{font-size:13px;font-weight:700;}
-.history-list{padding:8px;}
+.history-list{ padding:6px; }
 .history-item{
-  padding:10px 12px;border-radius:8px;cursor:pointer;
+  padding:9px 12px;border-radius:8px;cursor:pointer;
   transition:var(--transition);margin-bottom:2px;
 }
-.history-item:hover{background:var(--primary-glow);}
-.history-date{font-size:11px;color:var(--text-muted);margin-bottom:3px;}
-.history-preview{font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.empty-history{padding:20px;text-align:center;font-size:13px;color:var(--text-muted);}
+.history-item:hover{ background:var(--primary-glow); }
+.history-date{ font-size:11px;color:var(--text-muted);margin-bottom:2px; }
+.history-preview{ font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.empty-state{ padding:24px;text-align:center;font-size:13px;color:var(--text-muted); }
 
-/* Loading */
-.spinner{
-  display:inline-block;width:14px;height:14px;border-radius:50%;
-  border:2px solid rgba(165,180,252,.3);border-top-color:#a5b4fc;
-  animation:spin .7s linear infinite;
+/* Warning banner */
+.no-root-warn{
+  background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);
+  border-radius:9px;padding:9px 14px;font-size:12px;color:#fcd34d;
+  display:flex;align-items:center;gap:8px;margin-bottom:12px;
 }
-@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="journal-layout">
 
-  <!-- Main: Write + Result -->
+  <!-- Main column -->
   <div>
 
-    <!-- Write -->
-    <div class="write-card" style="margin-bottom:16px;">
-      <div class="write-head">
+    <!-- Root warning if not set -->
+    <div class="no-root-warn" id="rootWarn" style="display:none;">
+      ⚠ نود اصلی تنظیم نشده — بدون آن "من" در متن شناسایی نمی‌شود.
+      <a href="/settings/" style="color:#fcd34d;font-weight:700;margin-right:auto;">تنظیم کن ←</a>
+    </div>
+
+    <!-- Write card -->
+    <div class="write-card">
+      <div class="card-head">
         <h3>✎ یادداشت جدید</h3>
-        <span style="font-size:11px;color:var(--text-muted);">AI اتوماتیک موجودیت‌ها را استخراج می‌کند</span>
+        <span class="hint">AI اتوماتیک همه اطلاعات را استخراج می‌کند</span>
       </div>
-      <div class="write-body">
-        <textarea id="journalText" placeholder="امروز با آرش قهوه خوردم. بهم گفت که با سارا ازدواج کرده. از کارش در شرکت فناوری هم گفت..." oninput="updateCount()"></textarea>
+      <div class="card-body">
+        <textarea id="journalText"
+          placeholder="امروز با رضا قهوه خوردیم. گفت تیم لیدش آقای کریمی خیلی سخت‌گیره و به موسیقی جاز علاقه داره. رضا خودش اهداف بزرگی داره و میخواد استارتاپ بزنه..."
+          oninput="updateCount()"></textarea>
         <div class="action-row">
           <span class="char-count" id="charCount">۰ کاراکتر</span>
-          <button class="btn" onclick="clearText()">پاک کردن</button>
+          <button class="btn btn-sm" onclick="clearText()">پاک کردن</button>
           <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">
             ✦ تحلیل با AI
           </button>
@@ -132,34 +182,36 @@ textarea#journalText::placeholder{color:var(--text-muted);}
       </div>
     </div>
 
-    <!-- Result -->
+    <!-- Result card -->
     <div class="result-card" id="resultCard">
       <div class="result-head">
         <h3>✦ نتایج استخراج</h3>
-        <button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;" onclick="closeResult()">✕</button>
+        <button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;" onclick="closeResult()">✕</button>
       </div>
       <div class="result-body" id="resultBody"></div>
+      <div class="apply-row" id="applyRow" style="display:none;">
+        <button class="btn btn-primary" onclick="applyResult()">✓ ذخیره همه در شبکه</button>
+        <button class="btn" onclick="closeResult()">انصراف</button>
+      </div>
     </div>
 
   </div>
 
-  <!-- Sidebar: History -->
+  <!-- History sidebar -->
   <div>
     <div class="history-card">
-      <div class="history-head">
-        <h3>تاریخچه یادداشت‌ها</h3>
-      </div>
+      <div class="card-head"><h3>تاریخچه</h3></div>
       {% if entries %}
-      <div class="history-list">
-        {% for entry in entries %}
-        <div class="history-item" onclick="loadHistory(`{{ entry.text|escapejs }}`)">
-          <div class="history-date">{{ entry.created_at|date:"Y/m/d H:i" }}</div>
-          <div class="history-preview">{{ entry.text|truncatechars:60 }}</div>
+        <div class="history-list">
+          {% for entry in entries %}
+          <div class="history-item" onclick="loadText(`{{ entry.text|escapejs }}`)">
+            <div class="history-date">{{ entry.created_at|date:"Y/m/d — H:i" }}</div>
+            <div class="history-preview">{{ entry.text|truncatechars:55 }}</div>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
-      </div>
       {% else %}
-      <div class="empty-history">هنوز یادداشتی نیست</div>
+        <div class="empty-state">هنوز یادداشتی نوشته نشده</div>
       {% endif %}
     </div>
   </div>
@@ -167,130 +219,197 @@ textarea#journalText::placeholder{color:var(--text-muted);}
 </div>
 
 <script>
+let lastResult = null;
+
+// ── Init ────────────────────────────────────────────────
+checkRootStatus();
+
+async function checkRootStatus(){
+  try{
+    const r = await fetch("/api/graph/all/");
+    const d = await r.json();
+    if(!d.root_id){ document.getElementById("rootWarn").style.display="flex"; }
+  }catch(e){}
+}
+
 function updateCount(){
-  const len = document.getElementById("journalText").value.length;
-  document.getElementById("charCount").textContent = len + " کاراکتر";
+  document.getElementById("charCount").textContent =
+    document.getElementById("journalText").value.length + " کاراکتر";
 }
 function clearText(){
-  document.getElementById("journalText").value = "";
-  updateCount();
+  document.getElementById("journalText").value = ""; updateCount();
 }
-function loadHistory(text){
-  document.getElementById("journalText").value = text;
-  updateCount();
+function loadText(t){
+  document.getElementById("journalText").value = t; updateCount();
 }
 function closeResult(){
   document.getElementById("resultCard").classList.remove("show");
 }
 
+// ── Analyze ─────────────────────────────────────────────
 async function analyzeJournal(){
   const text = document.getElementById("journalText").value.trim();
   if(!text){ alert("متنی بنویس!"); return; }
-
   const btn = document.getElementById("analyzeBtn");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> در حال تحلیل...';
+  document.getElementById("resultBody").innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)"><span class="spinner"></span> AI در حال خواندن خاطره...</div>';
+  document.getElementById("resultCard").classList.add("show");
+  document.getElementById("applyRow").style.display = "none";
 
   try{
     const res = await fetch("/api/journal/analyze/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": getCookie("csrftoken")
-      },
-      body: JSON.stringify({ text })
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
+      body: JSON.stringify({text})
     });
     const data = await res.json();
-
     if(data.error){
-      alert("خطا: " + data.error);
+      document.getElementById("resultBody").innerHTML =
+        `<div style="padding:16px;color:#f43f5e;">خطا: ${data.error}</div>`;
       return;
     }
-
+    lastResult = data.result;
     renderResult(data.result);
-
   }catch(e){
-    alert("خطا در ارتباط با سرور");
+    document.getElementById("resultBody").innerHTML =
+      '<div style="padding:16px;color:#f43f5e;">خطا در ارتباط با سرور</div>';
   }finally{
     btn.disabled = false;
     btn.innerHTML = '✦ تحلیل دوباره';
   }
 }
 
+// ── Render extracted result ──────────────────────────────
 function renderResult(r){
-  const card = document.getElementById("resultCard");
   const body = document.getElementById("resultBody");
-
   let html = "";
 
-  // Summary
-  if(r.summary){
-    html += `<div class="result-summary">${r.summary}</div>`;
+  // Summary + mood
+  if(r.summary || r.my_mood){
+    html += `<div class="r-section">
+      <div class="r-section-title">خلاصه</div>
+      <div class="summary-box">${r.summary||""}`;
+    if(r.my_mood)
+      html += `<div class="mood-row"><span class="mood-badge">خلق‌وخوی من: ${r.my_mood}</span></div>`;
+    if(r.my_insights && r.my_insights.length)
+      html += `<div class="mood-row">${r.my_insights.map(i=>`<span class="mood-badge" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#a5b4fc;">💡 ${i}</span>`).join("")}</div>`;
+    html += `</div></div>`;
   }
 
-  // Nodes
+  // Nodes found
   if(r.nodes && r.nodes.length){
-    html += `<div class="entity-section">
-      <h4>افراد (${r.nodes.length})</h4>
-      ${r.nodes.map(n=>`<span class="entity-chip node">◉ ${n.name||n.username}</span>`).join("")}
-    </div>`;
+    html += `<div class="r-section">
+      <div class="r-section-title">افراد جدید (${r.nodes.length})</div>
+      <div class="chip-group">
+        ${r.nodes.map(n=>`<span class="ec ec-node">◉ ${n.name||n.username}</span>`).join("")}
+      </div></div>`;
   }
 
   // Relationships
   if(r.relationships && r.relationships.length){
-    html += `<div class="entity-section">
-      <h4>روابط (${r.relationships.length})</h4>
-      ${r.relationships.map(rel=>`<span class="entity-chip rel">⟶ ${rel.from} → ${rel.to}: ${rel.type}</span>`).join("")}
-    </div>`;
+    html += `<div class="r-section">
+      <div class="r-section-title">روابط (${r.relationships.length})</div>
+      <div class="chip-group">
+        ${r.relationships.map(rel=>{
+          const str = rel.strength ? ` · ${rel.strength}/5` : "";
+          return `<span class="ec ec-rel">⟶ ${rel.from} → ${rel.to}: ${rel.type}${str}</span>`;
+        }).join("")}
+      </div></div>`;
   }
 
   // Events
   if(r.events && r.events.length){
-    html += `<div class="entity-section">
-      <h4>رویدادها (${r.events.length})</h4>
-      ${r.events.map(ev=>`<span class="entity-chip event">◷ ${ev.title}${ev.date?" ("+ev.date+")":""}</span>`).join("")}
-    </div>`;
+    html += `<div class="r-section">
+      <div class="r-section-title">رویدادها (${r.events.length})</div>
+      <div class="chip-group">
+        ${r.events.map(ev=>`<span class="ec ec-event">◷ ${ev.title}${ev.date?" ("+ev.date+")":""}</span>`).join("")}
+      </div></div>`;
   }
 
-  // If nothing found
-  if(!r.nodes?.length && !r.relationships?.length && !r.events?.length){
-    html += `<p style="font-size:13px;color:var(--text-muted);text-align:center;">موجودیت مهمی یافت نشد</p>`;
+  // Rich attributes per person
+  if(r.attributes && r.attributes.length){
+    const LABELS = {
+      personality:          "شخصیت",
+      mood:                 "خلق‌وخو",
+      interests:            "علایق",
+      preferences:          "سلایق",
+      strengths:            "نقاط قوت",
+      weaknesses:           "نقاط ضعف",
+      goals:                "اهداف",
+      values:               "ارزش‌ها",
+      communication_style:  "شیوه ارتباط",
+      relationship_quality: "کیفیت رابطه",
+      notable_facts:        "نکات مهم",
+    };
+
+    html += `<div class="r-section">
+      <div class="r-section-title">اطلاعات عمیق افراد</div>`;
+
+    for(const attr of r.attributes){
+      let rows = "";
+      for(const [key, label] of Object.entries(LABELS)){
+        const val = attr[key];
+        if(!val || (Array.isArray(val) && !val.length)) continue;
+        if(Array.isArray(val)){
+          rows += `<div class="attr-row">
+            <div class="attr-key">${label}</div>
+            <div class="attr-vals">${val.map(v=>`<span class="attr-val">${v}</span>`).join("")}</div>
+          </div>`;
+        } else {
+          rows += `<div class="attr-row">
+            <div class="attr-key">${label}</div>
+            <span class="attr-val-str">${val}</span>
+          </div>`;
+        }
+      }
+      if(rows){
+        html += `<div class="attr-person" style="margin-bottom:8px;">
+          <div class="attr-person-head">🧑 ${attr.username}</div>
+          <div class="attr-person-body">${rows}</div>
+        </div>`;
+      }
+    }
+    html += `</div>`;
   }
 
-  // Store result for apply
-  window._lastResult = r;
-
-  html += `<div class="apply-row">
-    <button class="btn btn-primary" onclick="applyResult()">✓ ذخیره در شبکه</button>
-    <button class="btn" onclick="closeResult()">انصراف</button>
-  </div>`;
+  if(!r.nodes?.length && !r.relationships?.length && !r.events?.length && !r.attributes?.length){
+    html += `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:8px 0;">موجودیت مهمی یافت نشد</div>`;
+  }
 
   body.innerHTML = html;
-  card.classList.add("show");
-  card.scrollIntoView({behavior:"smooth", block:"nearest"});
+  document.getElementById("applyRow").style.display = "flex";
+  document.getElementById("resultCard").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 
+// ── Apply ────────────────────────────────────────────────
 async function applyResult(){
-  if(!window._lastResult) return;
-  const res = await fetch("/api/journal/apply/", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CSRFToken": getCookie("csrftoken")
-    },
-    body: JSON.stringify(window._lastResult)
-  });
-  const data = await res.json();
-  const created = data.created || {};
-  const summary = [
-    created.nodes?.length ? `${created.nodes.length} نود جدید` : "",
-    created.relationships?.length ? `${created.relationships.length} رابطه جدید` : "",
-    created.events?.length ? `${created.events.length} رویداد جدید` : "",
-  ].filter(Boolean).join("، ") || "تغییری اعمال نشد";
+  if(!lastResult) return;
+  const btn = document.querySelector("#applyRow .btn-primary");
+  btn.disabled = true; btn.textContent = "در حال ذخیره...";
 
-  alert(`✓ ذخیره شد: ${summary}`);
-  closeResult();
-  location.reload();
+  try{
+    const res = await fetch("/api/journal/apply/", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
+      body: JSON.stringify(lastResult)
+    });
+    const data = await res.json();
+    const c = data.created || {};
+    const parts = [
+      c.nodes?.length        ? `${c.nodes.length} نود جدید`         : "",
+      c.relationships?.length? `${c.relationships.length} رابطه جدید`: "",
+      c.events?.length       ? `${c.events.length} رویداد جدید`      : "",
+      c.attributes?.length   ? `${c.attributes.length} پروفایل آپدیت`: "",
+    ].filter(Boolean);
+    alert(`✓ ذخیره شد:\n${parts.join("\n") || "تغییری اعمال نشد"}`);
+    closeResult();
+    location.reload();
+  }catch(e){
+    alert("خطا در ذخیره‌سازی");
+  }finally{
+    btn.disabled = false; btn.textContent = "✓ ذخیره همه در شبکه";
+  }
 }
 
 function getCookie(n){
