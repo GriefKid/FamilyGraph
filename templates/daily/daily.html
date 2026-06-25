@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}نکات روزانه · FamilyGraph{% endblock %}
+{% block nav_daily %}active{% endblock %}
+{% block page_title %}✦ نکات روزانه شبکه{% endblock %}
+
+{% block extra_css %}
+<style>
+.day-header{
+  background:var(--card); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border); border-radius:20px; padding:28px 32px;
+  margin-bottom:24px; position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:space-between; gap:24px;
+}
+.day-header::before{
+  content:''; position:absolute; inset:0;
+  background:{% if is_holiday %}linear-gradient(135deg,rgba(16,185,129,.08),rgba(6,182,212,.06)){% else %}linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.06)){% endif %};
+  pointer-events:none;
+}
+.day-header::after{
+  content:''; position:absolute; top:-40px; right:-40px;
+  width:200px; height:200px; border-radius:50%;
+  background:{% if is_holiday %}rgba(16,185,129,.08){% else %}rgba(99,102,241,.08){% endif %};
+  filter:blur(40px);
+}
+.day-meta{ position:relative; z-index:1; }
+.day-name{ font-size:36px; font-weight:900; letter-spacing:-1px; }
+.day-date{ font-size:14px; color:var(--text-muted); margin-top:4px; }
+.day-type-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 14px; border-radius:20px; font-size:12px; font-weight:700;
+  margin-top:10px;
+  {% if is_holiday %}background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.25);
+  {% else %}background:rgba(99,102,241,.15);color:var(--primary-light);border:1px solid var(--primary-border);{% endif %}
+}
+.day-big-emoji{
+  font-size:72px; position:relative; z-index:1; filter:drop-shadow(0 0 20px rgba(99,102,241,.3));
+}
+
+.generate-btn{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; padding:14px 20px; border-radius:14px;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  border:none; color:#fff;
+  font-size:15px; font-weight:700;
+  font-family:'Vazirmatn',sans-serif;
+  cursor:pointer; transition:all .2s;
+  box-shadow:0 0 28px rgba(99,102,241,.38), 0 4px 14px rgba(0,0,0,.3);
+  margin-bottom:24px;
+}
+.generate-btn:hover{ opacity:.9; transform:translateY(-2px); box-shadow:0 0 40px rgba(99,102,241,.52), 0 6px 20px rgba(0,0,0,.35); }
+.generate-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
+
+.day-message-card{
+  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08));
+  border:1px solid var(--primary-border); border-radius:16px; padding:20px 24px;
+  margin-bottom:20px; font-size:15px; font-weight:600; line-height:1.7;
+  text-align:center; color:var(--text);
+  display:none;
+}
+{% if is_holiday %}
+.day-message-card{
+  background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(6,182,212,.08));
+  border-color:rgba(16,185,129,.25);
+}
+{% endif %}
+
+.tips-grid{ display:grid; gap:14px; display:none; }
+
+.tip-card{
+  background:var(--card); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border); border-radius:16px; padding:20px 22px;
+  display:flex; gap:16px; align-items:flex-start;
+  transition:all .2s; animation:tipFade .3s ease both;
+}
+.tip-card:nth-child(1){ animation-delay:.05s; }
+.tip-card:nth-child(2){ animation-delay:.10s; }
+.tip-card:nth-child(3){ animation-delay:.15s; }
+.tip-card:nth-child(4){ animation-delay:.20s; }
+.tip-card:nth-child(5){ animation-delay:.25s; }
+@keyframes tipFade{ from{opacity:0;transform:translateX(12px)} to{opacity:1;transform:translateX(0)} }
+.tip-card:hover{ border-color:var(--primary-border); box-shadow:0 6px 28px rgba(0,0,0,.35); }
+
+.tip-emoji{ font-size:32px; flex-shrink:0; margin-top:2px; }
+.tip-body{ flex:1; }
+.tip-title{ font-size:15px; font-weight:700; margin-bottom:6px; }
+.tip-action{ font-size:13px; color:var(--text-soft); line-height:1.6; margin-bottom:8px; }
+.tip-reason{ font-size:11px; color:var(--text-muted); line-height:1.5; }
+.tip-time{
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:10px; padding:3px 8px; border-radius:10px;
+  background:rgba(99,102,241,.1); color:var(--primary-light);
+  border:1px solid var(--primary-border); margin-top:6px;
+}
+{% if is_holiday %}
+.tip-time{ background:rgba(16,185,129,.1); color:#34d399; border-color:rgba(16,185,129,.25); }
+{% endif %}
+
+.tip-done-btn{
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:10px; padding:4px 10px; border-radius:10px; margin-top:6px; margin-right:6px;
+  background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2);
+  color:#34d399; cursor:pointer; font-family:'Vazirmatn',sans-serif; font-weight:600;
+  transition:all .18s;
+}
+.tip-done-btn:hover{ background:rgba(16,185,129,.18); }
+.tip-note-form{
+  margin-top:10px; padding:10px; border-radius:10px;
+  background:rgba(16,185,129,.06); border:1px solid rgba(16,185,129,.15);
+  display:none; animation:tipFade .2s ease;
+}
+.tip-note-form textarea{
+  width:100%; min-height:56px; resize:none;
+  background:rgba(0,0,0,.2); border:1px solid var(--border);
+  border-radius:7px; padding:8px; color:var(--text);
+  font-family:'Vazirmatn',sans-serif; font-size:12px;
+  outline:none; margin-bottom:8px; box-sizing:border-box;
+}
+.tip-note-save{
+  padding:5px 14px; border-radius:7px; font-size:11px; font-weight:700;
+  background:linear-gradient(135deg,#10b981,#06b6d4);
+  border:none; color:#fff; cursor:pointer; font-family:'Vazirmatn',sans-serif;
+}
+.tip-card.done-card{ opacity:.45; }
+.tip-card.done-card .tip-title::before{ content:'✓ '; color:#34d399; }
+
+.focus-card{
+  background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(239,68,68,.06));
+  border:1px solid rgba(245,158,11,.2); border-radius:16px; padding:20px 24px;
+  margin-top:8px; display:none;
+}
+.focus-head{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; margin-bottom:10px; color:#fbbf24; }
+.focus-person{ font-size:15px; font-weight:800; margin-bottom:6px; }
+.focus-suggestion{ font-size:13px; color:var(--text-soft); line-height:1.6; }
+
+.alerts-link-card{
+  background:rgba(244,63,94,.06); border:1px solid rgba(244,63,94,.15);
+  border-radius:12px; padding:14px 18px;
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:20px; text-decoration:none; transition:all .2s;
+}
+.alerts-link-card:hover{ border-color:rgba(244,63,94,.3); background:rgba(244,63,94,.1); }
+.alerts-link-card span{ font-size:13px; color:var(--text-soft); }
+.alerts-link-card strong{ color:#f87171; }
+.alerts-link-card .arrow{ color:#f87171; font-size:16px; }
+
+.spinner{ display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; }
+@keyframes spin{ to{transform:rotate(360deg);} }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Day header -->
+<div class="day-header">
+  <div class="day-meta">
+    <div class="day-name">{{ day_name }}</div>
+    <div class="day-date">{{ jalali_date }} — {{ season }}</div>
+    <div class="day-type-badge">
+      {% if is_holiday and holiday_name != 'جمعه' %}
+        🎉 {{ holiday_name }}
+      {% elif is_holiday %}
+        🌿 جمعه — استراحت و شارژ انرژی
+      {% else %}
+        ⚡ روز کاری — زمان ارتباط هدفمند
+      {% endif %}
+    </div>
+    {% if upcoming_holidays %}
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
+      {% for h in upcoming_holidays %}
+      <div style="font-size:10px;padding:3px 9px;border-radius:10px;
+                  background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);
+                  color:#fbbf24;">
+        🗓 {{ h.jalali }} — {{ h.holiday }} ({{ h.days_away }} روز دیگر)
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="day-big-emoji">
+    {% if is_holiday and holiday_name != 'جمعه' %}🎉
+    {% elif is_holiday %}🌿
+    {% else %}⚡{% endif %}
+  </div>
+</div>
+
+<!-- Urgent alerts link (if any) -->
+{% if alerts_count > 0 %}
+<a class="alerts-link-card" href="/alerts/">
+  <span>🔴 <strong>{{ alerts_count }} هشدار فوری</strong> در انتظار توجه</span>
+  <span class="arrow">←</span>
+</a>
+{% endif %}
+
+<!-- Generate button -->
+<button class="generate-btn" onclick="generateTips()" id="genBtn">
+  ✦ دریافت نکات روزانه
+</button>
+
+<!-- Day message -->
+<div class="day-message-card" id="dayMessage"></div>
+
+<!-- Tips grid -->
+<div class="tips-grid" id="tipsGrid"></div>
+
+<!-- Focus person -->
+<div class="focus-card" id="focusCard">
+  <div class="focus-head">🎯 تمرکز ویژه امروز</div>
+  <div class="focus-person" id="focusPerson"></div>
+  <div class="focus-suggestion" id="focusSugg"></div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TODAY_KEY = 'daily_tips_{{ today|date:"Ymd" }}';
+const TODAY_STR = '{{ today|date:"Ymd" }}';
+
+// Auto-load از localStorage
+const _cached = localStorage.getItem(TODAY_KEY);
+if(_cached){
+  try{
+    renderTips(JSON.parse(_cached));
+    document.getElementById('genBtn').textContent = '🔄 بازسازی نکات امروز';
+  } catch(e){ localStorage.removeItem(TODAY_KEY); }
+}
+
+async function generateTips(){
+  const btn = document.getElementById('genBtn');
+  btn.innerHTML = '<span class="spinner"></span> در حال تحلیل شبکه...';
+  btn.disabled = true;
+  document.getElementById('dayMessage').style.display = 'none';
+  document.getElementById('tipsGrid').style.display = 'none';
+  document.getElementById('focusCard').style.display = 'none';
+  try{
+    const r = await fetch('/api/daily/tips/', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
+    });
+    const d = await r.json();
+    if(d.ok && d.result){
+      localStorage.setItem(TODAY_KEY, JSON.stringify(d.result));
+      renderTips(d.result);
+    } else {
+      alert(d.error || 'خطا در دریافت نکات');
+    }
+  } catch(e){ alert('خطا در ارتباط با سرور: ' + e.message); }
+  btn.innerHTML = '🔄 بازسازی نکات امروز';
+  btn.disabled = false;
+}
+
+function renderTips(result){
+  // Day message
+  const msgEl = document.getElementById('dayMessage');
+  msgEl.textContent = result.day_message || '';
+  msgEl.style.display = result.day_message ? 'block' : 'none';
+
+  // Tips
+  const grid = document.getElementById('tipsGrid');
+  const tips = result.tips || [];
+  if(tips.length > 0){
+    grid.innerHTML = tips.map((t,i) => {
+      const safeTitle = (t.title||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return `<div class="tip-card" id="tip-card-${i}">
+        <div class="tip-emoji">${t.emoji||'💡'}</div>
+        <div class="tip-body">
+          <div class="tip-title">${t.title||''}</div>
+          <div class="tip-action">${t.action||''}</div>
+          <div class="tip-reason">${t.reason||''}</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
+            <div class="tip-time">⏱ ${t.time_needed||'...'}</div>
+            <button class="tip-done-btn" onclick="tipDone(${i},'${safeTitle}')">✓ انجام دادم</button>
+          </div>
+          <div class="tip-note-form" id="tip-note-${i}">
+            <textarea placeholder="نتیجه چی شد؟ (اختیاری — به AI کمک می‌کنه الگوهایت رو بهتر بفهمه)"></textarea>
+            <button class="tip-note-save" onclick="saveTipDone(${i},'${safeTitle}')">ذخیره</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    grid.style.display = 'grid';
+  }
+
+  // Focus person
+  if(result.focus_person && result.focus_person.name){
+    document.getElementById('focusPerson').textContent = '👤 ' + result.focus_person.name;
+    document.getElementById('focusSugg').textContent = result.focus_person.suggestion || '';
+    document.getElementById('focusCard').style.display = 'block';
+  }
+}
+
+function tipDone(i, title){
+  document.getElementById('tip-note-' + i).style.display = 'block';
+}
+
+async function saveTipDone(i, title){
+  const outcome = document.querySelector('#tip-note-' + i + ' textarea').value.trim();
+  try{
+    await fetch('/api/alerts/action/', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        alert_id: 'daily_tip_' + TODAY_STR + '_' + i,
+        alert_type: 'daily_tip',
+        node_id: null,
+        title: title,
+        action: 'completed',
+        outcome: outcome,
+      })
+    });
+  } catch(e){}
+  document.getElementById('tip-card-' + i).classList.add('done-card');
+  document.getElementById('tip-note-' + i).style.display = 'none';
+}
+</script>
+{% endblock %}

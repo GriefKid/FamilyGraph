@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+{% block title %}روانشناسی شبکه · FamilyGraph{% endblock %}
+{% block nav_psychology %}active{% endblock %}
+{% block page_title %}🧠 تحلیل روانشناختی شبکه{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-primary" onclick="runAIAnalysis()" id="aiBtn">✦ تحلیل AI جامع</button>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.psych-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:18px; margin-bottom:24px; }
+
+.metric-card{
+  background:var(--card); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border); border-radius:16px; padding:22px;
+  transition:all .2s; position:relative; overflow:hidden;
+}
+.metric-card:hover{ border-color:var(--primary-border); box-shadow:0 6px 28px rgba(0,0,0,.35); }
+
+.metric-head{ display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+.metric-icon{ font-size:22px; }
+.metric-name{ font-size:13px; font-weight:700; }
+.metric-theory{ font-size:10px; color:var(--text-muted); margin-top:1px; }
+
+/* Dunbar bars */
+.dunbar-layer{
+  display:flex; align-items:center; gap:10px; margin-bottom:8px;
+}
+.dunbar-label{ font-size:11px; color:var(--text-soft); width:80px; flex-shrink:0; }
+.dunbar-bar-wrap{ flex:1; height:10px; background:rgba(255,255,255,.06); border-radius:6px; overflow:hidden; }
+.dunbar-bar{ height:100%; border-radius:6px; transition:width .6s ease; }
+.d-intimate      .dunbar-bar{ background:linear-gradient(90deg,#f43f5e,#e11d48); }
+.d-close         .dunbar-bar{ background:linear-gradient(90deg,#f59e0b,#d97706); }
+.d-friends       .dunbar-bar{ background:linear-gradient(90deg,#6366f1,#8b5cf6); }
+.d-acquaint      .dunbar-bar{ background:linear-gradient(90deg,#10b981,#06b6d4); }
+.d-acquaintances .dunbar-bar{ background:linear-gradient(90deg,#10b981,#06b6d4); }
+.d-weak          .dunbar-bar{ background:linear-gradient(90deg,#6b7280,#9ca3af); }
+.dunbar-count{ font-size:11px; color:var(--text-soft); width:30px; text-align:left; }
+
+.dunbar-note{
+  font-size:11px; color:var(--text-soft); margin-top:10px;
+  padding:8px 10px; background:rgba(255,255,255,.04); border-radius:8px;
+  border-right:2px solid var(--primary);
+}
+
+/* Gauge / Circle */
+.gauge-row{ display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.gauge-wrap{ position:relative; width:100px; height:100px; flex-shrink:0; }
+.gauge-wrap svg{ width:100%; height:100%; transform:rotate(-90deg); }
+.gauge-track{ fill:none; stroke:rgba(255,255,255,.07); stroke-width:8; }
+.gauge-fill{ fill:none; stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset .8s ease; }
+.gauge-label{
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  text-align:center;
+}
+.gauge-number{ font-size:18px; font-weight:800; }
+.gauge-unit{ font-size:10px; color:var(--text-muted); }
+
+.gauge-info{ flex:1; }
+.gauge-info-title{ font-size:13px; font-weight:700; margin-bottom:6px; }
+.gauge-info-desc{ font-size:12px; color:var(--text-soft); line-height:1.6; }
+
+/* Status pills */
+.status-pill{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:4px 10px; border-radius:20px;
+  font-size:11px; font-weight:700;
+}
+.status-optimal{ background:rgba(16,185,129,.14); color:#34d399; border:1px solid rgba(16,185,129,.2); }
+.status-warning { background:rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.2); }
+.status-danger  { background:rgba(244,63,94,.12); color:#f87171; border:1px solid rgba(244,63,94,.2); }
+
+/* Connectors table */
+.connectors-table{ width:100%; border-collapse:collapse; }
+.connectors-table th{ font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.8px; padding:6px 0; border-bottom:1px solid var(--border); }
+.connectors-table td{ font-size:12px; padding:8px 0; border-bottom:1px solid var(--border-soft); }
+.connectors-table tr:last-child td{ border-bottom:none; }
+.mini-bar{ height:5px; border-radius:3px; background:linear-gradient(90deg,#6366f1,#8b5cf6); display:inline-block; }
+
+/* Full-width AI card */
+.ai-card{
+  background:var(--card); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--primary-border); border-radius:16px; padding:24px;
+  margin-bottom:24px;
+}
+.ai-card-head{ display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+.ai-card-title{ font-size:15px; font-weight:700; }
+
+.ai-result-section{ margin-bottom:18px; }
+.ai-result-section h4{ font-size:12px; font-weight:700; color:var(--primary-light); letter-spacing:.8px; text-transform:uppercase; margin-bottom:10px; }
+
+.health-score-big{
+  text-align:center; padding:24px 16px;
+  background:rgba(99,102,241,.08); border-radius:12px; margin-bottom:20px;
+}
+.health-score-num{ font-size:56px; font-weight:900; background:linear-gradient(135deg,#6366f1,#8b5cf6,#ec4899); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.health-score-label{ font-size:15px; color:var(--text-soft); margin-top:4px; }
+.health-score-summary{ font-size:13px; color:var(--text-muted); margin-top:8px; max-width:600px; margin-left:auto; margin-right:auto; line-height:1.7; }
+
+.rec-item{ display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }
+.rec-item:last-child{ border-bottom:none; }
+.rec-impact{ font-size:10px; padding:2px 7px; border-radius:10px; }
+.impact-high{ background:rgba(244,63,94,.12); color:#f87171; }
+.impact-medium{ background:rgba(245,158,11,.12); color:#fbbf24; }
+.impact-low{ background:rgba(16,185,129,.12); color:#34d399; }
+
+.tag-cloud{ display:flex; flex-wrap:wrap; gap:6px; }
+.tag-item{ font-size:11px; padding:4px 10px; border-radius:20px; background:rgba(99,102,241,.1); border:1px solid var(--primary-border); color:var(--primary-light); }
+
+.communities-row{ display:flex; align-items:center; gap:16px; margin-bottom:12px; }
+.comm-circle{ width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#fff; flex-shrink:0; }
+
+/* Spinner */
+.spinner{ display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.2); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+.rel-type-bar-wrap{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.rel-type-label{ font-size:11px; color:var(--text-soft); width:90px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rel-type-bar{ height:8px; border-radius:4px; background:linear-gradient(90deg,#6366f1,#8b5cf6); }
+.rel-type-count{ font-size:11px; color:var(--text-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if empty %}
+<div style="text-align:center;padding:64px;color:var(--text-muted)">
+  <div style="font-size:48px;margin-bottom:16px">📊</div>
+  <h3 style="color:var(--text-soft)">شبکه‌ای وجود ندارد</h3>
+  <p>اول چند نود و رابطه اضافه کن.</p>
+</div>
+{% else %}
+
+<!-- ── Summary stats ─────────────────────────────────────────── -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+  <div class="metric-card" style="padding:16px 20px;text-align:center;">
+    <div style="font-size:26px;font-weight:900;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{{ n_nodes }}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">افراد شبکه</div>
+  </div>
+  <div class="metric-card" style="padding:16px 20px;text-align:center;">
+    <div style="font-size:26px;font-weight:900;background:linear-gradient(135deg,#ec4899,#f43f5e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{{ n_edges }}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">روابط</div>
+  </div>
+  <div class="metric-card" style="padding:16px 20px;text-align:center;">
+    <div style="font-size:26px;font-weight:900;background:linear-gradient(135deg,#10b981,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{{ n_communities }}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">گروه‌ها</div>
+  </div>
+  <div class="metric-card" style="padding:16px 20px;text-align:center;">
+    <div style="font-size:26px;font-weight:900;background:linear-gradient(135deg,#f59e0b,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{{ total_entries }}</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">یادداشت‌های دفترچه</div>
+  </div>
+</div>
+
+<!-- ── Metric Cards Grid ──────────────────────────────────────── -->
+<div class="psych-grid">
+
+  <!-- Dunbar's Number -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🏛</span>
+      <div>
+        <div class="metric-name">نظریه داونبار</div>
+        <div class="metric-theory">Dunbar's Number — ظرفیت شناختی روابط</div>
+      </div>
+    </div>
+    {% if dunbar %}
+      {% for key,count in dunbar.items %}
+      <div class="dunbar-layer d-{{ key }}">
+        <div class="dunbar-label">
+          {% if key == "intimate" %}صمیمی (۱-۵)
+          {% elif key == "close" %}نزدیک (۶-۱۵)
+          {% elif key == "friends" %}دوست (۱۶-۵۰)
+          {% elif key == "acquaintances" %}آشنا (۵۱-۱۵۰)
+          {% else %}ضعیف (۱۵۰+){% endif %}
+        </div>
+        <div class="dunbar-bar-wrap">
+          <div class="dunbar-bar" style="width:{% if total_direct > 0 %}{{ count|default:0 }}{% else %}0{% endif %}0%;max-width:100%"></div>
+        </div>
+        <div class="dunbar-count">{{ count }}</div>
+      </div>
+      {% endfor %}
+      {% for note in dunbar_notes %}
+      <div class="dunbar-note">{{ note }}</div>
+      {% endfor %}
+    {% else %}
+      <p style="font-size:12px;color:var(--text-muted)">نود اصلی (من) را در تنظیمات تعریف کن.</p>
+    {% endif %}
+  </div>
+
+  <!-- Granovetter Weak Ties -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🔗</span>
+      <div>
+        <div class="metric-name">نظریه پیوندهای ضعیف</div>
+        <div class="metric-theory">Granovetter Weak Tie Theory</div>
+      </div>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 36 36">
+          <circle class="gauge-track" cx="18" cy="18" r="14"/>
+          <circle class="gauge-fill" cx="18" cy="18" r="14"
+            stroke="{% if grano_status == 'optimal' %}#10b981{% elif grano_status == 'too_strong' %}#f59e0b{% else %}#f43f5e{% endif %}"
+            stroke-dasharray="{{ weak_ratio_pct }}, 100"
+            stroke-dashoffset="0"/>
+        </svg>
+        <div class="gauge-label">
+          <div class="gauge-number" style="color:{% if grano_status == 'optimal' %}#10b981{% elif grano_status == 'too_strong' %}#fbbf24{% else %}#f87171{% endif %}">{{ weak_ratio_pct }}%</div>
+          <div class="gauge-unit">ضعیف</div>
+        </div>
+      </div>
+      <div class="gauge-info">
+        <div class="gauge-info-title">
+          <span class="status-pill {% if grano_status == 'optimal' %}status-optimal{% elif grano_status == 'too_strong' %}status-warning{% else %}status-danger{% endif %}">
+            {{ grano_label }}
+          </span>
+        </div>
+        <div class="gauge-info-desc" style="margin-top:8px;">{{ grano_note }}</div>
+        <div style="display:flex;gap:12px;margin-top:10px;font-size:11px;color:var(--text-muted)">
+          <span>🟣 قوی: {{ strong }}</span>
+          <span>⚪ متوسط: {{ medium }}</span>
+          <span>⬜ ضعیف: {{ weak }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Echo Chamber Risk -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">📡</span>
+      <div>
+        <div class="metric-name">ریسک اتاق پژواک</div>
+        <div class="metric-theory">Clustering Coefficient — Homophily Risk</div>
+      </div>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 36 36">
+          <circle class="gauge-track" cx="18" cy="18" r="14"/>
+          <circle class="gauge-fill" cx="18" cy="18" r="14"
+            stroke="{% if echo_risk == 'high' %}#f43f5e{% elif echo_risk == 'medium' %}#f59e0b{% else %}#10b981{% endif %}"
+            stroke-dasharray="{{ avg_clust_pct }}, 100"
+            stroke-dashoffset="0"/>
+        </svg>
+        <div class="gauge-label">
+          <div class="gauge-number" style="font-size:14px;color:{% if echo_risk == 'high' %}#f87171{% elif echo_risk == 'medium' %}#fbbf24{% else %}#34d399{% endif %}">{{ avg_clust }}</div>
+          <div class="gauge-unit">ضریب</div>
+        </div>
+      </div>
+      <div class="gauge-info">
+        <div class="gauge-info-title">
+          <span class="status-pill {% if echo_risk == 'high' %}status-danger{% elif echo_risk == 'medium' %}status-warning{% else %}status-optimal{% endif %}">
+            ریسک {{ echo_label }}
+          </span>
+        </div>
+        <div class="gauge-info-desc" style="margin-top:8px;">
+          {% if echo_risk == 'high' %}شبکه بسیار متراکم است — احتمال اتاق پژواک بالا. تنوع ایجاد کن.
+          {% elif echo_risk == 'medium' %}تراکم متوسط — تعادل نسبتاً خوبی بین انسجام و تنوع.
+          {% else %}شبکه باز است — دیدگاه‌های متنوعی به جریان می‌افتد.{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Network Resilience -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🛡</span>
+      <div>
+        <div class="metric-name">تاب‌آوری شبکه</div>
+        <div class="metric-theory">Network Resilience — Node Connectivity</div>
+      </div>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 36 36">
+          <circle class="gauge-track" cx="18" cy="18" r="14"/>
+          <circle class="gauge-fill" cx="18" cy="18" r="14"
+            stroke="{% if resilience_score >= 60 %}#10b981{% elif resilience_score >= 30 %}#f59e0b{% else %}#f43f5e{% endif %}"
+            stroke-dasharray="{{ resilience_score }}, 100"
+            stroke-dashoffset="0"/>
+        </svg>
+        <div class="gauge-label">
+          <div class="gauge-number" style="font-size:14px;">{{ resilience_score }}</div>
+          <div class="gauge-unit">/۱۰۰</div>
+        </div>
+      </div>
+      <div class="gauge-info">
+        <div class="gauge-info-title">
+          <span class="status-pill {% if resilience_score >= 60 %}status-optimal{% elif resilience_score >= 30 %}status-warning{% else %}status-danger{% endif %}">
+            {% if resilience_score >= 60 %}قوی{% elif resilience_score >= 30 %}متوسط{% else %}آسیب‌پذیر{% endif %}
+          </span>
+        </div>
+        <div class="gauge-info-desc" style="margin-top:8px;">
+          اتصال گره‌ای: {{ node_connectivity }} —
+          {% if node_connectivity == 0 %}شبکه منقطع است
+          {% elif node_connectivity == 1 %}یک نود حذف کافی است برای قطع شبکه
+          {% elif node_connectivity >= 3 %}شبکه در برابر حذف تصادفی مقاوم است
+          {% else %}شبکه نسبتاً مقاوم است{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relationship Status -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">⚡</span>
+      <div>
+        <div class="metric-name">وضعیت روابط</div>
+        <div class="metric-theory">Social Exchange Theory — Reciprocity</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:14px;">
+      <div style="flex:1;text-align:center;padding:12px;background:rgba(16,185,129,.08);border-radius:10px;border:1px solid rgba(16,185,129,.15);">
+        <div style="font-size:22px;font-weight:800;color:#34d399;">{{ active_rels }}</div>
+        <div style="font-size:10px;color:var(--text-muted);">فعال</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:12px;background:rgba(245,158,11,.08);border-radius:10px;border:1px solid rgba(245,158,11,.15);">
+        <div style="font-size:22px;font-weight:800;color:#fbbf24;">{{ distant_rels }}</div>
+        <div style="font-size:10px;color:var(--text-muted);">دور شده</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:12px;background:rgba(244,63,94,.08);border-radius:10px;border:1px solid rgba(244,63,94,.15);">
+        <div style="font-size:22px;font-weight:800;color:#f87171;">{{ inactive_rels }}</div>
+        <div style="font-size:10px;color:var(--text-muted);">غیرفعال</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text-soft);padding:8px 10px;background:rgba(255,255,255,.04);border-radius:8px;">
+      نرخ روابط فعال در شبکه: <strong>{{ reciprocity_rate }}</strong>
+    </div>
+  </div>
+
+  <!-- Top Connectors -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🌟</span>
+      <div>
+        <div class="metric-name">مرکزیت در شبکه</div>
+        <div class="metric-theory">Centrality Measures — Degree / Betweenness</div>
+      </div>
+    </div>
+    <table class="connectors-table">
+      <thead>
+        <tr>
+          <th>نام</th>
+          <th>درجه</th>
+          <th>بین‌مرکزیت</th>
+          <th>نزدیکی</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in top_connectors %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td><span class="mini-bar" style="width:{{ c.degree }}px;max-width:40px"></span> {{ c.degree }}%</td>
+          <td>{{ c.betweenness }}%</td>
+          <td>{{ c.closeness }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Community / Bridges -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🏘</span>
+      <div>
+        <div class="metric-name">گروه‌بندی و پل‌ها</div>
+        <div class="metric-theory">Burt's Structural Holes — Bridge Nodes</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:14px;">
+      <div style="flex:1;text-align:center;padding:10px;background:rgba(99,102,241,.08);border-radius:10px;">
+        <div style="font-size:20px;font-weight:800;color:var(--primary-light);">{{ n_communities }}</div>
+        <div style="font-size:10px;color:var(--text-muted);">گروه</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:10px;background:rgba(139,92,246,.08);border-radius:10px;">
+        <div style="font-size:20px;font-weight:800;color:#a78bfa;">{{ modularity_val }}</div>
+        <div style="font-size:10px;color:var(--text-muted);">modularity</div>
+      </div>
+    </div>
+    {% if bridges %}
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">پل‌های اجتماعی (رابط گروه‌ها):</div>
+    <div class="tag-cloud">
+      {% for b in bridges %}<span class="tag-item">{{ b }}</span>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Relationship Types -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🔎</span>
+      <div>
+        <div class="metric-name">ترکیب انواع روابط</div>
+        <div class="metric-theory">Social Role Diversity</div>
+      </div>
+    </div>
+    {% if rel_types %}
+      {% for rt,cnt in rel_types %}
+      <div class="rel-type-bar-wrap">
+        <div class="rel-type-label">{{ rt }}</div>
+        <div class="rel-type-bar" style="width:{{ cnt }}0px;max-width:120px;"></div>
+        <div class="rel-type-count">{{ cnt }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p style="font-size:12px;color:var(--text-muted)">انواع رابطه ثبت نشده‌اند.</p>
+    {% endif %}
+  </div>
+
+</div><!-- /psych-grid -->
+
+<!-- AI Panel (populated on demand) -->
+<div class="ai-card" id="aiCard" style="display:none">
+  <div class="ai-card-head">
+    <span style="font-size:22px">🧠</span>
+    <div>
+      <div class="ai-card-title">تحلیل جامع روانشناسی و جامعه‌شناسی</div>
+      <div style="font-size:11px;color:var(--text-muted)">داونبار · گرانووتر · بورت · نظریه دلبستگی · سرمایه اجتماعی</div>
+    </div>
+  </div>
+  <div id="aiContent"></div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function runAIAnalysis(){
+  const btn = document.getElementById('aiBtn');
+  const card = document.getElementById('aiCard');
+  const content = document.getElementById('aiContent');
+
+  btn.innerHTML = '<span class="spinner"></span> در حال تحلیل...';
+  btn.disabled = true;
+  card.style.display = 'block';
+  content.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><span class="spinner" style="width:32px;height:32px;border-width:3px"></span><p style="margin-top:16px">هوش مصنوعی در حال تحلیل عمیق شبکه شما...</p></div>';
+  card.scrollIntoView({behavior:'smooth', block:'start'});
+
+  try{
+    const r = await fetch('/api/psychology/analyze/', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const d = await r.json();
+    if(d.ok && d.result){
+      renderAI(d.result);
+    } else {
+      content.innerHTML = `<div style="color:var(--danger);padding:16px">${d.error||'خطا در تحلیل'}</div>`;
+    }
+  } catch(e){
+    content.innerHTML = `<div style="color:var(--danger);padding:16px">خطا در ارتباط با سرور: ${e.message}</div>`;
+  }
+  btn.innerHTML = '✦ تحلیل AI جامع';
+  btn.disabled = false;
+}
+
+function renderAI(res){
+  const content = document.getElementById('aiContent');
+  let html = '';
+
+  if(res.health){
+    html += `
+    <div class="health-score-big">
+      <div class="health-score-num">${res.health.score||'--'}</div>
+      <div class="health-score-label">${res.health.label||''}</div>
+      <div class="health-score-summary">${res.health.summary||''}</div>
+    </div>`;
+  }
+
+  if(res.patterns && res.patterns.length){
+    html += `<div class="ai-result-section">
+      <h4>🔄 الگوهای رفتاری</h4>
+      ${res.patterns.map(p=>`<div style="padding:6px 0 6px 12px;border-right:2px solid var(--primary);margin-bottom:8px;font-size:13px;color:var(--text-soft)">${p}</div>`).join('')}
+    </div>`;
+  }
+
+  if(res.risks && res.risks.length){
+    html += `<div class="ai-result-section">
+      <h4>⚠️ ریسک‌ها و آسیب‌پذیری‌ها</h4>
+      ${res.risks.map(r=>`<div style="padding:6px 0 6px 12px;border-right:2px solid #f43f5e;margin-bottom:8px;font-size:13px;color:var(--text-soft)">${r}</div>`).join('')}
+    </div>`;
+  }
+
+  if(res.opportunities && res.opportunities.length){
+    html += `<div class="ai-result-section">
+      <h4>✨ فرصت‌های رشد</h4>
+      ${res.opportunities.map(o=>`<div style="padding:6px 0 6px 12px;border-right:2px solid #10b981;margin-bottom:8px;font-size:13px;color:var(--text-soft)">${o}</div>`).join('')}
+    </div>`;
+  }
+
+  if(res.recommendations && res.recommendations.length){
+    html += `<div class="ai-result-section"><h4>💡 توصیه‌های عملی</h4>`;
+    res.recommendations.forEach(rec=>{
+      const impactClass = rec.impact === 'بالا' ? 'impact-high' : rec.impact === 'متوسط' ? 'impact-medium' : 'impact-low';
+      html += `<div class="rec-item">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${rec.action||''}</div>
+          <div style="font-size:11px;color:var(--text-muted)">📚 ${rec.theory||''}</div>
+        </div>
+        <span class="rec-impact ${impactClass}">${rec.impact||''}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  if(res.psychological_profile){
+    html += `<div class="ai-result-section">
+      <h4>🧬 پروفایل روانشناختی</h4>
+      <div style="font-size:13px;color:var(--text-soft);line-height:1.8;padding:14px;background:rgba(255,255,255,.03);border-radius:10px">${res.psychological_profile}</div>
+    </div>`;
+  }
+
+  if(res.sociological_summary){
+    html += `<div class="ai-result-section">
+      <h4>🌐 خلاصه جامعه‌شناختی</h4>
+      <div style="font-size:13px;color:var(--text-soft);line-height:1.8;padding:14px;background:rgba(99,102,241,.06);border-radius:10px;border:1px solid var(--primary-border)">${res.sociological_summary}</div>
+    </div>`;
+  }
+
+  content.innerHTML = html || '<p>پاسخی از هوش مصنوعی دریافت نشد.</p>';
+}
+</script>
+{% endblock %}

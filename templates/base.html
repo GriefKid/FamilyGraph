@@ -328,6 +328,90 @@ input:focus, textarea:focus, select:focus{
 }
 .light .chip{ color:var(--primary); }
 
+/* ─── SELECT DARK MODE FIX ─── */
+select{
+  -webkit-appearance:none;
+  appearance:none;
+  background-color:rgba(8,8,25,.96);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:7px 36px 7px 12px;
+  font-family:'Vazirmatn',sans-serif;
+  font-size:13px;
+  cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236366f1' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:left 10px center;
+  transition:all var(--transition);
+  color-scheme:dark;
+}
+select:hover{ border-color:var(--primary-border); background-color:rgba(12,12,35,.99); }
+select option{ background-color:#0c0c1e; color:#e8eaf6; }
+.light select{
+  background-color:rgba(255,255,255,.93);
+  color:#12122a;
+  border-color:var(--border);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234f46e5' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  color-scheme:light;
+}
+.light select option{ background-color:#ffffff; color:#12122a; }
+
+/* ─── NOTIFICATION BELL ─── */
+.notif-wrap{ position:relative; }
+.notif-btn{
+  display:flex; align-items:center; gap:5px;
+  padding:6px 10px; border-radius:8px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.05);
+  color:var(--text-soft); font-size:14px;
+  cursor:pointer; transition:all var(--transition); position:relative;
+}
+.notif-btn:hover{
+  background:rgba(99,102,241,.10);
+  border-color:var(--primary-border); color:var(--text);
+}
+.notif-badge{
+  display:none; position:absolute; top:-6px; left:-4px;
+  background:linear-gradient(135deg,#f43f5e,#e11d48);
+  color:#fff; font-size:10px; font-weight:700;
+  min-width:16px; height:16px; border-radius:10px; padding:0 4px;
+  align-items:center; justify-content:center;
+  box-shadow:0 0 8px rgba(244,63,94,.5);
+}
+.notif-panel{
+  display:none; position:absolute; top:calc(100% + 10px); left:0;
+  width:320px;
+  background:rgba(8,8,24,.97);
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border:1px solid var(--border); border-radius:14px;
+  box-shadow:0 16px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(99,102,241,.12);
+  z-index:200; overflow:hidden;
+}
+.light .notif-panel{ background:rgba(240,240,252,.97); }
+.notif-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px 10px; border-bottom:1px solid var(--border);
+  font-size:13px; font-weight:600;
+}
+.notif-head a{ font-size:11px; color:var(--primary-light); text-decoration:none; }
+.notif-body-scroll{ max-height:320px; overflow-y:auto; }
+.notif-item{
+  padding:11px 16px; border-bottom:1px solid var(--border-soft);
+  cursor:pointer; transition:background var(--transition);
+}
+.notif-item:hover{ background:rgba(99,102,241,.08); }
+.notif-item:last-child{ border-bottom:none; }
+.notif-item-title{ font-size:12px; font-weight:600; margin-bottom:3px; }
+.notif-item-body{ font-size:11px; color:var(--text-soft); line-height:1.4; }
+.notif-item.p-high .notif-item-title{ color:#fbbf24; }
+.notif-item.p-medium .notif-item-title{ color:var(--primary-light); }
+.notif-item.p-low .notif-item-title{ color:var(--text-soft); }
+.notif-empty{ padding:24px 16px; text-align:center; color:var(--text-muted); font-size:13px; }
+.notif-footer{ padding:10px 16px; border-top:1px solid var(--border); text-align:center; }
+.notif-footer a{ font-size:12px; color:var(--primary-light); text-decoration:none; }
+
 /* ─── PAGE FADE IN ─── */
 @keyframes pageFadeIn{
   from{ opacity:0; transform:translateY(5px); }
@@ -375,9 +459,11 @@ input:focus, textarea:focus, select:focus{
       <span class="nav-section-arrow">▾</span>
     </div>
     <div class="nav-section-items" id="sec2-items">
-      <a href="/communities/"  class="nav-item {% block nav_communities %}{% endblock %}"><span class="nav-icon">⬡</span> گروه‌ها</a>
-      <a href="/insights/"     class="nav-item {% block nav_insights %}{% endblock %}"><span class="nav-icon">◎</span> بینش‌ها</a>
-      <a href="/chat/"         class="nav-item {% block nav_chat  %}{% endblock %}"><span class="nav-icon">✦</span> چت AI</a>
+      <a href="/groups/"       class="nav-item {% block nav_groups %}{% endblock %}"><span class="nav-icon">🗂</span> مدیریت گروه‌ها</a>
+      <a href="/psychology/"   class="nav-item {% block nav_psychology %}{% endblock %}"><span class="nav-icon">🧠</span> روانشناسی</a>
+      <a href="/daily/"        class="nav-item {% block nav_daily %}{% endblock %}"><span class="nav-icon">✦</span> نکات روزانه</a>
+      <a href="/alerts/"       class="nav-item {% block nav_alerts %}{% endblock %}"><span class="nav-icon">🔔</span> هشدارها</a>
+      <a href="/chat/"         class="nav-item {% block nav_chat  %}{% endblock %}"><span class="nav-icon">◈</span> چت AI</a>
     </div>
 
     <!-- Section: تنظیمات -->
@@ -402,7 +488,26 @@ input:focus, textarea:focus, select:focus{
 <div class="main-wrap">
   <div class="topbar">
     <span class="page-title">{% block page_title %}{% endblock %}</span>
-    <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <!-- Notification Bell -->
+      <div class="notif-wrap" id="notifWrap">
+        <button class="notif-btn" onclick="toggleNotifPanel(event)" title="هشدارها">
+          🔔
+          <span class="notif-badge" id="notifBadge"></span>
+        </button>
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-head">
+            <span>🔔 هشدارها</span>
+            <a href="/alerts/">همه →</a>
+          </div>
+          <div class="notif-body-scroll" id="notifList">
+            <div class="notif-empty">در حال بارگذاری...</div>
+          </div>
+          <div class="notif-footer"><a href="/alerts/">مشاهده همه هشدارها</a></div>
+        </div>
+      </div>
+      <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
+    </div>
   </div>
   <div class="content">{% block content %}{% endblock %}</div>
 </div>
@@ -446,6 +551,65 @@ function toggleSection(id){
     }
   });
 })();
+
+// ── Notification Bell ─────────────────────────────────────────
+let _notifLoaded = false;
+
+async function _loadNotifBadge(){
+  try{
+    const r = await fetch('/api/alerts/count/');
+    const d = await r.json();
+    const badge = document.getElementById('notifBadge');
+    if(d.total > 0){
+      badge.style.display = 'inline-flex';
+      badge.textContent = d.total > 9 ? '9+' : d.total;
+    }
+  }catch(e){}
+}
+
+async function _loadNotifList(){
+  if(_notifLoaded) return;
+  _notifLoaded = true;
+  const list = document.getElementById('notifList');
+  try{
+    const r = await fetch('/api/alerts/');
+    const d = await r.json();
+    if(!d.alerts || d.alerts.length === 0){
+      list.innerHTML = '<div class="notif-empty">هیچ هشداری نیست 🎉</div>';
+      return;
+    }
+    list.innerHTML = d.alerts.slice(0,6).map(a=>`
+      <div class="notif-item p-${a.priority}" onclick="window.location='/alerts/'">
+        <div class="notif-item-title">${a.title}</div>
+        <div class="notif-item-body">${a.body}</div>
+      </div>
+    `).join('');
+  }catch(e){
+    list.innerHTML = '<div class="notif-empty">خطا در بارگذاری</div>';
+  }
+}
+
+function toggleNotifPanel(e){
+  e && e.stopPropagation();
+  const panel = document.getElementById('notifPanel');
+  const isOpen = panel.style.display === 'block';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen){ _loadNotifList(); }
+}
+
+// Close panel when clicking outside
+document.addEventListener('click', function(e){
+  const wrap = document.getElementById('notifWrap');
+  if(wrap && !wrap.contains(e.target)){
+    const panel = document.getElementById('notifPanel');
+    if(panel) panel.style.display = 'none';
+  }
+});
+
+// Load badge count on page load
+_loadNotifBadge();
+
 </script>
+{% block extra_js %}{% endblock %}
 </body>
 </html>

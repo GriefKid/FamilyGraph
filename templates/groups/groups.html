@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+{% block title %}مدیریت گروه‌ها · FamilyGraph{% endblock %}
+{% block page_title %}گروه‌بندی شبکه{% endblock %}
+{% block nav_groups %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.page-layout{
+  display:grid; grid-template-columns:1fr 320px; gap:20px; align-items:start;
+}
+@media(max-width:900px){ .page-layout{ grid-template-columns:1fr; } }
+
+/* ── کارت گروه ── */
+.group-card{
+  background:var(--card); backdrop-filter:blur(12px);
+  border:1px solid var(--border); border-radius:16px;
+  padding:20px 22px; margin-bottom:14px;
+}
+.group-header{
+  display:flex; align-items:center; gap:10px; margin-bottom:14px;
+}
+.group-dot{ width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+.group-name{ font-size:15px; font-weight:700; flex:1; }
+.group-name-input{
+  display:none; font-size:14px; font-weight:700;
+  background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.4);
+  border-radius:8px; padding:4px 10px; color:var(--text);
+  font-family:'Vazirmatn',sans-serif; outline:none; flex:1;
+}
+.icon-btn{
+  background:none; border:none; color:#4b5563; cursor:pointer;
+  font-size:13px; padding:3px 7px; border-radius:6px; transition:all .15s;
+}
+.icon-btn:hover{ color:#a5b4fc; background:rgba(99,102,241,.12); }
+.icon-btn.danger:hover{ color:#f87171; background:rgba(239,68,68,.1); }
+.save-btn{
+  display:none; padding:4px 12px; border-radius:7px; font-size:11px; font-weight:700;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none;
+  color:#fff; cursor:pointer; font-family:'Vazirmatn',sans-serif;
+}
+.group-count{
+  font-size:11px; color:var(--text-muted);
+  background:rgba(255,255,255,.06); border:1px solid var(--border);
+  padding:2px 8px; border-radius:10px; white-space:nowrap;
+}
+
+/* ── چیپ نودها ── */
+.chips-wrap{ display:flex; flex-wrap:wrap; gap:7px; min-height:28px; }
+.chip{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:4px 10px 4px 12px; border-radius:20px;
+  background:rgba(255,255,255,.05); border:1px solid var(--border);
+  font-size:12px; color:var(--text-soft); transition:border-color .15s;
+}
+.chip:hover{ border-color:rgba(255,255,255,.2); }
+.chip-remove{
+  background:none; border:none; color:#4b5563; cursor:pointer;
+  font-size:11px; line-height:1; padding:0; margin-right:2px; transition:color .15s;
+}
+.chip-remove:hover{ color:#f87171; }
+.empty-chips{ font-size:12px; color:#374151; font-style:italic; }
+
+/* ── صفحه کناری: نودها ── */
+.sidebar-card{
+  background:var(--card); backdrop-filter:blur(12px);
+  border:1px solid var(--border); border-radius:16px;
+  padding:18px 20px; position:sticky; top:72px;
+}
+.sidebar-title{
+  font-size:13px; font-weight:700; color:var(--text-muted);
+  margin-bottom:12px; display:flex; align-items:center; gap:8px;
+}
+.node-search{
+  width:100%; padding:7px 11px; border-radius:9px;
+  background:rgba(0,0,0,.3); border:1px solid var(--border);
+  color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:12px;
+  outline:none; margin-bottom:10px; box-sizing:border-box;
+}
+.node-search:focus{ border-color:rgba(99,102,241,.4); }
+.node-row{
+  display:flex; align-items:center; gap:9px;
+  padding:7px 9px; border-radius:9px; margin-bottom:4px;
+  cursor:pointer; transition:all .14s; border:1px solid transparent;
+}
+.node-row:hover{ background:rgba(99,102,241,.07); border-color:rgba(99,102,241,.15); }
+.node-row.sel{ background:rgba(99,102,241,.14); border-color:rgba(99,102,241,.4); }
+.node-check{
+  width:15px; height:15px; border-radius:4px; border:1px solid #374151;
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; color:#6366f1; flex-shrink:0; transition:all .14s;
+}
+.node-row.sel .node-check{ background:rgba(99,102,241,.25); border-color:#6366f1; }
+.node-label{ flex:1; font-size:12px; color:var(--text); }
+.node-groups-mini{
+  display:flex; gap:3px; flex-wrap:wrap;
+}
+.node-group-dot{
+  width:7px; height:7px; border-radius:50%; display:inline-block;
+}
+
+/* ── action bar ── */
+.action-bar{
+  margin-top:12px; padding-top:12px; border-top:1px solid var(--border);
+  display:none;
+}
+.action-bar.show{ display:block; }
+.action-label{ font-size:11px; color:var(--text-muted); margin-bottom:7px; }
+.existing-groups{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+.eg-btn{
+  padding:4px 10px; border-radius:8px; font-size:11px; font-weight:600;
+  border:1px solid; cursor:pointer; font-family:'Vazirmatn',sans-serif;
+  transition:all .14s;
+}
+.new-group-input{
+  width:100%; padding:7px 11px; border-radius:9px;
+  background:rgba(0,0,0,.3); border:1px solid var(--border);
+  color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:12px;
+  outline:none; margin-bottom:7px; box-sizing:border-box;
+}
+.new-group-input:focus{ border-color:rgba(99,102,241,.4); }
+.action-apply-btn{
+  width:100%; padding:9px; border-radius:9px;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  border:none; color:#fff; font-size:13px; font-weight:700;
+  font-family:'Vazirmatn',sans-serif; cursor:pointer;
+}
+.action-apply-btn:disabled{ opacity:.5; cursor:wait; }
+
+/* ── گروه جدید ── */
+.new-group-card{
+  border:1px dashed rgba(99,102,241,.3); border-radius:16px;
+  padding:14px 18px; margin-bottom:14px; cursor:pointer;
+  display:flex; align-items:center; gap:10px;
+  color:#6366f1; font-size:13px; font-weight:600; transition:all .2s;
+}
+.new-group-card:hover{ background:rgba(99,102,241,.07); border-color:rgba(99,102,241,.5); }
+
+/* ── empty ── */
+.empty-state-groups{
+  text-align:center; padding:40px 20px; color:var(--text-muted);
+}
+
+/* ── toast ── */
+#toast{
+  position:fixed; bottom:26px; left:50%; transform:translateX(-50%);
+  padding:9px 22px; border-radius:12px; font-size:13px; display:none;
+  z-index:9999; backdrop-filter:blur(12px);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="toast"></div>
+
+<div class="page-layout">
+
+  <!-- ── ستون اصلی: گروه‌ها ── -->
+  <div>
+    <!-- دکمه ساخت گروه جدید -->
+    <div class="new-group-card" onclick="promptNewGroup()">
+      <span style="font-size:20px;">＋</span> گروه جدید
+    </div>
+
+    {% if not groups %}
+    <div class="empty-state-groups">
+      <div style="font-size:48px;margin-bottom:10px">🗂</div>
+      <p>هنوز هیچ گروهی تعریف نشده.<br>
+         از ستون سمت راست نودها رو انتخاب و assign کن.</p>
+    </div>
+    {% endif %}
+
+    {% for grp in groups %}
+    <div class="group-card" data-gname="{{ grp.name }}">
+      <div class="group-header">
+        <div class="group-dot gd" style="background:#6366f1;box-shadow:0 0 6px #6366f188;"></div>
+        <!-- نام (display) -->
+        <span class="group-name">{{ grp.name }}</span>
+        <!-- input rename (hidden) -->
+        <input class="group-name-input" value="{{ grp.name }}"
+               onkeydown="if(event.key==='Enter') saveRename(this)
+                          else if(event.key==='Escape') cancelRename(this)">
+        <!-- دکمه rename -->
+        <button class="icon-btn" onclick="startRename(this)" title="تغییر نام">✏</button>
+        <button class="save-btn" onclick="saveRename(this.previousElementSibling.previousElementSibling)">ذخیره</button>
+        <!-- دکمه حذف گروه -->
+        <button class="icon-btn danger" onclick="deleteGroup('{{ grp.name|escapejs }}', this)" title="حذف گروه">🗑</button>
+        <span class="group-count">{{ grp.nodes.count }} نود</span>
+      </div>
+
+      <!-- چیپ‌های نودها -->
+      <div class="chips-wrap">
+        {% for node in grp.nodes.all %}
+        <div class="chip" id="chip-{{ grp.pk }}-{{ node.pk }}">
+          {{ node.display_name }}
+          <button class="chip-remove"
+                  onclick="removeNodeFromGroup({{ node.pk }}, '{{ grp.name|escapejs }}', this)"
+                  title="حذف از این گروه">✕</button>
+        </div>
+        {% empty %}
+        <span class="empty-chips">هنوز نودی اضافه نشده</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- ── ستون کناری: نودها ── -->
+  <div>
+    <div class="sidebar-card">
+      <div class="sidebar-title">
+        👥 همه نودها
+        <span class="group-count">{{ all_nodes|length }}</span>
+      </div>
+
+      <input class="node-search" type="text" placeholder="جستجو..."
+             oninput="filterNodes(this.value)">
+
+      <div id="node-list">
+        {% for node in all_nodes %}
+        <div class="node-row" data-nid="{{ node.pk }}" data-name="{{ node.display_name|lower }}"
+             onclick="toggleNodeSelect(this)">
+          <div class="node-check">✓</div>
+          <div class="node-label">{{ node.display_name }}</div>
+          <div class="node-groups-mini">
+            {% for g in node.groups.all %}
+            <span class="node-group-dot gg-dot" title="{{ g.name }}" style="background:#6366f1;"></span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- action bar -->
+      <div class="action-bar" id="actionBar">
+        <div class="action-label">اضافه کردن انتخاب‌شده‌ها به گروه:</div>
+        <div class="existing-groups" id="existingGroups">
+          {% for grp in groups %}
+          <button class="eg-btn" style="color:#a5b4fc;border-color:rgba(99,102,241,.4);"
+                  onclick="addToGroup('{{ grp.name|escapejs }}')">{{ grp.name }}</button>
+          {% endfor %}
+        </div>
+        <input class="new-group-input" id="newGroupNameInput"
+               placeholder="یا اسم گروه جدید..."
+               onkeydown="if(event.key==='Enter') addToGroup(document.getElementById('newGroupNameInput').value)">
+        <button class="action-apply-btn" id="applyBtn"
+                onclick="addToGroup(document.getElementById('newGroupNameInput').value || null)">
+          ✓ اعمال
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── رنگ‌ها ──────────────────────────────────
+const COLORS = ["#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
+                 "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6"];
+document.querySelectorAll('.group-card').forEach((card, i) => {
+  const c = COLORS[i % COLORS.length];
+  const dot = card.querySelector('.gd');
+  if(dot){ dot.style.background = c; dot.style.boxShadow = `0 0 6px ${c}88`; }
+});
+document.querySelectorAll('.gg-dot').forEach((dot, i) => {
+  dot.style.background = COLORS[i % COLORS.length];
+});
+
+// ── toast ────────────────────────────────────
+function toast(msg, err=false){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = err ? 'rgba(239,68,68,.15)' : 'rgba(16,185,129,.15)';
+  el.style.border      = err ? '1px solid rgba(239,68,68,.3)' : '1px solid rgba(16,185,129,.3)';
+  el.style.color       = err ? '#f87171' : '#34d399';
+  el.style.display = 'block';
+  setTimeout(()=> el.style.display='none', 2800);
+}
+
+// ── rename ───────────────────────────────────
+function startRename(btn){
+  const card   = btn.closest('.group-card');
+  const nameEl = card.querySelector('.group-name');
+  const input  = card.querySelector('.group-name-input');
+  const saveB  = card.querySelector('.save-btn');
+  nameEl.style.display = 'none';
+  btn.style.display    = 'none';
+  input.style.display  = 'inline-block';
+  saveB.style.display  = 'inline-block';
+  input.focus(); input.select();
+}
+
+async function saveRename(input){
+  const card    = input.closest('.group-card');
+  const oldName = card.dataset.gname;
+  const newName = input.value.trim();
+  if(!newName || newName === oldName){ cancelRename(input); return; }
+
+  const r = await fetch('/api/groups/rename/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({old_name: oldName, new_name: newName})
+  });
+  const d = await r.json();
+  if(d.ok){
+    card.dataset.gname = newName;
+    card.querySelector('.group-name').textContent = newName;
+    // آپدیت دکمه‌های existing groups در action bar
+    document.querySelectorAll('.eg-btn').forEach(b => {
+      if(b.textContent.trim() === oldName) b.textContent = newName;
+    });
+    toast(`گروه «${oldName}» به «${newName}» تغییر یافت`);
+    cancelRename(input);
+  } else { toast(d.error || 'خطا', true); }
+}
+
+function cancelRename(input){
+  const card  = input.closest('.group-card');
+  const nameEl= card.querySelector('.group-name');
+  const btn   = card.querySelector('.icon-btn');
+  const saveB = card.querySelector('.save-btn');
+  nameEl.style.display = '';
+  btn.style.display    = '';
+  input.style.display  = 'none';
+  saveB.style.display  = 'none';
+}
+
+// ── حذف گروه ────────────────────────────────
+async function deleteGroup(name, btn){
+  if(!confirm(`گروه «${name}» حذف بشه؟ نودها از این گروه خارج می‌شن.`)) return;
+  const r = await fetch('/api/groups/rename/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({old_name: name, new_name: '__DELETE__'})
+  });
+  // استفاده از assign با لیست خالی
+  // بهتره یه API جداگانه برای delete بسازیم، فعلاً reload
+  const r2 = await fetch('/api/groups/delete/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})
+  });
+  const d = await r2.json();
+  if(d.ok){ toast(`گروه «${name}» حذف شد`); setTimeout(()=>location.reload(), 900); }
+  else { toast(d.error || 'خطا', true); }
+}
+
+// ── انتخاب نود ───────────────────────────────
+const selected = new Set();
+
+function toggleNodeSelect(row){
+  const nid = row.dataset.nid;
+  if(selected.has(nid)){ selected.delete(nid); row.classList.remove('sel'); }
+  else { selected.add(nid); row.classList.add('sel'); }
+  document.getElementById('actionBar').classList.toggle('show', selected.size > 0);
+}
+
+// ── جستجوی نود ──────────────────────────────
+function filterNodes(q){
+  q = q.toLowerCase();
+  document.querySelectorAll('#node-list .node-row').forEach(row => {
+    row.style.display = row.dataset.name.includes(q) ? '' : 'none';
+  });
+}
+
+// ── اضافه کردن به گروه ──────────────────────
+async function addToGroup(groupName){
+  if(typeof groupName !== 'string') groupName = '';
+  groupName = groupName.trim();
+
+  // اگه هیچ اسمی نشده — از input بگیر
+  if(!groupName) groupName = document.getElementById('newGroupNameInput').value.trim();
+  if(!groupName){ toast('یه گروه انتخاب کن یا اسم بنویس', true); return; }
+  if(selected.size === 0){ toast('ابتدا نودها رو انتخاب کن', true); return; }
+
+  const btn = document.getElementById('applyBtn');
+  btn.disabled = true;
+  const r = await fetch('/api/groups/assign/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      node_ids:   [...selected].map(Number),
+      group_name: groupName,
+      action:     'add'
+    })
+  });
+  const d = await r.json();
+  btn.disabled = false;
+  if(d.ok){
+    toast(`${d.count} نود به «${groupName}» اضافه شد`);
+    setTimeout(()=> location.reload(), 900);
+  } else { toast(d.error || 'خطا', true); }
+}
+
+// ── حذف نود از گروه ─────────────────────────
+async function removeNodeFromGroup(nodeId, groupName, btn){
+  const r = await fetch('/api/groups/assign/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ node_ids: [nodeId], group_name: groupName, action: 'remove' })
+  });
+  const d = await r.json();
+  if(d.ok){
+    btn.closest('.chip').remove();
+    toast(`نود از گروه «${groupName}» خارج شد`);
+  } else { toast(d.error || 'خطا', true); }
+}
+
+// ── ساخت گروه جدید ──────────────────────────
+function promptNewGroup(){
+  const name = prompt('اسم گروه جدید:');
+  if(!name || !name.trim()) return;
+  document.getElementById('newGroupNameInput').value = name.trim();
+  toast(`گروه «${name.trim()}» — نودها رو انتخاب کن و اعمال بزن`);
+}
+</script>
+{% endblock %}

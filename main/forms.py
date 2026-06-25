@@ -7,7 +7,7 @@ class NodeForm(forms.ModelForm):
     class Meta:
         model = Node
         fields = ['username', 'first_name', 'last_name', 'nickname',
-                  'picture', 'birth_day', 'career', 'phone_number', 'name']
+                  'picture', 'birth_day', 'career', 'phone_number', 'group', 'name']
         widgets = {
             'username':    forms.TextInput(attrs={'class': 'form-control'}),
             'first_name':  forms.TextInput(attrs={'class': 'form-control'}),
@@ -16,6 +16,8 @@ class NodeForm(forms.ModelForm):
             'birth_day':   forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'career':      forms.TextInput(attrs={'class': 'form-control'}),
             'phone_number':forms.TextInput(attrs={'class': 'form-control'}),
+            'group':       forms.TextInput(attrs={'class': 'form-control',
+                                                  'placeholder': 'مثال: خانواده، کار، دوستان، داستان'}),
             'name':        forms.TextInput(attrs={'class': 'form-control',
                                                   'placeholder': 'نام قدیمی (اختیاری)'}),
         }

@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 
 from .forms import NodeForm, RelationshipForm, EventForm
-from .models import Relationship, AppSettings, JournalEntry, JournalImage
+from .models import Relationship, AppSettings, JournalEntry, JournalImage, AlertAction
 from django.core.cache import cache
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
@@ -17,6 +17,31 @@ from django.contrib import messages
 from .models import Node, Information, Event
 from django.views.generic import ListView
 from django.views.generic import TemplateView
+
+def _ai_error_msg(e: Exception) -> str:
+    s = str(e)
+    if '429' in s or 'rate limit' in s.lower() or 'Rate limit' in s:
+        return ('حد روزانه تموم شده 😔 — فردا دوباره امتحان کن '
+                'یا GROQ_API_KEY رو در .env تنظیم کن (۱۴,۴۰۰ درخواست/روز رایگان).')
+    return f'خطای AI: {s[:200]}'
+
+def _get_ai_client_and_model():
+    """Returns (client, model_name). Priority: Gemini → Mistral → Groq → OpenRouter."""
+    from openai import OpenAI
+    gemini_key = os.environ.get('GEMINI_API_KEY', '')
+    if gemini_key:
+        return (
+            OpenAI(base_url="https://generativelanguage.googleapis.com/v1beta/openai/", api_key=gemini_key),
+            "gemini-1.5-flash"
+        )
+    mistral_key = os.environ.get('MISTRAL_API_KEY', '')
+    if mistral_key:
+        return OpenAI(base_url="https://api.mistral.ai/v1", api_key=mistral_key), "mistral-small-latest"
+    groq_key = os.environ.get('GROQ_API_KEY', '')
+    if groq_key:
+        return OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_key), "llama-3.3-70b-versatile"
+    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '')
+    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=openrouter_key), "google/gemma-4-31b-it:free"
 
 COMMUNITY_PALETTE = [
     "#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
@@ -467,6 +492,66 @@ def communities_view(request):
     })
 
 
+def groups_view(request):
+    """صفحه مدیریت گروه‌ها — rename و assign نودها (M2M)."""
+    from .models import Group as GroupModel
+    all_groups = list(GroupModel.objects.prefetch_related('nodes').order_by('name'))
+    all_nodes  = list(Node.objects.prefetch_related('groups').order_by('username'))
+
+    # نودهایی که در هیچ گروهی نیستند
+    ungrouped = [n for n in all_nodes if not n.groups.exists()]
+
+    return render(request, 'groups/groups.html', {
+        'groups':    all_groups,   # Group objects (هر کدوم .nodes.all() داره)
+        'ungrouped': ungrouped,
+        'all_nodes': all_nodes,
+    })
+
+
+@csrf_exempt
+def assign_group_api(request):
+    """
+    POST {node_ids, group_name, action}
+    action: 'add' (default) | 'remove'
+    group_name: اسم گروه — اگه وجود نداشت ساخته می‌شه
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    from .models import Group as GroupModel
+    node_ids   = body.get('node_ids', [])
+    group_name = (body.get('group_name') or '').strip()
+    action     = body.get('action', 'add')
+
+    if not node_ids:
+        return JsonResponse({'error': 'node_ids لازم است'}, status=400)
+
+    nodes = list(Node.objects.filter(pk__in=node_ids))
+
+    if action == 'remove':
+        if not group_name:
+            return JsonResponse({'error': 'group_name لازم است'}, status=400)
+        try:
+            grp = GroupModel.objects.get(name=group_name)
+            for n in nodes:
+                n.groups.remove(grp)
+        except GroupModel.DoesNotExist:
+            pass
+    else:
+        if not group_name:
+            return JsonResponse({'error': 'group_name لازم است'}, status=400)
+        grp, _ = GroupModel.objects.get_or_create(name=group_name)
+        for n in nodes:
+            n.groups.add(grp)
+
+    cache.delete('graph_all_data')
+    return JsonResponse({'ok': True, 'count': len(nodes)})
+
+
 def insights_view(request):
     all_nodes = list(Node.objects.all())
     all_rels  = list(Relationship.objects.select_related('source', 'target'))
@@ -621,21 +706,24 @@ def node_ai_summary(request, pk):
         "در ۲-۳ پاراگراف کوتاه فارسی بنویس: این شخص کیه، چه نقشی در شبکه داره، و چه نکته مهمی درباره‌اش هست."
     )
 
-    api_key = os.environ.get('OPENROUTER_API_KEY', '')
-    if not api_key:
-        return JsonResponse({'error': 'OPENROUTER_API_KEY تنظیم نشده'}, status=500)
+    # ── کش: خلاصه node تا زمانی که اطلاعاتش تغییر کنه معتبره ──────────────
+    cache_key = f'node_summary_{pk}'
+    cached = cache.get(cache_key)
+    if cached:
+        return JsonResponse({'summary': cached, 'from_cache': True})
 
     try:
-        from openai import OpenAI
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        client, ai_model = _get_ai_client_and_model()
         response = client.chat.completions.create(
-            model="google/gemma-4-31b-it:free",
+            model=ai_model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=512,
         )
-        return JsonResponse({'summary': response.choices[0].message.content})
+        summary_text = response.choices[0].message.content
+        cache.set(cache_key, summary_text, timeout=12 * 3600)  # کش ۱۲ ساعته
+        return JsonResponse({'summary': summary_text})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
 
 def chat_view(request):
@@ -655,54 +743,104 @@ def chat_api(request):
     if not user_message:
         return JsonResponse({'error': 'message is empty'}, status=400)
 
-    # ─── serialize graph ───
+    # ─── root node (کاربر اصلی که داره چت می‌کنه) ───────────────────────────
+    root_node = None
+    try:
+        root_node = AppSettings.get().root_node
+    except Exception:
+        pass
+
+    # ─── serialize graph ─────────────────────────────────────────────────────
     all_nodes = Node.objects.all()
     all_rels  = Relationship.objects.select_related('source', 'target')
     all_info  = Information.objects.select_related('node')
 
+    # اطلاعات خود کاربر اصلی
+    root_info = ""
+    if root_node:
+        root_info = (
+            f"نام: {root_node.name or root_node.username}\n"
+            f"شغل: {root_node.career or '—'}\n"
+            f"تولد: {root_node.birth_day or '—'}"
+        )
+        root_extra = root_node.informations.first()
+        if root_extra and root_extra.data:
+            d = root_extra.data
+            if isinstance(d, dict):
+                if d.get('personality'): root_info += f"\nشخصیت: {d['personality']}"
+                if d.get('interests'):   root_info += f"\nعلایق: {', '.join(d['interests']) if isinstance(d['interests'], list) else d['interests']}"
+
+    # روابط از دید من (root)
+    if root_node:
+        my_rels = Relationship.objects.filter(
+            Q(source=root_node) | Q(target=root_node)
+        ).select_related('source', 'target')
+        rels_text = "\n".join(
+            f"- من ↔ {(r.target if r.source == root_node else r.source).display_name()}"
+            + (f" [{r.rel}]" if r.rel else "")
+            + (f" (قدرت: {r.strength}/5)" if r.strength else "")
+            for r in my_rels
+        ) or "هنوز رابطه‌ای ثبت نشده"
+    else:
+        rels_text = "\n".join(
+            f"- {r.source.username} → {r.target.username}" + (f" [{r.rel}]" if r.rel else "")
+            for r in all_rels
+        )
+
+    # سایر افراد شبکه
+    others = [n for n in all_nodes if not root_node or n.id != root_node.id]
     nodes_text = "\n".join(
-        f"- {n.username}"
-        + (f" (نام: {n.name})" if n.name else "")
+        f"- {n.display_name()}"
         + (f" (شغل: {n.career})" if n.career else "")
         + (f" (تولد: {n.birth_day})" if n.birth_day else "")
-        for n in all_nodes
-    )
-
-    rels_text = "\n".join(
-        f"- {r.source.username} → {r.target.username}"
-        + (f" [{r.rel}]" if r.rel else "")
-        for r in all_rels
-    )
-
-    info_text = "\n".join(
-        f"- {i.node.username}: {i.data}"
-        for i in all_info
+        for n in others
     ) or "موردی ثبت نشده"
 
-    system_prompt = (
-        "تو یک دستیار هوشمند هستی که به تحلیل شبکه روابط شخصی کمک می‌کنی.\n\n"
-        f"افراد در شبکه:\n{nodes_text}\n\n"
-        f"روابط:\n{rels_text}\n\n"
-        f"اطلاعات ثبت‌شده:\n{info_text}\n\n"
-        "بر اساس این داده‌ها به فارسی و مختصر پاسخ بده."
+    info_text = "\n".join(
+        f"- {i.node.display_name()}: {i.data}"
+        for i in all_info
+        if not root_node or i.node_id != root_node.id
+    ) or "موردی ثبت نشده"
+
+    # یادداشت‌های اخیر
+    recent_journals = JournalEntry.objects.order_by('-entry_date')[:5]
+    journal_text = "\n".join(
+        f"- {j.entry_date}: {j.text[:120]}{'...' if len(j.text) > 120 else ''}"
+        + (f" [حال: {j.mood}]" if j.mood else "")
+        for j in recent_journals
+    ) or "یادداشتی ثبت نشده"
+
+    # اقدامات اخیر روی هشدارها (برای AI تا الگوهای رابطه رو بهتر بفهمه)
+    recent_actions = AlertAction.objects.order_by('-created_at')[:8]
+    actions_text = "\n".join(
+        f"- {a.created_at.strftime('%Y-%m-%d')}: [{a.get_action_display()}] {a.title}"
+        + (f" → نتیجه: {a.outcome}" if a.outcome else "")
+        for a in recent_actions
+    ) or "هنوز اقدامی ثبت نشده"
+
+    who_am_i = (
+        f"نام من (کاربر اصلی): {root_node.display_name()}\n{root_info}"
+        if root_node else
+        "کاربر اصلی (root node) هنوز در تنظیمات مشخص نشده"
     )
 
-    api_key = os.environ.get('OPENROUTER_API_KEY', '')
-    if not api_key:
-        return JsonResponse({'error': 'OPENROUTER_API_KEY تنظیم نشده'}, status=500)
+    system_prompt = (
+        "تو یک دستیار هوشمند شخصی هستی که به صاحب این شبکه روابط کمک می‌کنی.\n\n"
+        f"## من کیستم (صاحب شبکه که داره باهات صحبت می‌کنه):\n{who_am_i}\n\n"
+        f"## روابط من با دیگران:\n{rels_text}\n\n"
+        f"## افراد دیگر در شبکه:\n{nodes_text}\n\n"
+        f"## اطلاعات بیشتر درباره افراد:\n{info_text}\n\n"
+        f"## یادداشت‌های اخیر من:\n{journal_text}\n\n"
+        f"## اقدامات اخیر من روی هشدارها و نکات روزانه:\n{actions_text}\n\n"
+        "وقتی کاربر می‌گه «من»، «خودم»، «شبکه‌ام» منظورش همون شخص اصلی بالاست. "
+        "از اقدامات ثبت‌شده برای درک الگوهای رابطه‌ای استفاده کن. "
+        "به فارسی، مختصر و کاربردی پاسخ بده."
+    )
 
     try:
-        from openai import OpenAI
-    except ImportError:
-        return JsonResponse({'error': 'پکیج openai نصب نیست. دستور: py -m pip install openai'}, status=500)
-
-    try:
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
-        )
+        client, ai_model = _get_ai_client_and_model()
         response = client.chat.completions.create(
-            model="google/gemma-4-31b-it:free",
+            model=ai_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_message},
@@ -711,7 +849,7 @@ def chat_api(request):
         )
         return JsonResponse({'reply': response.choices[0].message.content})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
 
 def graph_all_api(request):
@@ -740,9 +878,32 @@ def graph_all_api(request):
     except Exception:
         pass
 
+    # گروه‌های دستی (M2M) — prefetch برای performance
+    all_nodes_qs = Node.objects.prefetch_related('groups').all()
+    all_nodes = list(all_nodes_qs)
+
+    # ساخت نگاشت node_id → [group_names]
+    node_groups_map = {}
+    all_group_names = set()
+    for n in all_nodes:
+        gnames = [g.name for g in n.groups.all()]
+        node_groups_map[n.id] = gnames
+        all_group_names.update(gnames)
+
+    # گروه‌های موجود (با رنگ از مدل اگه داره، وگرنه از palette)
+    from .models import Group as GroupModel
+    db_groups = {g.name: g.color for g in GroupModel.objects.all()}
+    all_groups_sorted = sorted(all_group_names)
+    group_color_map = {}
+    for i, g in enumerate(all_groups_sorted):
+        group_color_map[g] = db_groups.get(g) or COMMUNITY_PALETTE[i % len(COMMUNITY_PALETTE)]
+
     node_data = []
     for n in all_nodes:
-        c_idx = com_map.get(n.id, 0)
+        c_idx   = com_map.get(n.id, 0)
+        gnames  = node_groups_map.get(n.id, [])
+        # رنگ: اول گروه اول، وگرنه رنگ community
+        color   = group_color_map.get(gnames[0], COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)]) if gnames else COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)]
         node_data.append({
             "id":         str(n.id),
             "username":   n.username,
@@ -750,7 +911,9 @@ def graph_all_api(request):
             "image":      n.picture.url if n.picture else None,
             "centrality": round(deg_c.get(n.id, 0), 4),
             "community":  c_idx,
-            "color":      COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)],
+            "groups":     gnames,           # لیست گروه‌ها (M2M)
+            "group":      gnames[0] if gnames else '',   # backward compat
+            "color":      color,
         })
 
     edge_data = [
@@ -764,9 +927,11 @@ def graph_all_api(request):
     ]
 
     return JsonResponse({
-        "nodes":   node_data,
-        "edges":   edge_data,
-        "root_id": root_id,
+        "nodes":        node_data,
+        "edges":        edge_data,
+        "root_id":      root_id,
+        "all_groups":   all_groups_sorted,
+        "group_colors": group_color_map,
     })
 
 
@@ -854,10 +1019,6 @@ def journal_analyze_api(request):
     # If existing entry_id passed, analyze an already-saved entry
     existing_entry_id = body.get('entry_id')
 
-    api_key = os.environ.get('OPENROUTER_API_KEY', '')
-    if not api_key:
-        return JsonResponse({'error': 'OPENROUTER_API_KEY تنظیم نشده'}, status=500)
-
     # ── Who is "me"? ─────────────────────────────────────────
     root_username = None
     root_display  = None
@@ -935,11 +1096,10 @@ def journal_analyze_api(request):
 5. هر آرایه بدون اطلاعات را [] بگذار"""
 
     try:
-        from openai import OpenAI
         import re
-        client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+        client, ai_model = _get_ai_client_and_model()
         response = client.chat.completions.create(
-            model="google/gemma-4-31b-it:free",
+            model=ai_model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=2048,
         )
@@ -992,7 +1152,7 @@ def journal_analyze_api(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'AI پاسخ معتبر JSON نداد', 'raw': content[:600]}, status=500)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
 
 @csrf_exempt

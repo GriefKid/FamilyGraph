@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 from .views import (
+    groups_view,
+    assign_group_api,
     InformationListView,
     InformationDetailView,
     InformationCreateView,
@@ -11,6 +13,19 @@ from .views_journal_extra import (
     journal_save_api,
     journal_calendar_api,
     journal_entries_api,
+)
+from .views_smart_features import (
+    alerts_api,
+    alerts_count_api,
+    alert_recommendation_api,
+    alert_action_api,
+    rename_group_api,
+    delete_group_api,
+    alerts_view,
+    psychology_view,
+    psychology_ai_api,
+    daily_tips_view,
+    daily_tips_api,
 )
 
 urlpatterns = [
@@ -80,6 +95,23 @@ urlpatterns = [
     path('api/journal/save/',         journal_save_api,               name='journal_save'),
     path('api/journal/calendar/',     journal_calendar_api,           name='journal_calendar'),
     path('api/journal/entries/',      journal_entries_api,            name='journal_entries'),
+
+    # ======================
+    # SMART FEATURES
+    # ======================
+    path('alerts/',                      alerts_view,                name='alerts'),
+    path('psychology/',                  psychology_view,            name='psychology'),
+    path('daily/',                       daily_tips_view,            name='daily'),
+    path('api/alerts/',                  alerts_api,                 name='alerts_api'),
+    path('api/alerts/count/',            alerts_count_api,           name='alerts_count_api'),
+    path('api/alerts/recommendation/',   alert_recommendation_api,   name='alert_recommendation_api'),
+    path('api/alerts/action/',           alert_action_api,           name='alert_action_api'),
+    path('api/groups/rename/',           rename_group_api,           name='rename_group_api'),
+    path('api/groups/assign/',           assign_group_api,           name='assign_group_api'),
+    path('api/groups/delete/',           delete_group_api,           name='delete_group_api'),
+    path('groups/',                      groups_view,                name='groups'),
+    path('api/psychology/analyze/',      psychology_ai_api,          name='psychology_ai_api'),
+    path('api/daily/tips/',              daily_tips_api,             name='daily_tips_api'),
 
     # ======================
     # LEGACY / API

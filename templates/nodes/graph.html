@@ -67,6 +67,23 @@
   border-color:rgba(99,102,241,.9) !important;
   color:#fff !important;
 }
+
+/* ── Group filter buttons ── */
+.grp-btn{
+  padding:4px 12px; border-radius:20px; font-size:11px; font-weight:600;
+  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+  color:#94a3b8; cursor:pointer; font-family:'Vazirmatn',sans-serif;
+  transition:all .18s; white-space:nowrap;
+}
+.grp-btn.active{
+  border-color:var(--gc, rgba(99,102,241,.8));
+  background:color-mix(in srgb, var(--gc, #6366f1) 18%, transparent);
+  color:#fff;
+  box-shadow:0 0 10px color-mix(in srgb, var(--gc, #6366f1) 35%, transparent);
+}
+#group-filter{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+#group-filter-wrap{ display:none; }
+
 .deg-slider{
   -webkit-appearance:none; appearance:none;
   width:70px; height:4px; border-radius:2px;
@@ -138,6 +155,16 @@
       <input type="range" class="deg-slider" min="0" max="10" value="0" id="degSlider"
              oninput="setMinDegree(+this.value)">
       <span id="degLabel" style="font-size:11px;color:#a5b4fc;min-width:14px;">0</span>
+    </div>
+    <!-- Group filter (dynamically populated) -->
+    <div class="tb-glass" id="group-filter-wrap">
+      <span style="font-size:11px;color:#64748b;white-space:nowrap">گروه:</span>
+      <div id="group-filter">
+        <span id="no-groups-hint" style="font-size:11px;color:#475569;">
+          هنوز گروهی تعریف نشده —
+          <a href="/groups/" style="color:#a5b4fc;text-decoration:none;">گروه‌بندی</a>
+        </span>
+      </div>
     </div>
     <!-- Layout + reset -->
     <div class="tb-glass">
@@ -223,6 +250,7 @@ const MIN_R = 10, MAX_R = 26;
 
 let gData = null, sim = null, useEgo = true, panelId = null;
 let hopFilter = 0, hiddenComs = new Set(), minDegFilter = 0;
+let activeGroups = new Set();   // گروه‌های انتخاب‌شده (خالی = همه)
 
 const svgEl  = d3.select("#graph-svg");
 const gRoot  = svgEl.select("#graph-root");
@@ -285,6 +313,11 @@ function getFilteredData(){
 
   let fn = nodes.filter(n => {
     if(hiddenComs.has(n.community)) return false;
+    // node.groups آرایه‌ست — اگه هیچ گروه انتخابی با گروه‌های نود تقاطع نداشت، فیلتر
+    if(activeGroups.size > 0 && n.id !== root_id){
+      const nodeGrps = n.groups || (n.group ? [n.group] : []);
+      if(!nodeGrps.some(g => activeGroups.has(g))) return false;
+    }
     if(minDegFilter > 0 && n.id !== root_id && (deg[n.id]||0) < minDegFilter) return false;
     if(hopFilter > 0 && n.id !== root_id){
       const lv = levels[n.id];
@@ -334,6 +367,7 @@ function draw(){
 
   document.getElementById("sR").textContent = nMap[eRoot]?.username || "—";
   buildLegend(commSet, nodes);
+  buildGroupFilter();
 
   if(useEgo){
     assignEgo(nodes, edges, eRoot);
@@ -535,20 +569,116 @@ function nr(n){ return Math.max(MIN_R, Math.min(MAX_R, MIN_R + (n.centrality || 
 function buildLegend(commSet, nodes){
   const c = document.getElementById("legend-items");
   c.innerHTML = "";
-  [...commSet].slice(0, 8).forEach(ci => {
-    const color = PAL[ci % PAL.length];
-    const cnt = nodes.filter(n => n.community === ci).length;
-    const row = document.createElement("div");
-    row.className = "leg-row";
-    row.style.cursor = "pointer";
-    row.title = "کلیک برای مخفی/نمایش";
-    const hidden = hiddenComs.has(ci);
-    row.innerHTML = `
-      <div class="leg-dot" style="background:${color};box-shadow:0 0 5px ${color}88;opacity:${hidden?.3:1};"></div>
-      <span style="opacity:${hidden?.4:1};">گروه ${ci+1} <span style="color:${color};font-weight:700">(${cnt})</span></span>
-    `;
-    row.onclick = () => toggleCommunity(ci);
-    c.appendChild(row);
+
+  const { all_groups, group_colors } = gData;
+
+  if(all_groups && all_groups.length > 0){
+    // Legend بر اساس گروه‌های دستی
+    all_groups.slice(0, 10).forEach(g => {
+      const color = group_colors[g] || PAL[0];
+      const cnt   = nodes.filter(n => n.group === g).length;
+      const isActive = activeGroups.size === 0 || activeGroups.has(g);
+      const row = document.createElement("div");
+      row.className = "leg-row";
+      row.style.justifyContent = "space-between";
+      row.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1"
+             onclick="toggleGroup('${g.replace(/'/g,"\\'")}')">
+          <div class="leg-dot" style="background:${color};box-shadow:0 0 5px ${color}88;opacity:${isActive?1:.3};"></div>
+          <span style="opacity:${isActive?1:.4};">${g} <span style="color:${color};font-weight:700">(${cnt})</span></span>
+        </div>
+        <button onclick="renameGroup('${g.replace(/'/g,"\\'")}','${color}')"
+          title="تغییر نام گروه"
+          style="background:none;border:none;color:#475569;cursor:pointer;font-size:11px;padding:0 2px;line-height:1;flex-shrink:0">✏</button>
+      `;
+      c.appendChild(row);
+    });
+    // نودهای بدون گروه
+    const noGroup = nodes.filter(n => !n.group).length;
+    if(noGroup > 0){
+      const row = document.createElement("div");
+      row.className = "leg-row";
+      row.innerHTML = `
+        <div class="leg-dot" style="background:#475569;"></div>
+        <span style="color:#64748b;">بدون گروه (${noGroup})</span>
+      `;
+      c.appendChild(row);
+    }
+  } else {
+    // Louvain fallback (وقتی هیچ گروه دستی‌ای تنظیم نشده)
+    [...commSet].slice(0, 8).forEach(ci => {
+      const color = PAL[ci % PAL.length];
+      const cnt = nodes.filter(n => n.community === ci).length;
+      const row = document.createElement("div");
+      row.className = "leg-row";
+      row.style.cursor = "pointer";
+      row.title = "کلیک برای مخفی/نمایش";
+      const hidden = hiddenComs.has(ci);
+      row.innerHTML = `
+        <div class="leg-dot" style="background:${color};box-shadow:0 0 5px ${color}88;opacity:${hidden?.3:1};"></div>
+        <span style="opacity:${hidden?.4:1};">گروه ${ci+1} <span style="color:${color};font-weight:700">(${cnt})</span></span>
+      `;
+      row.onclick = () => toggleCommunity(ci);
+      c.appendChild(row);
+    });
+  }
+}
+
+async function renameGroup(oldName, color){
+  const newName = prompt(`تغییر نام گروه «${oldName}» به:`, oldName);
+  if(!newName || newName.trim() === oldName) return;
+  try{
+    const r = await fetch('/api/groups/rename/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ old_name: oldName, new_name: newName.trim() })
+    });
+    const d = await r.json();
+    if(d.ok){
+      // آپدیت local data
+      if(activeGroups.has(oldName)){ activeGroups.delete(oldName); activeGroups.add(newName.trim()); }
+      gData.all_groups = gData.all_groups.map(g => g === oldName ? newName.trim() : g);
+      if(gData.group_colors[oldName]){
+        gData.group_colors[newName.trim()] = gData.group_colors[oldName];
+        delete gData.group_colors[oldName];
+      }
+      gData.nodes.forEach(n => { if(n.group === oldName) n.group = newName.trim(); });
+      draw(); fitAll();
+    } else { alert(d.error || 'خطا در تغییر نام'); }
+  } catch(e){ alert('خطا در ارتباط با سرور'); }
+}
+
+function buildGroupFilter(){
+  const { all_groups, group_colors } = gData;
+  const container = document.getElementById("group-filter");
+
+  if(!all_groups || all_groups.length === 0){
+    container.innerHTML = `<span style="font-size:11px;color:#475569;">
+      هنوز گروهی تعریف نشده —
+      <a href="/groups/" style="color:#a5b4fc;text-decoration:none;">گروه‌بندی</a>
+    </span>`;
+    return;
+  }
+
+  container.innerHTML = '';
+
+  // دکمه "همه"
+  const allBtn = document.createElement("button");
+  allBtn.className = "grp-btn" + (activeGroups.size === 0 ? " active" : "");
+  allBtn.style.setProperty('--gc', '#6366f1');
+  allBtn.textContent = "همه";
+  allBtn.onclick = () => { activeGroups.clear(); buildGroupFilter(); draw(); fitAll(); };
+  container.appendChild(allBtn);
+
+  // دکمه هر گروه (toggle بدون Shift)
+  all_groups.forEach(g => {
+    const color = group_colors[g] || PAL[0];
+    const btn = document.createElement("button");
+    btn.className = "grp-btn" + (activeGroups.has(g) ? " active" : "");
+    btn.style.setProperty('--gc', color);
+    btn.textContent = g;
+    btn.onclick = () => toggleGroup(g);
+    container.appendChild(btn);
   });
 }
 
@@ -594,13 +724,24 @@ function toggleCommunity(ci){
   draw(); fitAll();
 }
 
+function toggleGroup(g){
+  // toggle: اگه قبلاً انتخاب شده بود حذفش کن، وگرنه اضافه کن
+  if(activeGroups.has(g)){
+    activeGroups.delete(g);
+  } else {
+    activeGroups.add(g);
+  }
+  buildGroupFilter();
+  draw(); fitAll();
+}
+
 // ═══════════════════════════════════════════════════════════
 // Hover / click events
 // ═══════════════════════════════════════════════════════════
 function onEnter(ev, d){
   document.getElementById("ttName").textContent = d.label || d.username;
   document.getElementById("ttC").textContent    = (d.centrality || 0).toFixed(3);
-  document.getElementById("ttCom").textContent  = `گروه ${d.community + 1}`;
+  document.getElementById("ttCom").textContent  = (d.groups && d.groups.length) ? d.groups.join(' · ') : `گروه ${d.community + 1}`;
   tt.style.display = "block";
 
   eLayer.selectAll(".eline")
@@ -627,7 +768,7 @@ function onClick(ev, d){
   document.getElementById("npName").textContent   = d.label || d.username;
   document.getElementById("npUname").textContent  = "@" + d.username;
   document.getElementById("npCentral").textContent= (d.centrality||0).toFixed(3);
-  document.getElementById("npCom").textContent    = `گروه ${d.community+1}`;
+  document.getElementById("npCom").textContent    = (d.groups && d.groups.length) ? d.groups.join(' · ') : `گروه ${d.community+1}`;
   document.getElementById("npDot").style.background = d.color;
   document.getElementById("npLink").href          = "/nodes/" + d.id + "/";
   document.getElementById("node-panel").style.display = "block";

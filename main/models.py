@@ -1,6 +1,22 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
+
+class Group(models.Model):
+    """گروه‌بندی دستی نودها — هر نود می‌تونه توی چند گروه باشه."""
+    name  = models.CharField(max_length=100, unique=True, verbose_name='نام گروه')
+    color = models.CharField(max_length=20, blank=True, verbose_name='رنگ',
+                             help_text='کد رنگ hex مثل #6366f1 (اختیاری)')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'گروه'
+        verbose_name_plural = 'گروه‌ها'
+
+    def __str__(self):
+        return self.name
+
+
 class Node(models.Model):
     username   = models.CharField(max_length=100, unique=True)
     first_name = models.CharField(max_length=100, blank=True, verbose_name='نام')
@@ -11,6 +27,10 @@ class Node(models.Model):
     birth_day  = models.DateField(blank=True, null=True)
     career     = models.CharField(max_length=200, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
+    group      = models.CharField(max_length=100, blank=True, verbose_name='گروه (قدیمی)',
+                                  help_text='legacy — از groups استفاده کن')
+    groups     = models.ManyToManyField(Group, blank=True, related_name='nodes',
+                                        verbose_name='گروه‌ها')
 
     def display_name(self):
         """Best human-readable name for this node."""
@@ -128,6 +148,30 @@ class JournalEntry(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class AlertAction(models.Model):
+    """ثبت اقدام کاربر روی یک هشدار (رد کردن یا انجام دادن با نتیجه)."""
+    ACTION_CHOICES = [
+        ('completed', 'انجام دادم'),
+        ('dismissed', 'رد کردم'),
+    ]
+    alert_id   = models.CharField(max_length=120, db_index=True)
+    alert_type = models.CharField(max_length=50, blank=True)
+    node       = models.ForeignKey(Node, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='alert_actions')
+    title      = models.CharField(max_length=300, blank=True)
+    action     = models.CharField(max_length=20, choices=ACTION_CHOICES, default='dismissed')
+    outcome    = models.TextField(blank=True)   # نتیجه‌ای که کاربر ثبت کرد
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'اقدام روی هشدار'
+        verbose_name_plural = 'اقدامات روی هشدارها'
+
+    def __str__(self):
+        return f"{self.get_action_display()} — {self.title[:60]}"
 
 
 class JournalImage(models.Model):
