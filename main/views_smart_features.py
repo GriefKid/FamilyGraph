@@ -260,20 +260,21 @@ def _compute_alerts(user=None):
     return alerts
 
 
+@login_required
 def alerts_api(request):
     """JSON: all current alerts."""
-    user = request.user if request.user.is_authenticated else None
-    return JsonResponse({'alerts': _compute_alerts(user)})
+    return JsonResponse({'alerts': _compute_alerts(request.user)})
 
 
+@login_required
 def alerts_count_api(request):
     """JSON: quick badge count."""
-    user = request.user if request.user.is_authenticated else None
-    alerts = _compute_alerts(user)
+    alerts = _compute_alerts(request.user)
     high_count = sum(1 for a in alerts if a.get('priority') == 'high')
     return JsonResponse({'total': len(alerts), 'high': high_count})
 
 
+@login_required
 @csrf_exempt
 def alert_recommendation_api(request):
     """POST {node_id, alert_type, title} → AI gift/action suggestions."""
@@ -288,11 +289,11 @@ def alert_recommendation_api(request):
     alert_type = body.get('alert_type', '')
     alert_title = body.get('title', '')
 
-    # Gather person data
+    # Gather person data (owner-scoped)
     person_data = {}
     if node_id:
         try:
-            node = Node.objects.get(pk=node_id)
+            node = Node.objects.get(pk=node_id, owner=request.user)
             person_data['name'] = node.display_name()
             person_data['career'] = node.career or ''
             info_obj = node.informations.first()
@@ -308,8 +309,8 @@ def alert_recommendation_api(request):
         except Node.DoesNotExist:
             pass
 
-    # ── کش: پیشنهادات برای همین نود+نوع هشدار قبلاً ساخته شده؟ ─────────────
-    cache_key = f'alert_rec_{node_id}_{alert_type}_{date.today().strftime("%Y%m%d")}'
+    # ── کش: per user + node + alert type ──────────────────────────────────────
+    cache_key = f'alert_rec_{request.user.id}_{node_id}_{alert_type}_{date.today().strftime("%Y%m%d")}'
     cached = cache.get(cache_key)
     if cached:
         return JsonResponse({'ok': True, 'result': cached, 'from_cache': True})
@@ -1192,6 +1193,7 @@ def daily_tips_view(request):
     return render(request, 'daily/daily.html', context)
 
 
+@login_required
 @csrf_exempt
 def daily_tips_api(request):
     """POST → AI daily network tips — با تقویم شمسی و تعطیلات ایرانی."""

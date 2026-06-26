@@ -770,7 +770,7 @@ def node_ai_summary(request, pk):
 
     node = get_object_or_404(Node, pk=pk, owner=request.user)
     rels = Relationship.objects.filter(
-        Q(source=node) | Q(target=node)
+        Q(source=node) | Q(target=node), owner=request.user
     ).select_related('source', 'target')
     infos = Information.objects.filter(node=node)
 
@@ -1061,6 +1061,7 @@ def journal_view(request):
     })
 
 
+@login_required
 @csrf_exempt
 def journal_image_upload_api(request):
     """Upload an image for a journal entry (before or after entry creation)."""
@@ -1073,6 +1074,7 @@ def journal_image_upload_api(request):
     return JsonResponse({'id': img.id, 'url': img.image.url})
 
 
+@login_required
 @csrf_exempt
 def journal_analyze_api(request):
     """Diary text → rich structured extraction with root-node awareness."""
@@ -1225,6 +1227,7 @@ def journal_analyze_api(request):
         return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
 
+@login_required
 @csrf_exempt
 def journal_apply_api(request):
     """Apply extracted entities + rich attributes to DB."""
@@ -1402,7 +1405,7 @@ def journal_apply_api(request):
     entry_id = data.get('_entry_id')
     if entry_id:
         try:
-            entry = JournalEntry.objects.get(id=entry_id)
+            entry = JournalEntry.objects.get(id=entry_id, owner=req_user)
             # Collect all node usernames that appeared in relationships
             mentioned = set()
             for rd in data.get('relationships', []):
@@ -1477,6 +1480,7 @@ def export_graph(request):
     return response
 
 
+@login_required
 @require_GET
 def public_node_search(request):
     """جستجوی نودهای عمومی از حساب‌های عمومی — برای ساجست هنگام ادد کردن نود."""
