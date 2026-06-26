@@ -205,36 +205,49 @@ def _compute_alerts(user=None):
         if user and user.is_authenticated and user.root_node:
             root = user.root_node
             cutoff90 = today - timedelta(days=90)
-            seen_decay = set()
-            active_rels = Relationship.objects.filter(
-                status='active', **user_filter,
-            ).select_related('source', 'target')
 
-            # پیش‌واکشی یک‌باره نودهایی که در ۹۰ روز اخیر ذکر شدن — جلوگیری از N+1
-            recently_mentioned_ids = set(
-                JournalEntry.objects.filter(
-                    created_at__date__gte=cutoff90, **user_filter
-                ).values_list('mentioned_nodes__id', flat=True)
+            # فقط اگه کاربر حداقل ۹۰ روزه از journal استفاده می‌کنه decay معنا داره
+            # اگه قدیمی‌ترین entry بعد از cutoff باشه = کاربر تازه‌واردِ — skip
+            earliest_entry = JournalEntry.objects.filter(
+                **user_filter
+            ).order_by('created_at').values('created_at').first()
+
+            journal_old_enough = (
+                earliest_entry is not None and
+                earliest_entry['created_at'].date() <= cutoff90
             )
-            recently_mentioned_ids.discard(None)
 
-            for rel in active_rels:
-                other = rel.target if rel.source_id == root.id else rel.source
-                if other.id == root.id or other.id in seen_decay:
-                    continue
-                if other.id not in recently_mentioned_ids:
-                    seen_decay.add(other.id)
-                    alerts.append({
-                        'id':       f'decay_{rel.id}',
-                        'type':     'decay',
-                        'priority': 'medium',
-                        'node_id':       other.id,
-                        'node_username': other.username,
-                        'node_name':     other.display_name(),
-                        'title': f'📉 رابطه با {other.display_name()} داره ضعیف می‌شه',
-                        'body':  f'مدت ۳ ماهه از {other.display_name()} توی خاطراتت ذکری نشده. این رابطه رو فراموش کردی؟',
-                        'days_until': None,
-                    })
+            if journal_old_enough:
+                seen_decay = set()
+                active_rels = Relationship.objects.filter(
+                    status='active', **user_filter,
+                ).select_related('source', 'target')
+
+                # پیش‌واکشی یک‌باره نودهایی که در ۹۰ روز اخیر ذکر شدن — جلوگیری از N+1
+                recently_mentioned_ids = set(
+                    JournalEntry.objects.filter(
+                        created_at__date__gte=cutoff90, **user_filter
+                    ).values_list('mentioned_nodes__id', flat=True)
+                )
+                recently_mentioned_ids.discard(None)
+
+                for rel in active_rels:
+                    other = rel.target if rel.source_id == root.id else rel.source
+                    if other.id == root.id or other.id in seen_decay:
+                        continue
+                    if other.id not in recently_mentioned_ids:
+                        seen_decay.add(other.id)
+                        alerts.append({
+                            'id':       f'decay_{rel.id}',
+                            'type':     'decay',
+                            'priority': 'medium',
+                            'node_id':       other.id,
+                            'node_username': other.username,
+                            'node_name':     other.display_name(),
+                            'title': f'📉 رابطه با {other.display_name()} داره ضعیف می‌شه',
+                            'body':  f'مدت ۳ ماهه از {other.display_name()} توی خاطراتت ذکری نشده. این رابطه رو فراموش کردی؟',
+                            'days_until': None,
+                        })
     except Exception:
         pass
 
@@ -864,10 +877,10 @@ def psychology_view(request):
         same_career_edges = 0
         career_comparable = 0
         for u, v in G.edges():
-            cu, cv = career_map.get(u, ''), career_map.get(v, '')
-            if cu and cv:
+            c_u, c_v = career_map.get(u, ''), career_map.get(v, '')
+            if c_u and c_v:
                 career_comparable += 1
-                if cu == cv:
+                if c_u == c_v:
                     same_career_edges += 1
         if career_comparable > 0:
             homophily_score = round(same_career_edges / career_comparable * 100)

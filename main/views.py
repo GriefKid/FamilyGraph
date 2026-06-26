@@ -147,13 +147,26 @@ def node_delete(request, pk):
 
     if request.method == 'POST':
         try:
+            # اول relationships مرتبط رو حذف کن (PROTECT جلوگیری می‌کنه)
+            Relationship.objects.filter(
+                Q(source=node) | Q(target=node),
+                owner=request.user
+            ).delete()
+            # بعد informations مرتبط رو حذف کن (PROTECT دیگه)
+            node.informations.all().delete()
             node.delete()
-            messages.success(request, "Node حذف شد")
-        except ProtectedError:
-            messages.error(request, "این Node در Relationship استفاده شده")
+            messages.success(request, "Node و روابط مرتبطش حذف شدند")
+        except Exception as e:
+            messages.error(request, f"خطا در حذف: {e}")
         return redirect('node_list')
 
-    return render(request, 'nodes/node_confirm_delete.html', {'node': node})
+    rel_count  = Relationship.objects.filter(
+        Q(source=node) | Q(target=node), owner=request.user
+    ).count()
+    return render(request, 'nodes/node_confirm_delete.html', {
+        'node': node,
+        'rel_count': rel_count,
+    })
 
 
 @login_required
@@ -1165,9 +1178,14 @@ def journal_apply_api(request):
         if not root_username:
             root_username = root_node.username
 
+    # aliasهایی که همیشه به نویسنده (root) اشاره دارن
+    _me_aliases = {'me', 'من', 'خودم', 'نویسنده', 'i', 'myself'}
+    if root_username:
+        _me_aliases.add(root_username.lower())
+
     def resolve_node(uname):
         uname = (uname or '').strip()
-        if uname in ('me', 'من', root_username) and root_node:
+        if uname.lower() in _me_aliases and root_node:
             return root_node
         if req_user:
             try:
@@ -1177,9 +1195,10 @@ def journal_apply_api(request):
         return None
 
     # ── Create nodes (never create root) ──────────────────
+
     for nd in data.get('nodes', []):
         username = (nd.get('username') or '').strip()
-        if not username or username == root_username:
+        if not username or username.lower() in _me_aliases:
             continue
         is_pub   = bool(node_privacy.get(username, False))
         link     = node_links.get(username)          # اگه از شبکه عمومی لینک شده
@@ -1485,3 +1504,140 @@ def node_quick_update(request, pk):
 
     node.save()
     return JsonResponse({'ok': True, 'display_name': node.display_name()})
+
+
+@login_required
+@csrf_exempt
+def node_create_from_image(request):
+    """ایجاد نود از عکس drag-drop شده روی گراف — wizard step per image."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    import re, uuid as _uuid
+
+    req_user     = request.user
+    target_id    = (request.POST.get('target_id') or '').strip()
+    first_name   = (request.POST.get('first_name')   or '').strip()
+    last_name    = (request.POST.get('last_name')    or '').strip()
+    career       = (request.POST.get('career')       or '').strip()
+    phone        = (request.POST.get('phone_number') or '').strip()
+    birth_day    = (request.POST.get('birth_day')    or '').strip()
+    is_public    = request.POST.get('is_public') == 'true'
+    rel_type     = (request.POST.get('rel_type')     or '').strip()
+    try:
+        rel_strength = min(5, max(1, int(request.POST.get('rel_strength') or 3)))
+    except (ValueError, TypeError):
+        rel_strength = 3
+
+    image = request.FILES.get('image')
+
+    if not target_id:
+        return JsonResponse({'error': 'target_id required'}, status=400)
+    target = get_object_or_404(Node, pk=target_id, owner=req_user)
+
+    # ── Generate unique username از نام ──────────────────
+    raw  = f"{first_name} {last_name}".strip()
+    base = re.sub(r'[^\w]', '_', raw).lower().strip('_') if raw else 'person'
+    base = base or 'person'
+    username = base
+    counter  = 1
+    while Node.objects.filter(username=username, owner=req_user).exists():
+        username = f"{base}_{counter}"
+        counter += 1
+
+    # ── Create node ───────────────────────────────────────
+    new_node = Node(
+        username=username,
+        owner=req_user,
+        first_name=first_name,
+        last_name=last_name,
+        career=career,
+        phone_number=phone,
+        is_public=is_public,
+    )
+    if birth_day:
+        try:
+            from datetime import date as _date
+            new_node.birth_day = _date.fromisoformat(birth_day)
+        except Exception:
+            pass
+    if image:
+        new_node.picture = image
+    new_node.save()
+
+    # ── Create relationship (merge اگه موجود بود) ────────
+    existing = Relationship.objects.filter(
+        Q(source=target, target=new_node) | Q(source=new_node, target=target),
+        owner=req_user
+    ).first()
+    if not existing:
+        Relationship.objects.create(
+            source=target, target=new_node,
+            rel=rel_type, strength=rel_strength,
+            is_public=is_public, owner=req_user,
+        )
+
+    return JsonResponse({
+        'ok': True,
+        'node': {
+            'id':           new_node.id,
+            'username':     new_node.username,
+            'display_name': new_node.display_name(),
+            'picture_url':  new_node.picture.url if new_node.picture else None,
+        }
+    })
+
+
+@login_required
+@csrf_exempt
+def relationship_quick_create(request):
+    """ایجاد یا merge یال از طریق drag روی گراف."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    req_user  = request.user
+    source_id = data.get('source_id')
+    target_id = data.get('target_id')
+    rel_type  = (data.get('rel_type') or '').strip()
+    is_public = bool(data.get('is_public', False))
+    try:
+        strength = min(5, max(1, int(data.get('strength') or 3)))
+    except (ValueError, TypeError):
+        strength = 3
+
+    source = get_object_or_404(Node, pk=source_id, owner=req_user)
+    target = get_object_or_404(Node, pk=target_id, owner=req_user)
+
+    if source == target:
+        return JsonResponse({'error': 'نود نمیتونه با خودش رابطه داشته باشه'}, status=400)
+
+    # ── merge یا ایجاد — مثل journal_apply_api ────────────
+    existing = Relationship.objects.filter(
+        Q(source=source, target=target) | Q(source=target, target=source),
+        owner=req_user
+    ).first()
+
+    if existing:
+        cur_types = [t.strip() for t in (existing.rel or '').split('،') if t.strip()]
+        changed = False
+        if rel_type and rel_type not in cur_types:
+            cur_types.append(rel_type)
+            existing.rel = '، '.join(cur_types)
+            changed = True
+        if existing.strength < strength:
+            existing.strength = strength
+            changed = True
+        if changed:
+            existing.save()
+        return JsonResponse({'ok': True, 'merged': True})
+
+    Relationship.objects.create(
+        source=source, target=target,
+        rel=rel_type, strength=strength,
+        is_public=is_public, owner=req_user,
+    )
+    return JsonResponse({'ok': True, 'merged': False})

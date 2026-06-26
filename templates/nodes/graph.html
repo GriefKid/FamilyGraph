@@ -126,6 +126,123 @@
 #node-panel .np-primary{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }
 #node-panel .np-ghost{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:#94a3b8; }
 #node-panel .np-close{ position:absolute; top:12px; left:14px; background:none; border:none; color:#64748b; cursor:pointer; font-size:15px; line-height:1; }
+
+/* ── Edge draw (right-click drag) ── */
+#edge-draw-line{
+  pointer-events:none;
+  stroke:#a5b4fc; stroke-width:2.5; stroke-dasharray:8,5; opacity:.85;
+  filter:drop-shadow(0 0 6px rgba(165,180,252,.6));
+}
+.ng.edge-source > circle:nth-child(2){
+  stroke:#fff !important; stroke-width:2.5 !important;
+}
+.ng.edge-target-hover > circle:nth-child(2){
+  stroke:#10b981 !important; stroke-width:2.5 !important;
+}
+
+/* ── Rel quick-create modal ── */
+#rel-modal{
+  position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,.72); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  display:flex; align-items:center; justify-content:center;
+}
+#rel-modal.hidden{ display:none; }
+#rel-card{
+  background:rgba(8,8,24,.97); border:1px solid rgba(255,255,255,.1);
+  border-radius:20px; padding:26px 28px; width:360px; max-width:95vw;
+  font-family:'Vazirmatn',sans-serif; color:#e2e8f0;
+  box-shadow:0 30px 80px rgba(0,0,0,.5);
+}
+.rel-head{ margin-bottom:18px; }
+.rel-nodes{
+  display:flex; align-items:center; gap:8px;
+  font-size:14px; font-weight:700; margin-bottom:4px;
+}
+.rel-nodes .rn-name{ color:#a5b4fc; }
+.rel-nodes .rn-arrow{ color:#475569; font-size:16px; }
+.rel-subtitle{ font-size:11px; color:#475569; }
+.rel-section{ margin-bottom:12px; }
+.rel-label{ font-size:12px; color:#64748b; margin-bottom:5px; display:block; }
+.rel-input{ width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:#e2e8f0; font-family:'Vazirmatn',sans-serif; font-size:13px; padding:9px 12px; outline:none; transition:border-color .2s; box-sizing:border-box; }
+.rel-input:focus{ border-color:rgba(99,102,241,.6); }
+.rel-toggle-row{ display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
+.rel-toggle-label{ font-size:13px; color:#94a3b8; }
+.rel-str-row{ display:flex; gap:6px; }
+.rel-str-btn{ flex:1; padding:6px 0; border-radius:6px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:#64748b; cursor:pointer; font-family:'Vazirmatn',sans-serif; font-size:12px; transition:all .18s; }
+.rel-str-btn.active{ background:rgba(99,102,241,.25); border-color:rgba(99,102,241,.5); color:#a5b4fc; }
+.rel-actions{ display:flex; gap:10px; margin-top:18px; }
+.rel-btn{ flex:1; padding:11px; border-radius:10px; border:none; font-family:'Vazirmatn',sans-serif; font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; }
+.rel-btn-primary{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }
+.rel-btn-primary:hover{ opacity:.9; }
+.rel-btn-primary:disabled{ opacity:.5; cursor:not-allowed; }
+.rel-btn-ghost{ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:#64748b; }
+.rel-btn-ghost:hover{ color:#94a3b8; border-color:rgba(255,255,255,.2); }
+
+/* ── Drop overlay ── */
+#drop-overlay{
+  position:absolute; inset:0; z-index:25;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none; opacity:0; transition:opacity .2s;
+  background:rgba(99,102,241,.05);
+  border:2px dashed transparent;
+}
+#drop-overlay.active{
+  opacity:1;
+  border-color:rgba(99,102,241,.45);
+}
+#drop-overlay .drop-msg{
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  background:rgba(6,6,20,.85); border:1px solid rgba(99,102,241,.3);
+  border-radius:18px; padding:22px 36px;
+  box-shadow:0 0 40px rgba(99,102,241,.25);
+}
+.drop-icon{ color:#a5b4fc; }
+#drop-hint{ color:#a5b4fc; font-family:'Vazirmatn',sans-serif; font-size:15px; font-weight:600; }
+
+/* ── Photo wizard ── */
+#photo-wizard{
+  position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,.75); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  display:flex; align-items:center; justify-content:center;
+}
+#photo-wizard.hidden{ display:none; }
+#wizard-card{
+  background:rgba(8,8,24,.97); border:1px solid rgba(255,255,255,.1);
+  border-radius:22px; padding:28px 30px;
+  width:420px; max-width:95vw; max-height:90vh; overflow-y:auto;
+  font-family:'Vazirmatn',sans-serif; color:#e2e8f0;
+  box-shadow:0 30px 80px rgba(0,0,0,.5);
+}
+#wizard-card::-webkit-scrollbar{ width:4px; }
+#wizard-card::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.1); border-radius:4px; }
+.wz-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+.wz-title{ font-size:14px; color:#94a3b8; }
+.wz-progress{ font-size:12px; color:#6366f1; background:rgba(99,102,241,.15); border:1px solid rgba(99,102,241,.25); padding:3px 10px; border-radius:20px; }
+.wz-preview-wrap{ display:flex; justify-content:center; margin-bottom:6px; }
+#wz-preview{ width:120px; height:120px; border-radius:50%; object-fit:cover; border:3px solid rgba(99,102,241,.4); box-shadow:0 0 28px rgba(99,102,241,.3); }
+.wz-filename{ text-align:center; font-size:11px; color:#475569; margin-bottom:14px; }
+.wz-section{ margin-bottom:12px; }
+.wz-label{ font-size:12px; color:#64748b; margin-bottom:5px; display:block; }
+.wz-input{ width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:#e2e8f0; font-family:'Vazirmatn',sans-serif; font-size:13px; padding:9px 12px; outline:none; transition:border-color .2s; box-sizing:border-box; }
+.wz-input:focus{ border-color:rgba(99,102,241,.6); }
+.wz-row{ display:flex; gap:10px; }
+.wz-row .wz-section{ flex:1; }
+.wz-toggle-row{ display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:10px 14px; margin-bottom:12px; }
+.wz-toggle-label{ font-size:13px; color:#94a3b8; }
+.wz-toggle{ width:42px; height:24px; border-radius:12px; background:rgba(255,255,255,.1); border:none; cursor:pointer; position:relative; transition:background .2s; flex-shrink:0; }
+.wz-toggle.on{ background:#6366f1; }
+.wz-toggle::after{ content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .2s; }
+.wz-toggle.on::after{ transform:translateX(18px); }
+.wz-strength-row{ display:flex; gap:6px; }
+.wz-str-btn{ flex:1; padding:6px 0; border-radius:6px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:#64748b; cursor:pointer; font-family:'Vazirmatn',sans-serif; font-size:12px; transition:all .18s; }
+.wz-str-btn.active{ background:rgba(99,102,241,.25); border-color:rgba(99,102,241,.5); color:#a5b4fc; }
+.wz-actions{ display:flex; gap:10px; margin-top:18px; }
+.wz-btn{ flex:1; padding:11px; border-radius:10px; border:none; font-family:'Vazirmatn',sans-serif; font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; }
+.wz-btn-primary{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }
+.wz-btn-primary:hover{ opacity:.9; }
+.wz-btn-primary:disabled{ opacity:.5; cursor:not-allowed; }
+.wz-btn-ghost{ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:#64748b; }
+.wz-btn-ghost:hover{ border-color:rgba(255,255,255,.2); color:#94a3b8; }
 </style>
 {% endblock %}
 
@@ -237,6 +354,123 @@
     <div class="tt-name" id="ttName"></div>
     <div class="tt-row">Centrality: <span id="ttC"></span></div>
     <div class="tt-row">Community: <span id="ttCom"></span></div>
+  </div>
+
+  <!-- Drop overlay (نمایش وقتی کاربر عکس drag می‌کنه) -->
+  <div id="drop-overlay">
+    <div class="drop-msg">
+      <svg class="drop-icon" width="38" height="38" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+      </svg>
+      <span id="drop-hint">عکس رو روی یک راس رها کن</span>
+    </div>
+  </div>
+</div>
+
+<!-- Rel quick-create modal -->
+<div id="rel-modal" class="hidden">
+  <div id="rel-card">
+    <div class="rel-head">
+      <div class="rel-nodes">
+        <span class="rn-name" id="rel-src-name">—</span>
+        <span class="rn-arrow">→</span>
+        <span class="rn-name" id="rel-tgt-name">—</span>
+      </div>
+      <div class="rel-subtitle">نوع رابطه‌ای که بین این دو نفر هست رو بنویس</div>
+    </div>
+
+    <div class="rel-toggle-row">
+      <span class="rel-toggle-label">رابطه عمومی باشه؟</span>
+      <button type="button" class="wz-toggle" id="rel-pub-toggle" onclick="relTogglePub()"></button>
+    </div>
+
+    <div class="rel-section">
+      <label class="rel-label">نوع رابطه</label>
+      <input class="rel-input" id="rel-type-input" type="text" placeholder="دوست، خانواده، همکار، ...">
+    </div>
+
+    <div class="rel-section">
+      <label class="rel-label">قدرت رابطه</label>
+      <div class="rel-str-row">
+        <button type="button" class="rel-str-btn" data-v="1" onclick="relSetStr(1)">۱</button>
+        <button type="button" class="rel-str-btn" data-v="2" onclick="relSetStr(2)">۲</button>
+        <button type="button" class="rel-str-btn active" data-v="3" onclick="relSetStr(3)">۳</button>
+        <button type="button" class="rel-str-btn" data-v="4" onclick="relSetStr(4)">۴</button>
+        <button type="button" class="rel-str-btn" data-v="5" onclick="relSetStr(5)">۵</button>
+      </div>
+    </div>
+
+    <div class="rel-actions">
+      <button class="rel-btn rel-btn-ghost" onclick="closeRelModal()">انصراف</button>
+      <button class="rel-btn rel-btn-primary" id="rel-save-btn" onclick="submitRelModal()">ایجاد رابطه ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo wizard modal (خارج از graph-wrapper) -->
+<div id="photo-wizard" class="hidden">
+  <div id="wizard-card">
+    <div class="wz-head">
+      <div class="wz-title">افزودن از عکس — <span id="wz-target-name" style="color:#a5b4fc"></span></div>
+      <div class="wz-progress" id="wz-progress">۱ از ۱</div>
+    </div>
+
+    <div class="wz-preview-wrap">
+      <img id="wz-preview" src="" alt="preview">
+    </div>
+    <div class="wz-filename" id="wz-filename"></div>
+
+    <!-- Public toggle -->
+    <div class="wz-toggle-row">
+      <span class="wz-toggle-label">این شخص عمومی باشه؟ (دیگران ببینن)</span>
+      <button type="button" class="wz-toggle" id="wz-pub-toggle" onclick="togglePub()"></button>
+    </div>
+
+    <form id="wz-form" onsubmit="return false">
+      <div class="wz-row">
+        <div class="wz-section">
+          <label class="wz-label">نام</label>
+          <input class="wz-input" name="first_name" type="text" placeholder="علی">
+        </div>
+        <div class="wz-section">
+          <label class="wz-label">نام خانوادگی</label>
+          <input class="wz-input" name="last_name" type="text" placeholder="محمدی">
+        </div>
+      </div>
+      <div class="wz-section">
+        <label class="wz-label">شغل</label>
+        <input class="wz-input" name="career" type="text" placeholder="مثال: مهندس نرم‌افزار">
+      </div>
+      <div class="wz-row">
+        <div class="wz-section">
+          <label class="wz-label">موبایل</label>
+          <input class="wz-input" name="phone_number" type="tel" placeholder="09...">
+        </div>
+        <div class="wz-section">
+          <label class="wz-label">تولد</label>
+          <input class="wz-input" name="birth_day" type="date">
+        </div>
+      </div>
+      <div class="wz-section">
+        <label class="wz-label">نوع رابطه با <span id="wz-rel-target" style="color:#a5b4fc"></span></label>
+        <input class="wz-input" name="rel_type" type="text" placeholder="دوست، خانواده، همکار، ...">
+      </div>
+      <div class="wz-section">
+        <label class="wz-label">قدرت رابطه</label>
+        <div class="wz-strength-row">
+          <button type="button" class="wz-str-btn" data-v="1" onclick="wzSetStr(1)">۱</button>
+          <button type="button" class="wz-str-btn" data-v="2" onclick="wzSetStr(2)">۲</button>
+          <button type="button" class="wz-str-btn active" data-v="3" onclick="wzSetStr(3)">۳</button>
+          <button type="button" class="wz-str-btn" data-v="4" onclick="wzSetStr(4)">۴</button>
+          <button type="button" class="wz-str-btn" data-v="5" onclick="wzSetStr(5)">۵</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="wz-actions">
+      <button class="wz-btn wz-btn-ghost" onclick="wzSkip()">رد کن</button>
+      <button class="wz-btn wz-btn-primary" id="wz-save-btn" onclick="wzSave()">ذخیره و بعدی ←</button>
+    </div>
   </div>
 </div>
 
@@ -493,7 +727,15 @@ function paint(nodes, edges, rootId, nMap){
     .on("mouseenter", onEnter)
     .on("mousemove",  onMove)
     .on("mouseleave", onLeave)
-    .on("click",      onClick);
+    .on("click",      onClick)
+    .on("mousedown.edge", (e, d) => {
+      if(e.button !== 0) return;
+      // فقط pending ست می‌کنیم — اگه threshold رد شد edge draw شروع میشه
+      edgePending = { node: d, startX: e.clientX, startY: e.clientY };
+      wasEdgeDrag = false;
+      e.stopPropagation();           // از zoom روی SVG جلوگیری کن
+      e.stopImmediatePropagation();  // از D3 force-drag جلوگیری کن
+    });
 
   // Root: extra white glow ring
   ng.filter(d => d.id === rootId)
@@ -763,6 +1005,7 @@ function resetEdges(){
 }
 
 function onClick(ev, d){
+  if(wasEdgeDrag){ wasEdgeDrag = false; return; } // drag بود نه click
   ev.stopPropagation();
   panelId = d.id;
   document.getElementById("npName").textContent   = d.label || d.username;
@@ -814,5 +1057,352 @@ function getCookie(n){
 // Init
 // ═══════════════════════════════════════════════════════════
 loadGraph();
+
+// ═══════════════════════════════════════════════════════════
+// Edge Draw — left-click drag between nodes
+// ═══════════════════════════════════════════════════════════
+const EDGE_THRESHOLD = 8; // پیکسل — کمتر از این = click معمولی
+let edgePending = null;   // {node, startX, startY} — قبل از threshold
+let edgeSrc     = null;   // وقتی threshold رد شد، edge draw شروع میشه
+let edgeTgt     = null;
+let edgeLine    = null;
+let wasEdgeDrag = false;  // برای suppress کردن click بعد از drag
+let relIsPublic = false;
+let relStrength = 3;
+
+// جلوگیری از context menu
+svgEl.node().addEventListener('contextmenu', e => e.preventDefault());
+
+function edgeCleanup(){
+  edgePending = null;
+  if(edgeLine){ edgeLine.remove(); edgeLine = null; }
+  edgeSrc = null; edgeTgt = null;
+  nLayer.selectAll('.ng')
+    .classed('edge-source', false)
+    .classed('edge-target-hover', false)
+    .attr('opacity', 1);
+}
+
+// mousemove — threshold check + آپدیت خط
+svgEl.node().addEventListener('mousemove', e => {
+  // مرحله ۱: pending — بررسی threshold
+  if(edgePending){
+    const dx = e.clientX - edgePending.startX;
+    const dy = e.clientY - edgePending.startY;
+    if(Math.hypot(dx, dy) > EDGE_THRESHOLD){
+      // threshold رد شد → شروع edge draw
+      edgeSrc = edgePending.node;
+      edgePending = null;
+      edgeLine = gRoot.append('line')
+        .attr('id', 'edge-draw-line')
+        .attr('x1', edgeSrc.x).attr('y1', edgeSrc.y)
+        .attr('x2', edgeSrc.x).attr('y2', edgeSrc.y);
+      nLayer.selectAll('.ng').classed('edge-source', d => d.id === edgeSrc.id);
+    }
+    return;
+  }
+
+  // مرحله ۲: در حال draw — آپدیت خط و هدف
+  if(!edgeSrc || !edgeLine) return;
+
+  const rect = svgEl.node().getBoundingClientRect();
+  const t    = d3.zoomTransform(svgEl.node());
+  const [gx, gy] = t.invert([e.clientX - rect.left, e.clientY - rect.top]);
+
+  const nodes = nLayer.selectAll('.ng').data();
+  let best = null, bestD = Infinity;
+  nodes.forEach(n => {
+    if(n.id === edgeSrc.id) return;
+    const d = Math.hypot(n.x - gx, n.y - gy);
+    if(d < bestD){ bestD = d; best = n; }
+  });
+
+  const SNAP = 55;
+  edgeTgt = (best && bestD < SNAP) ? best : null;
+
+  if(edgeTgt){
+    edgeLine.attr('x2', edgeTgt.x).attr('y2', edgeTgt.y);
+  } else {
+    edgeLine.attr('x2', gx).attr('y2', gy);
+  }
+
+  nLayer.selectAll('.ng')
+    .classed('edge-target-hover', d => !!edgeTgt && d.id === edgeTgt.id)
+    .attr('opacity', d => {
+      if(d.id === edgeSrc.id) return 1;
+      if(edgeTgt && d.id === edgeTgt.id) return 1;
+      return edgeTgt ? 0.45 : 1;
+    });
+});
+
+// mouseup — تصمیم نهایی
+svgEl.node().addEventListener('mouseup', e => {
+  if(edgePending){
+    // threshold رد نشد = click معمولی — فقط pending رو پاک کن
+    edgePending = null;
+    return;
+  }
+  if(!edgeSrc) return;
+
+  wasEdgeDrag = true; // click رو suppress کن
+  const src = edgeSrc;
+  const tgt = edgeTgt;
+  edgeCleanup();
+
+  if(tgt && tgt.id !== src.id){
+    openRelModal(src, tgt);
+  }
+});
+
+// Escape = لغو
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && (edgeSrc || edgePending)){
+    edgeCleanup();
+  }
+});
+
+// ── Modal functions ────────────────────────────────────────
+let relModalSrc = null, relModalTgt = null;
+
+function openRelModal(src, tgt){
+  relModalSrc = src; relModalTgt = tgt;
+  relIsPublic = false; relStrength = 3;
+
+  document.getElementById('rel-src-name').textContent = src.label || src.username;
+  document.getElementById('rel-tgt-name').textContent = tgt.label || tgt.username;
+  document.getElementById('rel-type-input').value = '';
+  document.getElementById('rel-pub-toggle').classList.remove('on');
+  relSetStr(3);
+
+  const btn = document.getElementById('rel-save-btn');
+  btn.disabled = false; btn.textContent = 'ایجاد رابطه ✓';
+
+  document.getElementById('rel-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('rel-type-input').focus(), 80);
+}
+
+function closeRelModal(){
+  document.getElementById('rel-modal').classList.add('hidden');
+  relModalSrc = null; relModalTgt = null;
+}
+
+function relTogglePub(){
+  relIsPublic = !relIsPublic;
+  document.getElementById('rel-pub-toggle').classList.toggle('on', relIsPublic);
+}
+
+function relSetStr(v){
+  relStrength = v;
+  document.querySelectorAll('.rel-str-btn').forEach(b =>
+    b.classList.toggle('active', +b.dataset.v === v)
+  );
+}
+
+async function submitRelModal(){
+  if(!relModalSrc || !relModalTgt) return;
+  const btn = document.getElementById('rel-save-btn');
+  btn.disabled = true; btn.textContent = 'در حال ذخیره...';
+
+  try{
+    const r = await fetch('/api/relationships/quick-create/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: JSON.stringify({
+        source_id: relModalSrc.id,
+        target_id: relModalTgt.id,
+        rel_type:  document.getElementById('rel-type-input').value.trim(),
+        strength:  relStrength,
+        is_public: relIsPublic,
+      }),
+    });
+    const d = await r.json();
+    if(d.ok){
+      closeRelModal();
+      loadGraph();  // ریلود گراف تا یال جدید نمایش داده بشه
+    } else {
+      btn.disabled = false; btn.textContent = 'ایجاد رابطه ✓';
+      alert(d.error || 'خطا در ذخیره رابطه');
+    }
+  } catch(err){
+    btn.disabled = false; btn.textContent = 'ایجاد رابطه ✓';
+    alert('خطا در ارتباط با سرور');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Photo Drag-and-Drop Feature
+// ═══════════════════════════════════════════════════════════
+let wzDropTarget   = null;   // نود هدف (آبجکت D3 data)
+let wzQueue        = [];     // صف عکس‌ها
+let wzIndex        = 0;
+let wzTargetId     = null;
+let wzStrength     = 3;
+let wzIsPublic     = false;
+let wzDragCounter  = 0;      // برای جلوگیری از flicker در dragleave
+
+function initDropZone(){
+  const svg = svgEl.node();
+
+  svg.addEventListener('dragenter', e => {
+    if(!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    wzDragCounter++;
+    document.getElementById('drop-overlay').classList.add('active');
+  });
+
+  svg.addEventListener('dragover', e => {
+    if(!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+
+    // پیدا کردن نزدیک‌ترین نود به موس
+    const rect = svg.getBoundingClientRect();
+    const t    = d3.zoomTransform(svg);
+    const [gx, gy] = t.invert([e.clientX - rect.left, e.clientY - rect.top]);
+
+    const nodes = nLayer.selectAll('.ng').data();
+    let best = null, bestD = Infinity;
+    nodes.forEach(n => {
+      const d = Math.hypot(n.x - gx, n.y - gy);
+      if(d < bestD){ bestD = d; best = n; }
+    });
+
+    if(best){
+      wzDropTarget = best;
+      document.getElementById('drop-hint').textContent =
+        `رها کن روی «${best.label || best.username}»`;
+    }
+  });
+
+  svg.addEventListener('dragleave', e => {
+    wzDragCounter = Math.max(0, wzDragCounter - 1);
+    if(wzDragCounter === 0){
+      document.getElementById('drop-overlay').classList.remove('active');
+      wzDropTarget = null;
+    }
+  });
+
+  svg.addEventListener('drop', e => {
+    e.preventDefault();
+    wzDragCounter = 0;
+    document.getElementById('drop-overlay').classList.remove('active');
+
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if(!files.length){ return; }
+    if(!wzDropTarget){ alert('لطفاً عکس رو مستقیم روی یک راس رها کن'); return; }
+
+    wzQueue    = files;
+    wzIndex    = 0;
+    wzTargetId = wzDropTarget.id;
+    const tName = wzDropTarget.label || wzDropTarget.username;
+    document.getElementById('wz-target-name').textContent = tName;
+    document.getElementById('wz-rel-target').textContent  = tName;
+    wzShowStep();
+    document.getElementById('photo-wizard').classList.remove('hidden');
+  });
+}
+
+function wzShowStep(){
+  if(wzIndex >= wzQueue.length){
+    document.getElementById('photo-wizard').classList.add('hidden');
+    wzQueue = [];
+    loadGraph();
+    return;
+  }
+
+  const file  = wzQueue[wzIndex];
+  const total = wzQueue.length;
+
+  // شماره
+  document.getElementById('wz-progress').textContent =
+    `${persianNum(wzIndex + 1)} از ${persianNum(total)}`;
+
+  // پیش‌نمایش عکس
+  const prev = document.getElementById('wz-preview');
+  if(prev._blobUrl) URL.revokeObjectURL(prev._blobUrl);
+  prev._blobUrl = URL.createObjectURL(file);
+  prev.src = prev._blobUrl;
+
+  document.getElementById('wz-filename').textContent = file.name;
+
+  // ریست فرم
+  document.getElementById('wz-form').reset();
+  wzIsPublic = false;
+  wzStrength = 3;
+  document.getElementById('wz-pub-toggle').classList.remove('on');
+  wzSetStr(3);
+
+  // متن دکمه
+  const btn = document.getElementById('wz-save-btn');
+  btn.disabled = false;
+  btn.textContent = wzIndex < total - 1 ? 'ذخیره و بعدی ←' : 'ذخیره و پایان ✓';
+}
+
+function togglePub(){
+  wzIsPublic = !wzIsPublic;
+  document.getElementById('wz-pub-toggle').classList.toggle('on', wzIsPublic);
+}
+
+function wzSetStr(v){
+  wzStrength = v;
+  document.querySelectorAll('.wz-str-btn').forEach(b =>
+    b.classList.toggle('active', +b.dataset.v === v)
+  );
+}
+
+async function wzSave(){
+  const file = wzQueue[wzIndex];
+  const form = document.getElementById('wz-form');
+  const btn  = document.getElementById('wz-save-btn');
+
+  const fd = new FormData();
+  fd.append('image',        file);
+  fd.append('target_id',   wzTargetId);
+  fd.append('first_name',  form.querySelector('[name=first_name]').value.trim());
+  fd.append('last_name',   form.querySelector('[name=last_name]').value.trim());
+  fd.append('career',      form.querySelector('[name=career]').value.trim());
+  fd.append('phone_number',form.querySelector('[name=phone_number]').value.trim());
+  fd.append('birth_day',   form.querySelector('[name=birth_day]').value);
+  fd.append('is_public',   wzIsPublic ? 'true' : 'false');
+  fd.append('rel_type',    form.querySelector('[name=rel_type]').value.trim());
+  fd.append('rel_strength',wzStrength);
+
+  btn.disabled = true; btn.textContent = 'در حال ذخیره...';
+
+  try{
+    const r = await fetch('/api/nodes/create-from-image/', {
+      method: 'POST',
+      headers: {'X-CSRFToken': getCookie('csrftoken')},
+      body: fd,
+    });
+    const d = await r.json();
+    if(d.ok){
+      wzIndex++;
+      wzShowStep();
+    } else {
+      btn.disabled = false;
+      btn.textContent = wzIndex < wzQueue.length - 1 ? 'ذخیره و بعدی ←' : 'ذخیره و پایان ✓';
+      alert(d.error || 'خطا در ذخیره');
+    }
+  } catch(err){
+    btn.disabled = false;
+    btn.textContent = wzIndex < wzQueue.length - 1 ? 'ذخیره و بعدی ←' : 'ذخیره و پایان ✓';
+    alert('خطا در ارتباط با سرور');
+  }
+}
+
+function wzSkip(){
+  wzIndex++;
+  wzShowStep();
+}
+
+function persianNum(n){
+  return String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
+}
+
+initDropZone();
 </script>
 {% endblock %}
