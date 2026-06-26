@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}اطلاعیه‌ها — FamilyGraph{% endblock %}
+{% block page_title %}🔔 اطلاعیه‌ها{% endblock %}
+
+{% block extra_css %}
+<style>
+.notif-section-title{
+  font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;
+  letter-spacing:1px;margin:20px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);
+}
+/* ── Sync card ── */
+.sync-card{
+  background:var(--card);border:1px solid var(--primary-border);border-radius:14px;
+  padding:18px 20px;margin-bottom:12px;
+  box-shadow:0 0 0 1px rgba(99,102,241,.08), 0 4px 16px rgba(0,0,0,.3);
+}
+.sync-header{display:flex;align-items:flex-start;gap:12px;}
+.sync-avatar{
+  width:42px;height:42px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:800;color:#fff;
+}
+.sync-meta{flex:1;}
+.sync-title{font-size:13px;font-weight:700;margin-bottom:3px;}
+.sync-sub{font-size:12px;color:var(--text-muted);}
+.sync-time{font-size:11px;color:var(--text-muted);flex-shrink:0;}
+
+.sync-body{
+  margin:12px 0;padding:12px 14px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;
+  font-size:12.5px;line-height:1.7;
+}
+.sync-compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.sync-col{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.sync-col-title{font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;}
+.sync-col-row{font-size:12px;display:flex;gap:6px;margin-bottom:3px;}
+.sync-col-key{color:var(--text-muted);min-width:50px;}
+.sync-col-val{font-weight:600;}
+
+.sync-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.btn-accept{background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#34d399;padding:7px 16px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:'Vazirmatn',sans-serif;transition:.15s;}
+.btn-accept:hover{background:rgba(16,185,129,.22);}
+.btn-flag{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25);color:#a5b4fc;padding:7px 16px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:'Vazirmatn',sans-serif;transition:.15s;}
+.btn-flag:hover{background:rgba(99,102,241,.2);}
+.btn-ignore{background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text-muted);padding:7px 16px;border-radius:8px;font-size:12.5px;cursor:pointer;font-family:'Vazirmatn',sans-serif;transition:.15s;}
+.btn-ignore:hover{background:rgba(255,255,255,.08);}
+.sync-done{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);padding:6px 0;}
+
+/* ── General notif ── */
+.notif-item{
+  display:flex;align-items:flex-start;gap:12px;
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;margin-bottom:8px;
+}
+.notif-item.unread{border-color:rgba(99,102,241,.3);background:rgba(99,102,241,.04);}
+.notif-dot{width:8px;height:8px;border-radius:50%;background:#6366f1;flex-shrink:0;margin-top:5px;}
+.notif-dot.read{background:var(--border);}
+.notif-msg{flex:1;font-size:13px;line-height:1.6;}
+.notif-ts{font-size:11px;color:var(--text-muted);flex-shrink:0;}
+.empty-state{text-align:center;padding:40px;color:var(--text-muted);font-size:13px;}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Sync Notifications ── -->
+{% if sync_notifs %}
+<div class="notif-section-title">🔗 درخواست‌های همگام‌سازی ({{ sync_notifs|length }})</div>
+
+{% for sn in sync_notifs %}
+<div class="sync-card" id="sync-{{ sn.id }}">
+  <div class="sync-header">
+    <div class="sync-avatar">{{ sn.from_user.username|first|upper }}</div>
+    <div class="sync-meta">
+      {% if sn.event_type == 'new_user' %}
+        <div class="sync-title">کاربر جدید به شبکه پیوست</div>
+        <div class="sync-sub">@{{ sn.from_user.username }} ثبت‌نام کرده — شاید با نود «{{ sn.node_username }}» در شبکه‌ات یکیه</div>
+      {% else %}
+        <div class="sync-title">آپدیت پروفایل عمومی</div>
+        <div class="sync-sub">@{{ sn.from_user.username }} اطلاعاتش رو آپدیت کرده</div>
+      {% endif %}
+    </div>
+    <div class="sync-time">{{ sn.created_at|timesince }} پیش</div>
+  </div>
+
+  <div class="sync-body">
+    {% if sn.event_type == 'new_user' %}
+      <div>کاربر <strong>@{{ sn.from_user.username }}</strong>
+        {% if sn.payload.new_user_name %}({{ sn.payload.new_user_name }}){% endif %}
+        به FamilyGraph پیوست.
+        آیا این همون <strong>«{{ sn.node_username }}»</strong> توی شبکه‌توئه؟
+      </div>
+      <div class="sync-compare">
+        <div class="sync-col">
+          <div class="sync-col-title">نود فعلی تو</div>
+          <div class="sync-col-row"><span class="sync-col-key">نام:</span><span class="sync-col-val">{{ sn.node_username }}</span></div>
+        </div>
+        <div class="sync-col">
+          <div class="sync-col-title">کاربر جدید</div>
+          <div class="sync-col-row"><span class="sync-col-key">نام:</span><span class="sync-col-val">{{ sn.payload.new_user_name|default:sn.from_user.username }}</span></div>
+          {% if sn.payload.career %}<div class="sync-col-row"><span class="sync-col-key">شغل:</span><span class="sync-col-val">{{ sn.payload.career }}</span></div>{% endif %}
+          {% if sn.payload.city %}<div class="sync-col-row"><span class="sync-col-key">شهر:</span><span class="sync-col-val">{{ sn.payload.city }}</span></div>{% endif %}
+        </div>
+      </div>
+    {% else %}
+      <div>@{{ sn.from_user.username }} پروفایل عمومیش رو آپدیت کرد. می‌خوای نود «{{ sn.node_username }}» در شبکه‌ات هم آپدیت بشه؟</div>
+      <div class="sync-compare">
+        <div class="sync-col">
+          <div class="sync-col-title">اطلاعات جدید</div>
+          {% if sn.payload.first_name %}<div class="sync-col-row"><span class="sync-col-key">نام:</span><span class="sync-col-val">{{ sn.payload.first_name }} {{ sn.payload.last_name }}</span></div>{% endif %}
+          {% if sn.payload.career %}<div class="sync-col-row"><span class="sync-col-key">شغل:</span><span class="sync-col-val">{{ sn.payload.career }}</span></div>{% endif %}
+          {% if sn.payload.city %}<div class="sync-col-row"><span class="sync-col-key">شهر:</span><span class="sync-col-val">{{ sn.payload.city }}</span></div>{% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="sync-actions" id="sa-{{ sn.id }}">
+    <button class="btn-accept" onclick="syncRespond({{ sn.id }}, 'accepted')">✓ بله، همونه — آپدیت کن</button>
+    <button class="btn-flag"   onclick="syncRespond({{ sn.id }}, 'flagged')">✕ نه، اشتباهه</button>
+    <button class="btn-ignore" onclick="syncRespond({{ sn.id }}, 'ignored')">نادیده بگیر</button>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- ── General Notifications ── -->
+<div class="notif-section-title">📢 اطلاعیه‌های سیستم</div>
+{% if general_notifs %}
+{% for n in general_notifs %}
+<div class="notif-item {% if not n.is_read %}unread{% endif %}">
+  <div class="notif-dot {% if n.is_read %}read{% endif %}"></div>
+  <div class="notif-msg">{{ n.message }}</div>
+  <div class="notif-ts">{{ n.created_at|timesince }} پیش</div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">اطلاعیه‌ای نداری</div>
+{% endif %}
+
+{% if not sync_notifs and not general_notifs %}
+<div class="empty-state" style="padding:80px 0;">
+  🔔<br>همه چیز آروم و ساکته!
+</div>
+{% endif %}
+
+<script>
+async function syncRespond(id, action){
+  const actionsDiv = document.getElementById(`sa-${id}`);
+  actionsDiv.innerHTML = '<div class="sync-done"><span class="spinner"></span> در حال پردازش...</div>';
+  try{
+    const r = await fetch(`/api/sync/${id}/respond/`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': getCookie('csrftoken')},
+      body: JSON.stringify({action})
+    });
+    const d = await r.json();
+    if(d.ok){
+      const msgs = {
+        accepted: '✓ لینک شد و داده‌ها آپدیت شدن',
+        flagged:  '✕ علامت‌گذاری شد — این شخص متفاوته',
+        ignored:  '— نادیده گرفته شد',
+      };
+      actionsDiv.innerHTML = `<div class="sync-done" style="color:${action==='accepted'?'#34d399':action==='flagged'?'#f87171':'var(--text-muted)'};">${msgs[action]}</div>`;
+    }
+  }catch(e){
+    actionsDiv.innerHTML = '<div class="sync-done" style="color:#f87171;">خطا در پردازش</div>';
+  }
+}
+
+function getCookie(name){
+  const v = document.cookie.match('(^|;) ?'+name+'=([^;]*)(;|$)');
+  return v ? v[2] : null;
+}
+</script>
+{% endblock %}

@@ -26,7 +26,7 @@ class RelationshipForm(forms.ModelForm):
 
     class Meta:
         model = Relationship
-        fields = "__all__"
+        fields = ['source', 'target', 'rel', 'strength', 'status', 'met_at']
 
         widgets = {
             "source":   forms.Select(attrs={"class": "form-select"}),
@@ -40,7 +40,8 @@ class RelationshipForm(forms.ModelForm):
 class EventForm(forms.ModelForm):
     class Meta:
         model = Event
-        fields = '__all__'
+        # owner is set programmatically in the view — never expose it
+        fields = ['title', 'date', 'description', 'participants']
         widgets = {
             'title':        forms.TextInput(attrs={'class': 'form-control'}),
             'date':         forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),

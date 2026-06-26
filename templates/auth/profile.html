@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}پروفایل — FamilyGraph{% endblock %}
+{% block page_title %}⚙ پروفایل و تنظیمات{% endblock %}
+{% block nav_settings %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.profile-grid{ display:grid; grid-template-columns:280px 1fr; gap:20px; }
+.avatar-section{ text-align:center; }
+.avatar-img{
+  width:100px; height:100px; border-radius:50%; object-fit:cover;
+  border:3px solid var(--primary-border);
+  box-shadow:0 0 24px rgba(99,102,241,.4);
+}
+.avatar-placeholder{
+  width:100px; height:100px; border-radius:50%;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:36px; font-weight:900; color:#fff;
+  box-shadow:0 0 24px rgba(99,102,241,.4);
+  border:3px solid var(--primary-border);
+}
+.trust-ring{
+  width:80px; height:80px; margin:0 auto 8px;
+  position:relative;
+}
+.trust-ring svg{ transform:rotate(-90deg); }
+.trust-val{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; }
+.trust-label{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+.section-title{ font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:16px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+
+.field{ margin-bottom:14px; }
+.field label{ display:block; font-size:12px; font-weight:600; color:var(--text-soft); margin-bottom:6px; }
+.field input,.field textarea,.field select{
+  width:100%; background:rgba(255,255,255,.05); border:1px solid var(--border); border-radius:10px;
+  padding:10px 14px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:13px;
+}
+.field input:focus,.field textarea:focus{ outline:none; border-color:var(--primary-border); box-shadow:0 0 0 3px rgba(99,102,241,.1); }
+.field textarea{ resize:vertical; min-height:72px; }
+.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+.toggle-wrap{ display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--card); border:1px solid var(--border); border-radius:10px; }
+.toggle-label{ flex:1; font-size:13px; font-weight:600; }
+.toggle-sub{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+.toggle{ position:relative; width:42px; height:22px; flex-shrink:0; }
+.toggle input{ opacity:0; width:0; height:0; }
+.toggle-slider{ position:absolute; inset:0; background:rgba(255,255,255,.1); border-radius:22px; cursor:pointer; transition:.3s; border:1px solid rgba(255,255,255,.1); }
+.toggle input:checked + .toggle-slider{ background:var(--primary); }
+.toggle-slider::before{ content:''; position:absolute; width:16px; height:16px; bottom:2px; right:2px; background:#fff; border-radius:50%; transition:.3s; }
+.toggle input:checked + .toggle-slider::before{ transform:translateX(-20px); }
+
+.save-row{ display:flex; gap:10px; margin-top:6px; }
+
+.badge-public{ display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; background:rgba(16,185,129,.1); color:#34d399; border:1px solid rgba(16,185,129,.2); }
+.badge-private{ display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; background:rgba(99,102,241,.1); color:var(--primary-light); border:1px solid var(--primary-border); }
+
+.saved-msg{ display:flex; align-items:center; gap:6px; padding:8px 14px; background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2); border-radius:10px; font-size:13px; color:#34d399; margin-bottom:14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if saved %}<div class="saved-msg">✓ تغییرات ذخیره شد</div>{% endif %}
+{% if error %}<div style="background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.2);border-radius:10px;padding:10px 14px;color:#fb7185;font-size:13px;margin-bottom:14px;">⚠ {{ error }}</div>{% endif %}
+
+<div class="profile-grid">
+
+  <!-- Left: Avatar + Stats -->
+  <div>
+    <div class="card avatar-section" style="padding:28px 20px;">
+      {% if user.avatar %}
+        <img src="{{ user.avatar.url }}" class="avatar-img" alt="avatar">
+      {% else %}
+        <div class="avatar-placeholder">{{ user.username|first|upper }}</div>
+      {% endif %}
+      <div style="margin-top:14px;font-size:16px;font-weight:700;">{{ user.get_full_name|default:user.username }}</div>
+      <div style="font-size:13px;color:var(--text-muted);margin-top:3px;">@{{ user.username }}</div>
+      <div style="margin-top:10px;">
+        {% if user.is_public %}
+          <span class="badge-public">🌐 عمومی</span>
+        {% else %}
+          <span class="badge-private">🔒 خصوصی</span>
+        {% endif %}
+      </div>
+
+      <!-- Trust Score Ring -->
+      <div style="margin-top:20px;">
+        <div class="trust-ring">
+          <svg width="80" height="80" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="6"/>
+            <circle cx="40" cy="40" r="34" fill="none"
+              stroke="{% if user.trust_score >= 70 %}#10b981{% elif user.trust_score >= 40 %}#f59e0b{% else %}#ef4444{% endif %}"
+              stroke-width="6"
+              stroke-dasharray="{{ user.trust_score|default:80 }} 100"
+              stroke-linecap="round"
+              style="transition:stroke-dasharray .6s ease;"/>
+          </svg>
+          <div class="trust-val">{{ user.trust_score }}</div>
+        </div>
+        <div class="trust-label">امتیاز اعتماد</div>
+      </div>
+
+      <!-- Stats -->
+      <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center;">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;">
+          <div style="font-size:20px;font-weight:800;color:var(--primary-light);">{{ user.nodes.count }}</div>
+          <div style="font-size:11px;color:var(--text-muted);">نود</div>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;">
+          <div style="font-size:20px;font-weight:800;color:var(--secondary);">{{ user.relationships.count }}</div>
+          <div style="font-size:11px;color:var(--text-muted);">رابطه</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Edit Forms -->
+  <div>
+
+    <!-- Profile Info -->
+    <div class="card">
+      <div class="section-title">اطلاعات پروفایل</div>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="profile">
+
+        <div class="field-row">
+          <div class="field">
+            <label>نام</label>
+            <input type="text" name="first_name" value="{{ user.first_name }}" placeholder="سجاد">
+          </div>
+          <div class="field">
+            <label>نام خانوادگی</label>
+            <input type="text" name="last_name" value="{{ user.last_name }}" placeholder="انگوتی">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>درباره من</label>
+          <textarea name="bio" placeholder="چند جمله درباره خودت...">{{ user.bio }}</textarea>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>شغل</label>
+            <input type="text" name="career" value="{{ user.career }}" placeholder="برنامه‌نویس">
+          </div>
+          <div class="field">
+            <label>شهر</label>
+            <input type="text" name="city" value="{{ user.city }}" placeholder="تهران">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>کشور</label>
+          <input type="text" name="country" value="{{ user.country }}" placeholder="ایران">
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>تاریخ تولد</label>
+            <input type="date" name="birth_date" value="{{ user.birth_date|date:'Y-m-d'|default:'' }}" dir="ltr">
+          </div>
+          <div class="field">
+            <label>شماره تلفن</label>
+            <input type="tel" name="phone_number" value="{{ self_node.phone_number|default:'' }}" placeholder="09..." dir="ltr">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>لقب / اسم مستعار</label>
+          <input type="text" name="nickname" value="{{ self_node.nickname|default:'' }}" placeholder="اختیاری">
+        </div>
+
+        <div class="field">
+          <label>آواتار</label>
+          <input type="file" name="avatar" accept="image/*">
+        </div>
+
+        <!-- Public toggle -->
+        <div class="toggle-wrap" style="margin-bottom:18px;">
+          <div>
+            <div class="toggle-label">حساب عمومی</div>
+            <div class="toggle-sub">حسابت قابل جستجوست — فقط نودها و رابطه‌هایی که خودت عمومی کنی دیده می‌شن</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" name="is_public" {% if user.is_public %}checked{% endif %}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="save-row">
+          <button type="submit" class="btn btn-primary">💾 ذخیره تغییرات</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card">
+      <div class="section-title">تغییر رمز عبور</div>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="password">
+
+        <div class="field">
+          <label>رمز عبور فعلی</label>
+          <input type="password" name="old_password" autocomplete="current-password" dir="ltr">
+        </div>
+        <div class="field">
+          <label>رمز عبور جدید</label>
+          <input type="password" name="new_password" autocomplete="new-password" dir="ltr">
+        </div>
+        <div class="field">
+          <label>تکرار رمز جدید</label>
+          <input type="password" name="new_password2" autocomplete="new-password" dir="ltr">
+        </div>
+
+        <div class="save-row">
+          <button type="submit" class="btn btn-primary">🔑 تغییر رمز</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Root Node -->
+    <div class="card">
+      <div class="section-title">نود اصلی (من در گراف)</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+        این نود نقطه مرکزی ego-network هست. گراف حول این نود رسم می‌شه.
+      </p>
+      {% if user.root_node %}
+      <div style="margin-bottom:12px;">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;background:rgba(99,102,241,.12);color:#a5b4fc;border:1px solid rgba(99,102,241,.25);">
+          ✓ فعلی: <strong>{{ user.root_node.username }}</strong>
+        </span>
+      </div>
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="root_node">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <select name="root_node_id" style="flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13px;">
+            <option value="">— انتخاب نشده —</option>
+            {% for node in all_nodes %}
+            <option value="{{ node.id }}" {% if node == user.root_node %}selected{% endif %}>
+              {{ node.username }}{% if node.first_name %} — {{ node.first_name }} {{ node.last_name }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary">ذخیره</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Export Data -->
+    <div class="card" style="margin-top:16px;">
+      <div class="section-title">خروجی داده</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+        کل گراف، روابط و خاطراتت رو دانلود کن (فرمت JSON).
+      </p>
+      <a href="{% url 'export_graph' %}" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;">
+        ⬇ دانلود گراف (JSON)
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

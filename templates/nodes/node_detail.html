@@ -1,347 +1,710 @@
 {% extends "base.html" %}
-{% block title %}{{ node.username }} — FamilyGraph{% endblock %}
-{% block page_title %}پروفایل{% endblock %}
+{% block title %}{{ node.display_name }} — FamilyGraph{% endblock %}
+{% block page_title %}◉ افراد <span class="page-title-sep">›</span> {{ node.display_name }}{% endblock %}
 {% block nav_nodes %}active{% endblock %}
 {% block topbar_actions %}
-  <a href="{% url 'node_list' %}" class="btn btn-sm">← نودها</a>
-  <a href="{% url 'node_update' node.id %}" class="btn btn-sm">ویرایش</a>
-  <a href="{% url 'node_delete' node.id %}" class="btn btn-sm btn-danger">حذف</a>
+  <a href="{% url 'node_update' node.id %}" class="btn btn-sm">✎ ویرایش</a>
+  <a href="{% url 'node_delete' node.id %}" class="btn btn-sm btn-danger">✕ حذف</a>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-.detail-stack{display:flex;flex-direction:column;gap:16px;}
 
-/* ─── PROFILE CARD ─── */
-.profile-card{background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);}
-.profile-banner{height:80px;background:linear-gradient(135deg,rgba(99,102,241,.25) 0%,rgba(139,92,246,.15) 50%,rgba(59,130,246,.10) 100%);position:relative;}
-.profile-banner::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.3));}
-.profile-body{display:flex;align-items:flex-end;gap:18px;padding:0 24px 20px;}
-.avatar-wrap{margin-top:-36px;flex-shrink:0;position:relative;z-index:1;}
-.avatar-ring{display:inline-flex;padding:3px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 0 20px rgba(99,102,241,.4);outline:4px solid var(--card);}
-.avatar{width:72px;height:72px;border-radius:50%;overflow:hidden;display:block;}
-.avatar img{width:100%;height:100%;object-fit:cover;}
-.avatar-ph{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#1e1e38,#2a2a4a);display:flex;align-items:center;justify-content:center;color:var(--primary);font-weight:700;font-size:28px;}
-.profile-info{flex:1;padding-top:12px;}
-.profile-name{font-size:17px;font-weight:700;margin-bottom:2px;}
-.profile-username{font-size:12px;color:var(--text-muted);margin-bottom:12px;}
-.profile-meta{display:flex;flex-wrap:wrap;gap:8px;}
-.meta-tag{font-size:12px;background:var(--surface);border:1px solid var(--border);color:var(--text-soft);padding:3px 10px;border-radius:20px;}
-.meta-tag strong{color:var(--primary);font-weight:600;margin-right:4px;}
-.profile-stats{display:flex;gap:20px;margin-top:14px;padding:14px 24px 16px;border-top:1px solid var(--border);}
-.stat-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-soft);}
-.stat-num{font-size:20px;font-weight:700;color:var(--primary);line-height:1;}
+/* ─── HERO CARD ─── */
+.hero{
+  background:var(--card);
+  border:1px solid var(--border-accent);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  box-shadow:0 8px 40px rgba(0,0,0,.55), 0 0 80px rgba(99,102,241,.06);
+  margin-bottom:18px;
+}
 
-/* Network metrics row */
-.metrics-row{display:flex;gap:12px;flex-wrap:wrap;padding:0 24px 16px;}
-.metric-chip{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--text-soft);}
-.metric-chip .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.metric-chip strong{color:var(--fg);}
+.hero-banner{
+  height:100px;
+  position:relative;
+  background:linear-gradient(135deg,
+    rgba(99,102,241,.35) 0%,
+    rgba(139,92,246,.22) 40%,
+    rgba(6,182,212,.12) 80%,
+    rgba(59,130,246,.08) 100%
+  );
+  overflow:hidden;
+}
+.hero-banner::before{
+  content:'';
+  position:absolute; inset:0;
+  background:repeating-linear-gradient(
+    -45deg,
+    rgba(255,255,255,.015) 0px,
+    rgba(255,255,255,.015) 1px,
+    transparent 1px,
+    transparent 20px
+  );
+}
+.hero-banner::after{
+  content:'';
+  position:absolute;
+  bottom:0; left:0; right:0;
+  height:60%;
+  background:linear-gradient(to top, var(--card), transparent);
+}
 
-/* Progressive disclosure */
-.disclosure-btn{display:flex;align-items:center;gap:6px;background:none;border:1px solid var(--border);color:var(--text-muted);font-size:12px;padding:6px 14px;border-radius:20px;cursor:pointer;font-family:'Vazirmatn',sans-serif;transition:var(--transition);margin:0 24px 16px;}
-.disclosure-btn:hover{border-color:var(--primary);color:var(--primary);}
-.disclosure-extra{display:none;}
-.disclosure-extra.open{display:block;}
+.hero-body{
+  display:flex;
+  align-items:flex-end;
+  gap:20px;
+  padding:0 26px 22px;
+}
 
-/* ─── SECTION CARD ─── */
-.section-card{background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04);}
-.section-head{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface);}
-.section-head-title{font-size:13px;font-weight:600;}
-.chip{font-size:11px;background:var(--border);color:var(--text-muted);padding:2px 9px;border-radius:20px;}
+.hero-av{
+  margin-top:-48px;
+  flex-shrink:0;
+  position:relative;
+  z-index:1;
+}
+.av-ring{
+  padding:3px;
+  border-radius:50%;
+  background:var(--grad-brand);
+  box-shadow:0 0 28px rgba(99,102,241,.5), 0 4px 16px rgba(0,0,0,.6);
+  outline:4px solid var(--card);
+  display:inline-flex;
+}
+.av-inner{
+  width:80px; height:80px;
+  border-radius:50%;
+  overflow:hidden;
+  display:block;
+}
+.av-inner img{ width:100%; height:100%; object-fit:cover; }
+.av-ph{
+  width:80px; height:80px;
+  border-radius:50%;
+  background:linear-gradient(135deg,#1e1e38,#2a2a50);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:30px;
+  color:var(--primary-light);
+}
 
-/* Relations */
-.rel-list{padding:6px 12px;}
-.rel-row{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;transition:var(--transition);}
-.rel-row:hover{background:var(--primary-glow);}
-.rel-nodes{display:flex;align-items:center;gap:8px;font-size:13px;}
-.rel-nodes a{color:var(--primary);text-decoration:none;font-weight:500;}
-.rel-nodes a:hover{text-decoration:underline;}
-.rel-me{font-weight:600;}
-.rel-arrow{color:var(--text-muted);font-size:10px;}
-.rel-badge{font-size:11px;background:var(--border);color:var(--text-muted);padding:3px 10px;border-radius:20px;}
+.hero-info{
+  flex:1;
+  padding-top:16px;
+}
+.hero-name{
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:-.3px;
+  margin-bottom:2px;
+  line-height:1.2;
+}
+.hero-username{
+  font-size:12px;
+  color:var(--text-muted);
+  margin-bottom:10px;
+}
+.hero-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.hero-tag{
+  font-size:11.5px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  color:var(--text-soft);
+  padding:3px 10px;
+  border-radius:20px;
+  display:flex;
+  gap:4px;
+  align-items:center;
+}
+.hero-tag strong{ color:var(--primary-light); font-weight:600; }
 
-/* Info */
-.info-list{padding:14px 16px;display:flex;flex-direction:column;gap:8px;}
-.info-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text-soft);}
+/* ─── HERO FOOTER: STATS + METRICS ─── */
+.hero-footer{
+  display:flex;
+  gap:0;
+  border-top:1px solid var(--border);
+}
+.hf-stat{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:14px 10px;
+  border-left:1px solid var(--border);
+  transition:background var(--t);
+}
+.hf-stat:first-child{ border-left:none; }
+.hf-stat:hover{ background:rgba(99,102,241,.04); }
+.hf-num{
+  font-size:22px;
+  font-weight:800;
+  background:var(--grad-brand);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  line-height:1;
+}
+.hf-label{
+  font-size:10.5px;
+  color:var(--text-muted);
+  margin-top:3px;
+  letter-spacing:.4px;
+}
 
-/* Events timeline */
-.event-list{padding:12px 16px;display:flex;flex-direction:column;gap:10px;}
-.event-item{display:flex;gap:14px;align-items:flex-start;}
-.event-dot{width:8px;height:8px;border-radius:50%;background:var(--primary);flex-shrink:0;margin-top:5px;}
-.event-content{flex:1;}
-.event-title{font-size:13px;font-weight:600;margin-bottom:2px;}
-.event-date{font-size:11px;color:var(--text-muted);}
-.event-desc{font-size:12px;color:var(--text-soft);margin-top:3px;}
+.hero-metrics{
+  padding:12px 26px 16px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.metric-tag{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:4px 12px;
+  font-size:11.5px;
+  color:var(--text-soft);
+}
+.metric-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 
-.empty-sec{padding:28px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
+/* ─── SECTION ─── */
+.section{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  margin-bottom:14px;
+  box-shadow:0 4px 20px rgba(0,0,0,.38);
+  transition:border-color var(--t);
+}
+.section:hover{ border-color:var(--border-strong); }
 
-/* AI */
-.ai-summary-card{background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border-accent);border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.4),0 0 40px rgba(99,102,241,.06);}
-.ai-summary-head{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface);}
-.ai-summary-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--primary);}
-.ai-summary-body{padding:18px 20px;font-size:13.5px;line-height:1.9;color:var(--text-soft);min-height:56px;}
-.ai-summary-body p{margin:0;}
-.ai-summary-body p+p{margin-top:10px;}
-.btn-ai{padding:7px 16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:var(--radius);font-family:'Vazirmatn',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:var(--transition);box-shadow:0 0 16px rgba(99,102,241,.35);}
-.btn-ai:hover{opacity:.88;transform:translateY(-1px);}
-.btn-ai:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+.section-hd{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:13px 18px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.section-hd-title{
+  font-size:12.5px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--text-soft);
+}
+.section-hd-title::before{
+  content:'';
+  width:3px; height:12px;
+  border-radius:2px;
+  background:var(--grad-brand);
+}
+
+/* ─── RELATIONSHIPS ─── */
+.rel-list{ padding:4px 10px; }
+
+.rel-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 8px;
+  border-radius:var(--radius-sm);
+  transition:background var(--t);
+  cursor:default;
+}
+.rel-row:hover{ background:rgba(99,102,241,.06); }
+
+.rel-avatars{
+  display:flex;
+  align-items:center;
+  gap:0;
+}
+.rel-av{
+  width:34px; height:34px;
+  border-radius:50%;
+  background:var(--grad-brand);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:13px;
+  font-weight:700;
+  color:#fff;
+  border:2px solid var(--card);
+  flex-shrink:0;
+  font-size:12px;
+  box-shadow:0 0 10px rgba(99,102,241,.3);
+}
+.rel-av-secondary{
+  background:linear-gradient(135deg,#1e1e38,#2a2a50);
+  color:var(--primary-light);
+  margin-right:-10px;
+  z-index:0;
+}
+.rel-av-primary{ z-index:1; }
+
+.rel-line{
+  font-size:12px;
+  color:var(--text-soft);
+  margin:0 12px;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+.rel-nodes{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12.5px;
+}
+.rel-me{ font-weight:700; color:var(--text); }
+.rel-other a{
+  color:var(--primary-light);
+  text-decoration:none;
+  font-weight:500;
+}
+.rel-other a:hover{ text-decoration:underline; }
+.rel-arrow{ color:var(--text-dim); font-size:11px; }
+.rel-type{ font-size:11px; color:var(--text-muted); margin-top:1px; }
+
+.rel-right{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:5px;
+}
+
+.strength-row{
+  display:flex;
+  gap:3px;
+  align-items:center;
+}
+.sp{
+  width:12px; height:4px;
+  border-radius:2px;
+  background:var(--border);
+  transition:background var(--t);
+}
+.sp.on{ background:var(--primary); }
+.sp.on.s4{ background:#a5b4fc; }
+.sp.on.s5{ background:#c4b5fd; box-shadow:0 0 5px rgba(196,181,253,.6); }
+
+.rel-status{
+  font-size:10px;
+  padding:1px 7px;
+  border-radius:10px;
+}
+.rel-status.active{ background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.22); }
+.rel-status.distant{ background:rgba(245,158,11,.10); color:#fbbf24; border:1px solid rgba(245,158,11,.20); }
+.rel-status.inactive{ background:rgba(255,255,255,.05); color:var(--text-muted); border:1px solid var(--border); }
+
+/* ─── EVENTS ─── */
+.timeline{ padding:10px 18px; display:flex; flex-direction:column; gap:0; }
+.tl-item{ display:flex; gap:14px; align-items:flex-start; position:relative; padding-bottom:14px; }
+.tl-item:last-child{ padding-bottom:6px; }
+.tl-item::before{
+  content:'';
+  position:absolute;
+  right:7px; top:20px; bottom:0;
+  width:1px;
+  background:linear-gradient(to bottom, var(--primary-border), transparent);
+}
+.tl-item:last-child::before{ display:none; }
+.tl-dot{
+  width:16px; height:16px;
+  border-radius:50%;
+  background:var(--grad-brand);
+  flex-shrink:0;
+  margin-top:2px;
+  box-shadow:0 0 10px rgba(99,102,241,.5);
+  position:relative; z-index:1;
+}
+.tl-content{ flex:1; }
+.tl-title{ font-size:13px; font-weight:600; margin-bottom:2px; }
+.tl-date{ font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+.tl-desc{ font-size:12px; color:var(--text-soft); line-height:1.55; }
+
+/* ─── JOURNAL ENTRIES ─── */
+.journal-preview{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 14px;
+}
+.je-item{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  overflow:hidden;
+  cursor:pointer;
+  transition:border-color var(--t);
+}
+.je-item:hover{ border-color:var(--primary-border); }
+.je-top{
+  display:flex;
+  gap:10px;
+  padding:10px 14px;
+  align-items:flex-start;
+}
+.je-img{
+  width:52px; height:52px;
+  border-radius:var(--radius-sm);
+  object-fit:cover;
+  border:1px solid var(--border);
+  flex-shrink:0;
+}
+.je-info{ flex:1; overflow:hidden; }
+.je-date{ font-size:10.5px; color:var(--text-muted); margin-bottom:3px; }
+.je-text{ font-size:12.5px; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.5; }
+.je-arrow{ color:var(--text-dim); font-size:12px; flex-shrink:0; margin-top:2px; transition:transform var(--t); }
+.je-item.open .je-arrow{ transform:rotate(180deg); }
+.je-full{
+  display:none;
+  border-top:1px solid var(--border);
+  padding:12px 14px;
+}
+.je-full.open{ display:block; }
+.je-full-text{ font-size:12.5px; color:var(--text-soft); line-height:1.8; margin-bottom:8px; }
+.je-imgs{ display:flex; gap:6px; flex-wrap:wrap; }
+.je-imgs a img{ height:72px; border-radius:6px; object-fit:cover; border:1px solid var(--border); }
+
+/* ─── INFO ─── */
+.info-list{ padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
+.info-item{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px 14px;
+  font-size:13px;
+  color:var(--text-soft);
+}
+
+/* ─── AI CARD ─── */
+.ai-card{
+  background:rgba(10,10,30,.5);
+  border:1px solid var(--border-accent);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.5), 0 0 60px rgba(99,102,241,.05);
+  margin-bottom:14px;
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+}
+.light .ai-card{ background:rgba(255,255,255,.8); }
+.ai-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 20px;
+  border-bottom:1px solid var(--border-accent);
+  background:rgba(99,102,241,.04);
+}
+.ai-head-title{
+  font-size:13px;
+  font-weight:700;
+  color:var(--primary-light);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.ai-body{
+  padding:20px;
+  font-size:13.5px;
+  line-height:2;
+  color:var(--text-soft);
+  min-height:60px;
+}
+.ai-body p{ margin:0; }
+.ai-body p+p{ margin-top:10px; }
+
+.btn-ai{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 16px;
+  background:var(--grad-brand);
+  color:#fff;
+  border:none;
+  border-radius:var(--radius-sm);
+  font-family:'Vazirmatn',sans-serif;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  transition:all var(--t);
+  box-shadow:0 0 18px rgba(99,102,241,.38);
+}
+.btn-ai:hover{ opacity:.88; transform:translateY(-1px); box-shadow:0 0 28px rgba(99,102,241,.5); }
+.btn-ai:disabled{ opacity:.35; cursor:not-allowed; transform:none; }
+
+.empty-sec{ padding:28px 20px; text-align:center; color:var(--text-muted); font-size:13px; }
+
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="detail-stack">
 
-  <!-- PROFILE CARD -->
-  <div class="profile-card">
-    <div class="profile-banner"></div>
-    <div class="profile-body">
-      <div class="avatar-wrap">
-        <div class="avatar-ring">
-          {% if node.picture %}
-            <div class="avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
-          {% else %}
-            <div class="avatar-ph">{{ node.username|first|upper }}</div>
-          {% endif %}
-        </div>
-      </div>
-      <div class="profile-info">
-        <div class="profile-name">
-          {% if node.nickname %}{{ node.nickname }}
-          {% elif node.first_name or node.last_name %}{{ node.first_name }} {{ node.last_name }}
-          {% elif node.name %}{{ node.name }}
-          {% else %}{{ node.username }}{% endif %}
-        </div>
-        <div class="profile-username">@{{ node.username }}</div>
-        <div class="profile-meta">
-          {% if node.career %}<span class="meta-tag"><strong>شغل</strong>{{ node.career }}</span>{% endif %}
-          {% if node.birth_day %}<span class="meta-tag"><strong>تولد</strong>{{ node.birth_day }}</span>{% endif %}
-          {% if node.phone_number %}<span class="meta-tag" dir="ltr"><strong>تلفن</strong>{{ node.phone_number }}</span>{% endif %}
-        </div>
+<!-- ══ HERO ══ -->
+<div class="hero">
+  <div class="hero-banner"></div>
+
+  <div class="hero-body">
+    <div class="hero-av">
+      <div class="av-ring">
+        {% if node.picture %}
+          <div class="av-inner"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
+        {% else %}
+          <div class="av-ph">{{ node.display_name|first|upper }}</div>
+        {% endif %}
       </div>
     </div>
 
-    <!-- Basic stats -->
-    <div class="profile-stats">
-      <div class="stat-item">
-        <span class="stat-num">{{ relationships|length }}</span>
-        <span>روابط</span>
+    <div class="hero-info">
+      <div class="hero-name">{{ node.display_name }}</div>
+      <div class="hero-username">
+        @{{ node.username }}
+        {% if request.user.root_node and node.id == request.user.root_node.id %}
+        <span class="chip" style="font-size:10px;padding:1px 7px;margin-right:6px;">★ من</span>
+        {% endif %}
+        {% if node.is_public %}<span class="chip chip-success" style="font-size:10px;padding:1px 7px;">🌐 عمومی</span>{% endif %}
       </div>
-      <div class="stat-item">
-        <span class="stat-num">{{ informations|length }}</span>
-        <span>اطلاعات</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-num">{{ events|length }}</span>
-        <span>رویداد</span>
+      <div class="hero-tags">
+        {% if node.career %}<span class="hero-tag">💼 <strong>{{ node.career }}</strong></span>{% endif %}
+        {% if node.birth_day %}<span class="hero-tag">🎂 <strong>{{ node.birth_day|date:"j F Y" }}</strong></span>{% endif %}
+        {% if node.phone_number %}<span class="hero-tag" dir="ltr">📞 <strong>{{ node.phone_number }}</strong></span>{% endif %}
+        {% if node.nickname and node.nickname != node.display_name %}<span class="hero-tag">✦ <strong>{{ node.nickname }}</strong></span>{% endif %}
       </div>
     </div>
+  </div>
 
-    <!-- Network metrics (always shown) -->
-    {% if community_idx is not None or degree_centrality is not None %}
-    <div class="metrics-row">
-      {% if community_idx is not None %}
-      <div class="metric-chip">
-        <div class="dot" style="background:{{ community_color }};box-shadow:0 0 6px {{ community_color }}66;"></div>
-        <span>Community <strong>#{{ community_idx|add:1 }}</strong></span>
-      </div>
-      {% endif %}
-      {% if degree_centrality is not None %}
-      <div class="metric-chip">
-        <div class="dot" style="background:#a5b4fc;"></div>
-        <span>Degree Centrality <strong>{{ degree_centrality }}</strong></span>
-      </div>
-      {% endif %}
-      {% if betweenness_centrality is not None %}
-      <div class="metric-chip">
-        <div class="dot" style="background:#34d399;"></div>
-        <span>Betweenness <strong>{{ betweenness_centrality }}</strong></span>
-      </div>
-      {% endif %}
+  <!-- Footer stats -->
+  <div class="hero-footer">
+    <div class="hf-stat">
+      <div class="hf-num">{{ relationships|length }}</div>
+      <div class="hf-label">رابطه</div>
     </div>
-    {% endif %}
-
-    <!-- Progressive disclosure toggle -->
-    {% if node.first_name or node.last_name or node.nickname or node.birth_day or node.phone_number %}
-    <button class="disclosure-btn" id="discloseBtn" onclick="toggleDisclosure()">
-      <span id="discloseBtnText">نمایش جزئیات بیشتر</span>
-      <span id="discloseArrow">▾</span>
-    </button>
-    <div class="disclosure-extra" id="disclosureExtra">
-      <div class="info-list" style="padding:0 24px 16px;">
-        {% if node.first_name %}<div class="info-item"><strong>نام:</strong> {{ node.first_name }}</div>{% endif %}
-        {% if node.last_name %}<div class="info-item"><strong>نام خانوادگی:</strong> {{ node.last_name }}</div>{% endif %}
-        {% if node.nickname %}<div class="info-item"><strong>لقب:</strong> {{ node.nickname }}</div>{% endif %}
-        {% if node.birth_day %}<div class="info-item"><strong>تولد:</strong> {{ node.birth_day }}</div>{% endif %}
-        {% if node.phone_number %}<div class="info-item"><strong>تلفن:</strong> {{ node.phone_number }}</div>{% endif %}
-      </div>
+    <div class="hf-stat">
+      <div class="hf-num">{{ events|length }}</div>
+      <div class="hf-label">رویداد</div>
+    </div>
+    <div class="hf-stat">
+      <div class="hf-num">{{ informations|length }}</div>
+      <div class="hf-label">اطلاعات</div>
+    </div>
+    {% if journal_entries %}
+    <div class="hf-stat">
+      <div class="hf-num">{{ journal_entries|length }}</div>
+      <div class="hf-label">یادداشت</div>
     </div>
     {% endif %}
   </div>
 
-  <!-- RELATIONS -->
-  <div class="section-card">
-    <div class="section-head">
-      <span class="section-head-title">روابط</span>
-      <span class="chip">{{ relationships|length }}</span>
+  <!-- Network metrics -->
+  {% if community_idx is not None or degree_centrality is not None %}
+  <div class="hero-metrics">
+    {% if community_idx is not None %}
+    <div class="metric-tag">
+      <div class="metric-dot" style="background:{{ community_color }};box-shadow:0 0 6px {{ community_color }}66;"></div>
+      Community <strong style="color:var(--text);margin-right:3px;">#{{ community_idx|add:1 }}</strong>
     </div>
-    {% if relationships %}
-      <div class="rel-list">
-        {% for r in relationships %}
-        <div class="rel-row">
-          <div class="rel-nodes">
-            {% if r.source == node %}
-              <span class="rel-me">{{ r.source.username }}</span>
-              <span class="rel-arrow">→</span>
-              <a href="{% url 'node_detail' r.target.id %}">{{ r.target.username }}</a>
-            {% else %}
-              <a href="{% url 'node_detail' r.source.id %}">{{ r.source.username }}</a>
-              <span class="rel-arrow">→</span>
-              <span class="rel-me">{{ r.target.username }}</span>
-            {% endif %}
-          </div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <span class="rel-badge">{{ r.rel|default:"—" }}</span>
-            <span class="rel-badge">💪 {{ r.strength }}/5</span>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <div class="empty-sec">هیچ رابطه‌ای ثبت نشده</div>
     {% endif %}
-  </div>
-
-  <!-- EVENTS -->
-  {% if events %}
-  <div class="section-card">
-    <div class="section-head">
-      <span class="section-head-title">رویدادهای مشترک</span>
-      <span class="chip">{{ events|length }}</span>
+    {% if degree_centrality is not None %}
+    <div class="metric-tag">
+      <div class="metric-dot" style="background:#a5b4fc;"></div>
+      Degree <strong style="color:var(--text);margin-right:3px;">{{ degree_centrality }}</strong>
     </div>
-    <div class="event-list">
-      {% for ev in events %}
-      <div class="event-item">
-        <div class="event-dot"></div>
-        <div class="event-content">
-          <div class="event-title">{{ ev.title }}</div>
-          <div class="event-date">{{ ev.date }}</div>
-          {% if ev.description %}<div class="event-desc">{{ ev.description }}</div>{% endif %}
-        </div>
-      </div>
-      {% endfor %}
+    {% endif %}
+    {% if betweenness_centrality is not None %}
+    <div class="metric-tag">
+      <div class="metric-dot" style="background:#34d399;"></div>
+      Betweenness <strong style="color:var(--text);margin-right:3px;">{{ betweenness_centrality }}</strong>
     </div>
+    {% endif %}
   </div>
   {% endif %}
-
-  <!-- JOURNAL ENTRIES -->
-  {% if journal_entries %}
-  <div class="section-card">
-    <div class="section-head">
-      <span class="section-head-title">📓 یادداشت‌های مرتبط</span>
-      <span class="chip">{{ journal_entries|length }}</span>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px;padding:4px 0;">
-      {% for entry in journal_entries %}
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;"
-           onclick="var ef=this.querySelector('.entry-full');ef.style.display=ef.style.display==='none'?'block':'none'">
-        <!-- Thumbnail row -->
-        <div style="display:flex;gap:10px;padding:10px 14px;align-items:flex-start;">
-          {% with first_img=entry.images.first %}
-          {% if first_img %}
-          <img src="{{ first_img.image.url }}" style="width:52px;height:52px;border-radius:7px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);" alt="">
-          {% endif %}
-          {% endwith %}
-          <div style="flex:1;overflow:hidden;">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">
-              {% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}
-            </div>
-            <div style="font-size:13px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.text|truncatechars:70 }}</div>
-          </div>
-          <span style="color:var(--text-muted);font-size:12px;flex-shrink:0;margin-top:2px;">▾</span>
-        </div>
-        <!-- Full text (expandable) -->
-        <div class="entry-full" style="display:none;border-top:1px solid var(--border);padding:12px 14px;">
-          <p style="font-size:13px;color:var(--text-soft);line-height:1.8;margin:0 0 8px;">{{ entry.text }}</p>
-          {% with imgs=entry.images.all %}
-          {% if imgs %}
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-            {% for img in imgs %}
-            <a href="{{ img.image.url }}" target="_blank">
-              <img src="{{ img.image.url }}" style="height:80px;border-radius:7px;object-fit:cover;border:1px solid var(--border);" alt="">
-            </a>
-            {% endfor %}
-          </div>
-          {% endif %}
-          {% endwith %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- INFO -->
-  <div class="section-card">
-    <div class="section-head">
-      <span class="section-head-title">اطلاعات</span>
-      <span class="chip">{{ informations|length }}</span>
-    </div>
-    {% if informations %}
-      <div class="info-list">
-        {% for info in informations %}
-          <div class="info-item">{{ info.data }}</div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <div class="empty-sec">اطلاعاتی ثبت نشده</div>
-    {% endif %}
-  </div>
-
-  <!-- AI SUMMARY -->
-  <div class="ai-summary-card">
-    <div class="ai-summary-head">
-      <span class="ai-summary-title">✦ تحلیل AI</span>
-      <button class="btn-ai" id="aiBtn" onclick="loadSummary()">تولید خلاصه</button>
-    </div>
-    <div class="ai-summary-body" id="aiBody">
-      <span style="color:var(--text-muted);font-style:italic">روی «تولید خلاصه» کلیک کن</span>
-    </div>
-  </div>
-
 </div>
 
+<!-- ══ RELATIONSHIPS ══ -->
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">روابط</span>
+    <span class="chip chip-gray">{{ relationships|length }}</span>
+  </div>
+  {% if relationships %}
+    <div class="rel-list">
+      {% for r in relationships %}
+      <div class="rel-row">
+
+        <div class="rel-avatars">
+          <div class="rel-av rel-av-primary">{{ r.source.display_name|first|upper }}</div>
+          <div class="rel-av rel-av-secondary">{{ r.target.display_name|first|upper }}</div>
+        </div>
+
+        <div class="rel-line">
+          <div class="rel-nodes">
+            {% if r.source == node %}
+              <span class="rel-me">{{ r.source.display_name }}</span>
+              <span class="rel-arrow">→</span>
+              <span class="rel-other"><a href="{% url 'node_detail' r.target.id %}">{{ r.target.display_name }}</a></span>
+            {% else %}
+              <span class="rel-other"><a href="{% url 'node_detail' r.source.id %}">{{ r.source.display_name }}</a></span>
+              <span class="rel-arrow">→</span>
+              <span class="rel-me">{{ r.target.display_name }}</span>
+            {% endif %}
+          </div>
+          {% if r.rel %}<div class="rel-type">{{ r.rel }}</div>{% endif %}
+        </div>
+
+        <div class="rel-right">
+          <div class="strength-row">
+            {% for i in "12345" %}
+            <div class="sp {% if forloop.counter <= r.strength %}on {% if r.strength >= 5 %}s5{% elif r.strength >= 4 %}s4{% endif %}{% endif %}"></div>
+            {% endfor %}
+          </div>
+          <span class="rel-status {{ r.status }}">
+            {% if r.status == 'active' %}فعال{% elif r.status == 'distant' %}دور{% else %}غیرفعال{% endif %}
+          </span>
+        </div>
+
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-sec">هیچ رابطه‌ای ثبت نشده</div>
+  {% endif %}
+</div>
+
+<!-- ══ AI SUMMARY ══ -->
+<div class="ai-card">
+  <div class="ai-head">
+    <span class="ai-head-title">✦ تحلیل هوشمند</span>
+    <button class="btn-ai" id="aiBtn" onclick="loadSummary()">✦ تولید خلاصه</button>
+  </div>
+  <div class="ai-body" id="aiBody">
+    <span style="color:var(--text-muted);font-style:italic;font-size:13px;">
+      روی «تولید خلاصه» کلیک کن — AI یه تحلیل کامل از این شخص و روابطش می‌نویسه
+    </span>
+  </div>
+</div>
+
+<!-- ══ EVENTS ══ -->
+{% if events %}
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">رویدادهای مشترک</span>
+    <span class="chip chip-gray">{{ events|length }}</span>
+  </div>
+  <div class="timeline">
+    {% for ev in events %}
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-content">
+        <div class="tl-title">{{ ev.title }}</div>
+        <div class="tl-date">{{ ev.date|date:"j F Y" }}</div>
+        {% if ev.description %}<div class="tl-desc">{{ ev.description }}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ JOURNAL ══ -->
+{% if journal_entries %}
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">یادداشت‌های مرتبط</span>
+    <span class="chip chip-gray">{{ journal_entries|length }}</span>
+  </div>
+  <div class="journal-preview">
+    {% for entry in journal_entries %}
+    <div class="je-item" id="je{{ entry.id }}" onclick="toggleJe('{{ entry.id }}')">
+      <div class="je-top">
+        {% with fi=entry.images.first %}
+        {% if fi %}<img class="je-img" src="{{ fi.image.url }}" alt="">{% endif %}
+        {% endwith %}
+        <div class="je-info">
+          <div class="je-date">
+            {% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}
+            {% if entry.mood %} · {{ entry.mood }}{% endif %}
+          </div>
+          <div class="je-text">{{ entry.text|truncatechars:80 }}</div>
+        </div>
+        <span class="je-arrow">▾</span>
+      </div>
+      <div class="je-full" id="jef{{ entry.id }}">
+        <p class="je-full-text">{{ entry.text }}</p>
+        {% with imgs=entry.images.all %}
+        {% if imgs %}
+        <div class="je-imgs">
+          {% for img in imgs %}
+          <a href="{{ img.image.url }}" target="_blank"><img src="{{ img.image.url }}" alt=""></a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ══ INFO ══ -->
+{% if informations %}
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">اطلاعات</span>
+    <span class="chip chip-gray">{{ informations|length }}</span>
+  </div>
+  <div class="info-list">
+    {% for info in informations %}
+    <div class="info-item">{{ info.data }}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <script>
-function toggleDisclosure(){
-  const extra = document.getElementById('disclosureExtra');
-  const btn   = document.getElementById('discloseBtnText');
-  const arrow = document.getElementById('discloseArrow');
-  const open  = extra.classList.toggle('open');
-  btn.textContent = open ? 'بستن جزئیات' : 'نمایش جزئیات بیشتر';
-  arrow.textContent = open ? '▴' : '▾';
+function toggleJe(id){
+  const item = document.getElementById('je'+id);
+  const full = document.getElementById('jef'+id);
+  const isOpen = full.classList.toggle('open');
+  item.classList.toggle('open', isOpen);
 }
 
 async function loadSummary(){
-  let btn=document.getElementById("aiBtn"),body=document.getElementById("aiBody");
-  btn.disabled=true; btn.textContent="در حال تحلیل...";
-  body.innerHTML='<span style="color:var(--text-muted)">لحظه‌ای صبر کن...</span>';
+  const btn = document.getElementById('aiBtn');
+  const body = document.getElementById('aiBody');
+  btn.disabled = true;
+  btn.textContent = 'در حال تحلیل...';
+  body.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">✦ در حال پردازش...</span>';
   try{
-    let res=await fetch("/api/node/{{ node.id }}/summary/",{
-      method:"POST", headers:{"X-CSRFToken":getCookie("csrftoken")}
+    const res = await fetch('/api/node/{{ node.id }}/summary/', {
+      method:'POST',
+      headers:{'X-CSRFToken': getCookie('csrftoken')}
     });
-    let data=await res.json();
+    const data = await res.json();
     if(data.summary){
-      body.innerHTML=data.summary.split(/\n\n+/).map(p=>"<p>"+p.replace(/\n/g,"<br>")+"</p>").join("");
-    }else{
-      body.innerHTML='<span style="color:#f43f5e">خطا: '+(data.error||"نامشخص")+'</span>';
+      body.innerHTML = data.summary
+        .split(/\n\n+/)
+        .map(p=>'<p>'+p.replace(/\n/g,'<br>')+'</p>')
+        .join('');
+    } else {
+      body.innerHTML = '<span style="color:#f43f5e">خطا: '+(data.error||'نامشخص')+'</span>';
     }
   }catch(e){
-    body.innerHTML='<span style="color:#f43f5e">خطا در ارتباط با سرور</span>';
-  }finally{
-    btn.disabled=false; btn.textContent="تولید دوباره";
+    body.innerHTML = '<span style="color:#f43f5e">خطا در ارتباط با سرور</span>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↺ تولید دوباره';
   }
 }
-
-function getCookie(n){let v=document.cookie.match("(^|;)\\s*"+n+"\\s*=\\s*([^;]+)");return v?v.pop():""}
 </script>
 {% endblock %}

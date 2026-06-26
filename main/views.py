@@ -2,11 +2,14 @@ import json
 import logging
 import os
 from django.db.models import Q, ProtectedError
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_GET
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404, render
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.utils import timezone
 
 from .forms import NodeForm, RelationshipForm, EventForm
 from .models import Relationship, AppSettings, JournalEntry, JournalImage, AlertAction
@@ -48,11 +51,15 @@ COMMUNITY_PALETTE = [
     "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
 ]
 
-def _build_graph():
-    """Build a networkx Graph from DB. Returns (G, nodes_list, rels_list)."""
+def _build_graph(user=None):
+    """Build a networkx Graph from DB (filtered by user). Returns (G, nodes_list, rels_list)."""
     import networkx as nx
-    all_nodes = list(Node.objects.all())
-    all_rels  = list(Relationship.objects.select_related('source', 'target'))
+    if user is not None and user.is_authenticated:
+        all_nodes = list(Node.objects.filter(owner=user))
+        all_rels  = list(Relationship.objects.filter(owner=user).select_related('source', 'target'))
+    else:
+        all_nodes = list(Node.objects.all())
+        all_rels  = list(Relationship.objects.select_related('source', 'target'))
     G = nx.Graph()
     for n in all_nodes:
         G.add_node(n.id)
@@ -76,29 +83,24 @@ def _community_map(G):
     return result
 
 
-class GraphView(TemplateView):
+class GraphView(LoginRequiredMixin, TemplateView):
     template_name = "nodes/graph.html"
 
 
-class NodeListView(ListView):
+class NodeListView(LoginRequiredMixin, ListView):
     model = Node
     template_name = 'nodes/node_list.html'
     context_object_name = 'nodes'
     paginate_by = 24
 
     def get_queryset(self):
-        return Node.objects.all().only(
-            "id",
-            "username",
-            "picture",
-            "name",
-            "career"
-        )
+        return Node.objects.filter(owner=self.request.user).select_related('owner')
 
 
+@login_required
 def home(request):
-    nodes = Node.objects.all()
-    relationships = Relationship.objects.all()
+    nodes = Node.objects.filter(owner=request.user)
+    relationships = Relationship.objects.filter(owner=request.user)
     context = {
         'nodes': nodes,
         'relationships': relationships,
@@ -113,15 +115,29 @@ class UpdateNodeView(UpdateView):
     template_name = 'nodes/node_form.html'
     success_url = reverse_lazy('node_list')
 
+    def dispatch(self, request, *args, **kwargs):
+        node = self.get_object()
+        # اگه self-node کاربر بود → ریدایرکت به پروفایل
+        if (request.user.is_authenticated and
+                node.owner == request.user and
+                node.username == request.user.username):
+            return redirect('profile')
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = f'ویرایش {self.object.username}'
         return context
 
+    def get_queryset(self):
+        return Node.objects.filter(owner=self.request.user)
+
     def form_valid(self, form):
-        # قبل save، چک کن unique نباشه
         if form.has_changed():
-            existing = Node.objects.filter(username=form.cleaned_data['username']).exclude(pk=self.object.pk).first()
+            existing = Node.objects.filter(
+                username=form.cleaned_data['username'],
+                owner=self.request.user,
+            ).exclude(pk=self.object.pk).first()
             if existing:
                 form.add_error('username', 'این نام قبلاً استفاده شده')
                 return self.form_invalid(form)
@@ -129,8 +145,9 @@ class UpdateNodeView(UpdateView):
 
 
 
+@login_required
 def node_delete(request, pk):
-    node = get_object_or_404(Node, pk=pk)
+    node = get_object_or_404(Node, pk=pk, owner=request.user)
 
     if request.method == 'POST':
         try:
@@ -143,12 +160,13 @@ def node_delete(request, pk):
     return render(request, 'nodes/node_confirm_delete.html', {'node': node})
 
 
+@login_required
 @require_http_methods(["GET"])
 def node_detail(request, pk):
-    node = get_object_or_404(Node, pk=pk)
+    node = get_object_or_404(Node, pk=pk, owner=request.user)
 
     relationships = Relationship.objects.filter(
-        Q(source=node) | Q(target=node)
+        Q(source=node) | Q(target=node), owner=request.user
     ).select_related('source', 'target')
 
     informations = Information.objects.filter(node=node)
@@ -161,7 +179,7 @@ def node_detail(request, pk):
     betweenness_centrality = None
     try:
         import networkx as nx
-        G, all_nodes, all_rels = _build_graph()
+        G, all_nodes, all_rels = _build_graph(request.user)
         if G.number_of_nodes() > 1:
             deg_c  = nx.degree_centrality(G)
             bet_c  = nx.betweenness_centrality(G)
@@ -190,11 +208,15 @@ def node_detail(request, pk):
     return render(request, 'nodes/node_detail.html', context)
 
 
+@login_required
 def create_node(request):
     if request.method == 'POST':
-        form = NodeForm(request.POST)
+        form = NodeForm(request.POST, request.FILES)
         if form.is_valid():
-            node = form.save()
+            node = form.save(commit=False)
+            node.owner = request.user
+            node.save()
+            form.save_m2m()
             messages.success(request, f'نود "{node.username}" ایجاد شد')
             return redirect('node_list')
     else:
@@ -203,48 +225,65 @@ def create_node(request):
     return render(request, 'nodes/node_form.html', {'form': form})
 
 
-class RelationshipListView(ListView):
+class RelationshipListView(LoginRequiredMixin, ListView):
     model = Relationship
     template_name = 'relationships/relationship_list.html'
     context_object_name = 'relationships'
     paginate_by = 20
 
-class RelationshipDetailView(DetailView):
+    def get_queryset(self):
+        return Relationship.objects.filter(owner=self.request.user).select_related('source', 'target')
+
+class RelationshipDetailView(LoginRequiredMixin, DetailView):
     model = Relationship
     template_name = 'relationships/relationship_detail.html'
 
-class RelationshipCreateView(CreateView):
+    def get_queryset(self):
+        return Relationship.objects.filter(owner=self.request.user)
+
+class RelationshipCreateView(LoginRequiredMixin, CreateView):
     model = Relationship
     form_class = RelationshipForm
     template_name = 'relationships/relationship_form.html'
     success_url = reverse_lazy('relationship_list')
 
-class RelationshipUpdateView(UpdateView):
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        qs = Node.objects.filter(owner=self.request.user)
+        form.fields['source'].queryset = qs
+        form.fields['target'].queryset = qs
+        return form
+
+    def form_valid(self, form):
+        form.instance.owner = self.request.user
+        return super().form_valid(form)
+
+class RelationshipUpdateView(LoginRequiredMixin, UpdateView):
     model = Relationship
     form_class = RelationshipForm
     template_name = 'relationships/relationship_form.html'
     success_url = reverse_lazy('relationship_list')
 
-class RelationshipDeleteView(DeleteView):
+    def get_queryset(self):
+        return Relationship.objects.filter(owner=self.request.user)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        qs = Node.objects.filter(owner=self.request.user)
+        form.fields['source'].queryset = qs
+        form.fields['target'].queryset = qs
+        return form
+
+class RelationshipDeleteView(LoginRequiredMixin, DeleteView):
     model = Relationship
     template_name = 'relationships/relationship_confirm_delete.html'
     success_url = reverse_lazy('relationship_list')
 
+    def get_queryset(self):
+        return Relationship.objects.filter(owner=self.request.user)
 
-class InformationCreateView(CreateView):
-    model = Information
-    fields = ['node', 'visibility', 'data']
-    template_name = 'informations/information_form.html'
-    success_url = reverse_lazy('information_list')
 
-    def form_valid(self, form):
-        if not form.instance.visibility:
-            form.instance.visibility = 'private'
-        messages.success(
-            self.request,
-            f'اطلاعات برای "{form.instance.node}" اضافه شد'
-        )
-        return super().form_valid(form)
+
 
 
 def information_detail(request, info_id):
@@ -358,25 +397,54 @@ def graph_level_data(request, level=0):
             'level': level
         }, status=500)
 
-class InformationListView(ListView):
+class InformationListView(LoginRequiredMixin, ListView):
     model = Information
     template_name = 'informations/informations_list.html'
     context_object_name = 'informations'
     paginate_by = 20
 
     def get_queryset(self):
-        return Information.objects.select_related('node').all()
+        return Information.objects.filter(node__owner=self.request.user).select_related('node')
 
 
-class InformationDetailView(DetailView):
+class InformationDetailView(LoginRequiredMixin, DetailView):
     model = Information
     template_name = 'informations/information_detail.html'
 
-class InformationUpdateView(UpdateView):
+    def get_queryset(self):
+        return Information.objects.filter(node__owner=self.request.user)
+
+
+class InformationCreateView(LoginRequiredMixin, CreateView):
     model = Information
     fields = ['node', 'visibility', 'data']
     template_name = 'informations/information_form.html'
     success_url = reverse_lazy('information_list')
+
+    def form_valid(self, form):
+        if not form.instance.visibility:
+            form.instance.visibility = 'private'
+        return super().form_valid(form)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields['node'].queryset = Node.objects.filter(owner=self.request.user)
+        return form
+
+
+class InformationUpdateView(LoginRequiredMixin, UpdateView):
+    model = Information
+    fields = ['node', 'visibility', 'data']
+    template_name = 'informations/information_form.html'
+    success_url = reverse_lazy('information_list')
+
+    def get_queryset(self):
+        return Information.objects.filter(node__owner=self.request.user)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        form.fields['node'].queryset = Node.objects.filter(owner=self.request.user)
+        return form
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -384,18 +452,22 @@ class InformationUpdateView(UpdateView):
         return context
 
 
-class InformationDeleteView(DeleteView):
+class InformationDeleteView(LoginRequiredMixin, DeleteView):
     model = Information
     template_name = 'informations/information_confirm_delete.html'
     success_url = reverse_lazy('information_list')
 
+    def get_queryset(self):
+        return Information.objects.filter(node__owner=self.request.user)
 
+
+@login_required
 def home_graph_api(request):
-    nodes = Node.objects.only("id", "username")
+    nodes = Node.objects.filter(owner=request.user).only("id", "username")
     relationships = (
         Relationship.objects
-        .select_related('father', 'child')
-        .all()
+        .filter(owner=request.user)
+        .select_related('source', 'target')
     )
 
     elements = {
@@ -424,28 +496,37 @@ def home_graph_api(request):
     return JsonResponse(elements)
 
 
+@login_required
 def events_list(request):
-    events = Event.objects.prefetch_related('participants').all()
+    events = Event.objects.filter(owner=request.user).prefetch_related('participants')
     return render(request, 'events/events_list.html', {'events': events})
 
+@login_required
 def event_create(request):
     if request.method == 'POST':
         form = EventForm(request.POST)
+        form.fields['participants'].queryset = Node.objects.filter(owner=request.user)
         if form.is_valid():
-            form.save()
+            ev = form.save(commit=False)
+            ev.owner = request.user
+            ev.save()
+            form.save_m2m()
             return redirect('events_list')
     else:
         form = EventForm()
+        form.fields['participants'].queryset = Node.objects.filter(owner=request.user)
     return render(request, 'events/event_form.html', {'form': form})
 
+@login_required
 def event_delete(request, pk):
-    event = get_object_or_404(Event, pk=pk)
+    event = get_object_or_404(Event, pk=pk, owner=request.user)
     if request.method == 'POST':
         event.delete()
         return redirect('events_list')
     return render(request, 'events/event_confirm_delete.html', {'event': event})
 
 
+@login_required
 def communities_view(request):
     try:
         import networkx as nx
@@ -453,8 +534,8 @@ def communities_view(request):
     except ImportError:
         return render(request, 'communities/communities.html', {'error': 'networkx نصب نیست. دستور: py -m pip install networkx'})
 
-    all_nodes = list(Node.objects.all())
-    all_rels  = list(Relationship.objects.select_related('source', 'target'))
+    all_nodes = list(Node.objects.filter(owner=request.user))
+    all_rels  = list(Relationship.objects.filter(owner=request.user).select_related('source', 'target'))
     node_map  = {n.id: n for n in all_nodes}
 
     G = nx.Graph()
@@ -492,11 +573,12 @@ def communities_view(request):
     })
 
 
+@login_required
 def groups_view(request):
     """صفحه مدیریت گروه‌ها — rename و assign نودها (M2M)."""
     from .models import Group as GroupModel
-    all_groups = list(GroupModel.objects.prefetch_related('nodes').order_by('name'))
-    all_nodes  = list(Node.objects.prefetch_related('groups').order_by('username'))
+    all_groups = list(GroupModel.objects.filter(owner=request.user).prefetch_related('nodes').order_by('name'))
+    all_nodes  = list(Node.objects.filter(owner=request.user).prefetch_related('groups').order_by('username'))
 
     # نودهایی که در هیچ گروهی نیستند
     ungrouped = [n for n in all_nodes if not n.groups.exists()]
@@ -508,6 +590,7 @@ def groups_view(request):
     })
 
 
+@login_required
 @csrf_exempt
 def assign_group_api(request):
     """
@@ -530,7 +613,7 @@ def assign_group_api(request):
     if not node_ids:
         return JsonResponse({'error': 'node_ids لازم است'}, status=400)
 
-    nodes = list(Node.objects.filter(pk__in=node_ids))
+    nodes = list(Node.objects.filter(pk__in=node_ids, owner=request.user))
 
     if action == 'remove':
         if not group_name:
@@ -552,9 +635,10 @@ def assign_group_api(request):
     return JsonResponse({'ok': True, 'count': len(nodes)})
 
 
+@login_required
 def insights_view(request):
-    all_nodes = list(Node.objects.all())
-    all_rels  = list(Relationship.objects.select_related('source', 'target'))
+    all_nodes = list(Node.objects.filter(owner=request.user))
+    all_rels  = list(Relationship.objects.filter(owner=request.user).select_related('source', 'target'))
 
     node_count = len(all_nodes)
     edge_count = len(all_rels)
@@ -744,16 +828,12 @@ def chat_api(request):
         return JsonResponse({'error': 'message is empty'}, status=400)
 
     # ─── root node (کاربر اصلی که داره چت می‌کنه) ───────────────────────────
-    root_node = None
-    try:
-        root_node = AppSettings.get().root_node
-    except Exception:
-        pass
+    root_node = request.user.root_node if request.user.is_authenticated else None
 
-    # ─── serialize graph ─────────────────────────────────────────────────────
-    all_nodes = Node.objects.all()
-    all_rels  = Relationship.objects.select_related('source', 'target')
-    all_info  = Information.objects.select_related('node')
+    # ─── serialize graph (فقط داده‌های این کاربر) ────────────────────────────
+    all_nodes = Node.objects.filter(owner=request.user)
+    all_rels  = Relationship.objects.filter(owner=request.user).select_related('source', 'target')
+    all_info  = Information.objects.filter(node__owner=request.user).select_related('node')
 
     # اطلاعات خود کاربر اصلی
     root_info = ""
@@ -803,7 +883,7 @@ def chat_api(request):
     ) or "موردی ثبت نشده"
 
     # یادداشت‌های اخیر
-    recent_journals = JournalEntry.objects.order_by('-entry_date')[:5]
+    recent_journals = JournalEntry.objects.filter(owner=request.user).order_by('-entry_date')[:5]
     journal_text = "\n".join(
         f"- {j.entry_date}: {j.text[:120]}{'...' if len(j.text) > 120 else ''}"
         + (f" [حال: {j.mood}]" if j.mood else "")
@@ -852,11 +932,12 @@ def chat_api(request):
         return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
 
+@login_required
 def graph_all_api(request):
     """Return all nodes+edges with community and centrality data for D3 graph."""
     try:
         import networkx as nx
-        G, all_nodes, all_rels = _build_graph()
+        G, all_nodes, all_rels = _build_graph(request.user)
 
         if G.number_of_nodes() > 0:
             deg_c   = nx.degree_centrality(G)
@@ -865,21 +946,18 @@ def graph_all_api(request):
             deg_c   = {}
             com_map = {}
     except Exception:
-        all_nodes = list(Node.objects.all())
-        all_rels  = list(Relationship.objects.select_related('source', 'target'))
+        all_nodes = list(Node.objects.filter(owner=request.user))
+        all_rels  = list(Relationship.objects.filter(owner=request.user).select_related('source', 'target'))
         deg_c   = {}
         com_map = {}
 
-    # Root node — graceful fallback if AppSettings table doesn't exist yet
+    # Root node — از user.root_node
     root_id = None
-    try:
-        settings = AppSettings.get()
-        root_id = str(settings.root_node_id) if settings.root_node_id else None
-    except Exception:
-        pass
+    if request.user.is_authenticated and request.user.root_node_id:
+        root_id = str(request.user.root_node_id)
 
     # گروه‌های دستی (M2M) — prefetch برای performance
-    all_nodes_qs = Node.objects.prefetch_related('groups').all()
+    all_nodes_qs = Node.objects.filter(owner=request.user).prefetch_related('groups')
     all_nodes = list(all_nodes_qs)
 
     # ساخت نگاشت node_id → [group_names]
@@ -892,7 +970,7 @@ def graph_all_api(request):
 
     # گروه‌های موجود (با رنگ از مدل اگه داره، وگرنه از palette)
     from .models import Group as GroupModel
-    db_groups = {g.name: g.color for g in GroupModel.objects.all()}
+    db_groups = {g.name: g.color for g in GroupModel.objects.filter(owner=request.user)}
     all_groups_sorted = sorted(all_group_names)
     group_color_map = {}
     for i, g in enumerate(all_groups_sorted):
@@ -940,44 +1018,33 @@ def graph_all_api(request):
 # ════════════════════════════════════════════════════════════════
 
 def settings_view(request):
-    app_settings = AppSettings.get()
-    nodes = Node.objects.order_by('username')
-    if request.method == 'POST':
-        root_id = request.POST.get('root_node')
-        if root_id:
-            app_settings.root_node = get_object_or_404(Node, pk=root_id)
-        else:
-            app_settings.root_node = None
-        app_settings.save()
-        messages.success(request, 'تنظیمات ذخیره شد.')
-        return redirect('settings')
-    return render(request, 'settings/settings.html', {
-        'settings': app_settings,
-        'nodes':    nodes,
-    })
+    # صفحه تنظیمات به پروفایل ادغام شده
+    return redirect('profile')
 
 
 # ════════════════════════════════════════════════════════════════
 # Journal
 # ════════════════════════════════════════════════════════════════
 
+@login_required
 def journal_view(request):
-    entries = JournalEntry.objects.prefetch_related('images', 'mentioned_nodes').all()[:20]
-    nodes_for_mention = list(Node.objects.values('username', 'name', 'first_name', 'last_name', 'nickname'))
+    user = request.user
+    entries = JournalEntry.objects.filter(owner=user).prefetch_related('images', 'mentioned_nodes')[:20]
+    nodes_for_mention = list(Node.objects.filter(owner=user).values('username', 'name', 'first_name', 'last_name', 'nickname'))
 
-    # Collect all unique tags from all entries
+    # Collect all unique tags from user's entries
     all_tags = []
-    for e in JournalEntry.objects.values_list('tags', flat=True):
+    for e in JournalEntry.objects.filter(owner=user).values_list('tags', flat=True):
         if e:
             all_tags.extend(e)
     all_tags = sorted(set(all_tags))
 
     # All node usernames for people filter
-    all_node_usernames = list(Node.objects.values_list('username', flat=True))
+    all_node_usernames = list(Node.objects.filter(owner=user).values_list('username', flat=True))
 
     # All distinct moods
     all_moods = list(
-        JournalEntry.objects.exclude(mood='').values_list('mood', flat=True).distinct()[:20]
+        JournalEntry.objects.filter(owner=user).exclude(mood='').values_list('mood', flat=True).distinct()[:20]
     )
 
     return render(request, 'journal/journal.html', {
@@ -1022,13 +1089,9 @@ def journal_analyze_api(request):
     # ── Who is "me"? ─────────────────────────────────────────
     root_username = None
     root_display  = None
-    try:
-        app_settings = AppSettings.get()
-        if app_settings.root_node:
-            root_username = app_settings.root_node.username
-            root_display  = app_settings.root_node.display_name()
-    except Exception:
-        pass
+    if request.user.is_authenticated and request.user.root_node:
+        root_username = request.user.root_node.username
+        root_display  = request.user.root_node.display_name()
 
     me_info = (
         f'نویسنده این خاطره "{root_display}" با username "{root_username}" است. '
@@ -1038,7 +1101,8 @@ def journal_analyze_api(request):
         'نویسنده مشخص نیست — اگر "من" آمد، username آن را "me" بگذار.'
     )
 
-    existing_nodes = ', '.join(Node.objects.values_list('username', flat=True)[:80]) or 'هیچ'
+    owner_filter = {'owner': request.user} if request.user.is_authenticated else {}
+    existing_nodes = ', '.join(Node.objects.filter(**owner_filter).values_list('username', flat=True)[:80]) or 'هیچ'
 
     prompt = f"""تو یک تحلیلگر هوشمند خاطرات شخصی هستی.
 
@@ -1123,9 +1187,10 @@ def journal_analyze_api(request):
             except Exception:
                 pass
 
+        entry_owner = request.user if request.user.is_authenticated else None
         if existing_entry_id:
             try:
-                entry = JournalEntry.objects.get(id=existing_entry_id)
+                entry = JournalEntry.objects.get(id=existing_entry_id, owner=entry_owner)
                 entry.ai_analyzed = True
                 entry.mood = result.get('my_mood', '')
                 if raw_tags:
@@ -1134,12 +1199,12 @@ def journal_analyze_api(request):
             except JournalEntry.DoesNotExist:
                 entry = JournalEntry.objects.create(
                     text=text, entry_date=entry_date, tags=raw_tags,
-                    mood=result.get('my_mood', ''), ai_analyzed=True
+                    mood=result.get('my_mood', ''), ai_analyzed=True, owner=entry_owner,
                 )
         else:
             entry = JournalEntry.objects.create(
                 text=text, entry_date=entry_date, tags=raw_tags,
-                mood=result.get('my_mood', ''), ai_analyzed=True
+                mood=result.get('my_mood', ''), ai_analyzed=True, owner=entry_owner,
             )
         result['_entry_id'] = entry.id
 
@@ -1169,37 +1234,82 @@ def journal_apply_api(request):
 
     created = {'nodes': [], 'relationships': [], 'events': [], 'attributes': []}
 
+    # ── Privacy maps از frontend ───────────────────────────
+    node_privacy = data.get('node_privacy', {})   # {username: true/false}
+    rel_privacy  = data.get('rel_privacy', {})    # {"from||to||type": true/false}
+    # ── Public node links: {username: {id, display_name, owner_username, ...}} ──
+    node_links   = data.get('node_links', {})     # نودهایی که از شبکه عمومی انتخاب شدن
+
     # ── Resolve root node ──────────────────────────────────
     root_node     = None
     root_username = (data.get('_root_username') or '').strip()
-    try:
-        app_settings = AppSettings.get()
-        root_node = app_settings.root_node
-        if root_node and not root_username:
+    req_user = request.user if request.user.is_authenticated else None
+    if req_user and req_user.root_node:
+        root_node = req_user.root_node
+        if not root_username:
             root_username = root_node.username
-    except Exception:
-        pass
 
     def resolve_node(uname):
         uname = (uname or '').strip()
         if uname in ('me', 'من', root_username) and root_node:
             return root_node
-        try:
-            return Node.objects.get(username=uname)
-        except Node.DoesNotExist:
-            return None
+        if req_user:
+            try:
+                return Node.objects.get(username=uname, owner=req_user)
+            except Node.DoesNotExist:
+                return None
+        return None
 
     # ── Create nodes (never create root) ──────────────────
     for nd in data.get('nodes', []):
         username = (nd.get('username') or '').strip()
         if not username or username == root_username:
             continue
+        is_pub   = bool(node_privacy.get(username, False))
+        link     = node_links.get(username)          # اگه از شبکه عمومی لینک شده
+        defaults = {'name': nd.get('name', ''), 'is_public': is_pub}
+
+        if link:
+            # داده‌های عمومی منبع رو کپی کن + قفل username
+            try:
+                src_node = Node.objects.get(id=link['id'])
+                defaults.update({
+                    'first_name':     src_node.first_name,
+                    'last_name':      src_node.last_name,
+                    'nickname':       src_node.nickname,
+                    'career':         src_node.career,
+                    'username_locked': True,
+                    'imported_from':  src_node.owner,
+                })
+                if src_node.picture:
+                    defaults['picture'] = src_node.picture
+            except Node.DoesNotExist:
+                pass
+
+        if req_user:
+            defaults['owner'] = req_user
         node, is_new = Node.objects.get_or_create(
             username=username,
-            defaults={'name': nd.get('name', '')}
+            owner=req_user,
+            defaults=defaults,
         )
         if is_new:
             created['nodes'].append(username)
+        else:
+            changed = False
+            if node_privacy.get(username) is not None and node.is_public != is_pub:
+                node.is_public = is_pub
+                changed = True
+            if link and not node.imported_from:
+                try:
+                    src = Node.objects.get(id=link['id'])
+                    node.imported_from   = src.owner
+                    node.username_locked = True
+                    changed = True
+                except Node.DoesNotExist:
+                    pass
+            if changed:
+                node.save()
 
     # ── Relationships ──────────────────────────────────────
     for rd in data.get('relationships', []):
@@ -1211,12 +1321,17 @@ def journal_apply_api(request):
         tgt = resolve_node(to)
         if not src or not tgt or src == tgt:
             continue
-        _, is_new = Relationship.objects.get_or_create(
+        rel_key = f"{frm}||{to}||{rel_type}"
+        is_pub  = bool(rel_privacy.get(rel_key, False))
+        rel_obj, is_new = Relationship.objects.get_or_create(
             source=src, target=tgt, rel=rel_type,
-            defaults={'strength': min(5, max(1, strength))}
+            defaults={'strength': min(5, max(1, strength)), 'is_public': is_pub, 'owner': req_user}
         )
         if is_new:
             created['relationships'].append(f"{src.username}→{tgt.username}")
+        elif rel_privacy.get(rel_key) is not None:
+            rel_obj.is_public = is_pub
+            rel_obj.save(update_fields=['is_public'])
 
     # ── Events ────────────────────────────────────────────
     for ed in data.get('events', []):
@@ -1231,7 +1346,8 @@ def journal_apply_api(request):
             event_date = today_date.today()
         ev = Event.objects.create(
             title=title, date=event_date,
-            description=ed.get('description', '')
+            description=ed.get('description', ''),
+            owner=req_user,
         )
         if root_node:
             ev.participants.add(root_node)
@@ -1303,3 +1419,91 @@ def journal_apply_api(request):
             pass
 
     return JsonResponse({'created': created})
+
+
+# ─────────────────────────────────────────────────────────────────
+# Public Node Search API
+# ─────────────────────────────────────────────────────────────────
+
+@login_required
+def export_graph(request):
+    """⬇ Export کامل گراف کاربر به JSON — قابل دانلود."""
+    from datetime import date as date_type
+    user = request.user
+
+    nodes = list(Node.objects.filter(owner=user).values(
+        'id', 'username', 'first_name', 'last_name', 'nickname',
+        'career', 'birth_day', 'phone_number', 'name', 'is_public',
+        'username_locked', 'group',
+    ))
+    rels = list(Relationship.objects.filter(owner=user).values(
+        'id', 'rel', 'source__username', 'target__username',
+        'strength', 'status', 'met_at', 'is_public',
+    ))
+    entries = list(JournalEntry.objects.filter(owner=user).values(
+        'id', 'text', 'entry_date', 'tags', 'mood', 'ai_analyzed', 'created_at',
+    ))
+
+    # dates → strings for JSON
+    for n in nodes:
+        if n['birth_day']:
+            n['birth_day'] = str(n['birth_day'])
+    for r in rels:
+        if r['met_at']:
+            r['met_at'] = str(r['met_at'])
+    for e in entries:
+        e['created_at'] = str(e['created_at'])
+        if e['entry_date']:
+            e['entry_date'] = str(e['entry_date'])
+
+    data = {
+        'version':     '3',
+        'exported_at': str(timezone.now()),
+        'username':    user.username,
+        'nodes':       nodes,
+        'relationships': rels,
+        'journal_entries': entries,
+    }
+    response = HttpResponse(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        content_type='application/json; charset=utf-8',
+    )
+    response['Content-Disposition'] = f'attachment; filename="familygraph_{user.username}.json"'
+    return response
+
+
+@require_GET
+def public_node_search(request):
+    """جستجوی نودهای عمومی از حساب‌های عمومی — برای ساجست هنگام ادد کردن نود."""
+    from django.db.models import Q
+    q = request.GET.get('q', '').strip()
+    if len(q) < 2:
+        return JsonResponse({'results': []})
+
+    nodes = Node.objects.filter(
+        is_public=True,
+        owner__is_public=True,
+    ).exclude(
+        owner=request.user
+    ).filter(
+        Q(username__icontains=q)   |
+        Q(first_name__icontains=q) |
+        Q(last_name__icontains=q)  |
+        Q(nickname__icontains=q)   |
+        Q(name__icontains=q)
+    ).select_related('owner')[:10]
+
+    results = []
+    for n in nodes:
+        results.append({
+            'id':            n.id,
+            'username':      n.username,
+            'display_name':  n.display_name(),
+            'first_name':    n.first_name,
+            'last_name':     n.last_name,
+            'nickname':      n.nickname,
+            'career':        n.career,
+            'owner_username': n.owner.username if n.owner else '',
+            'picture_url':   n.picture.url if n.picture else '',
+        })
+    return JsonResponse({'results': results})

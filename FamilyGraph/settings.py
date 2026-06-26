@@ -27,6 +27,18 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
+# ── Custom User Model ─────────────────────────────────────────
+AUTH_USER_MODEL = 'main.User'
+
+# ── Auth URLs & Redirects ──────────────────────────────────────
+LOGIN_URL          = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+
+# ── Session ──────────────────────────────────────────────────
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30   # 30 روز
+SESSION_SAVE_EVERY_REQUEST = False
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -35,6 +47,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'main.middleware.LoginRequiredMiddleware',
 ]
 
 ROOT_URLCONF = 'FamilyGraph.urls'

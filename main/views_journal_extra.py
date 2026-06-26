@@ -4,10 +4,12 @@ Extra journal views — imported in urls.py alongside main views.
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
 from .models import JournalEntry, JournalImage
 
 
 @csrf_exempt
+@login_required
 def journal_save_api(request):
     """Save a journal entry without AI analysis."""
     if request.method != 'POST':
@@ -35,7 +37,8 @@ def journal_save_api(request):
         raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
 
     entry = JournalEntry.objects.create(
-        text=text, entry_date=entry_date, tags=raw_tags, ai_analyzed=False
+        text=text, entry_date=entry_date, tags=raw_tags,
+        ai_analyzed=False, owner=request.user,
     )
 
     image_ids = body.get('image_ids', [])
@@ -45,6 +48,7 @@ def journal_save_api(request):
     return JsonResponse({'id': entry.id, 'message': 'ذخیره شد'})
 
 
+@login_required
 def journal_calendar_api(request):
     """Return entries grouped by date for a given year/month."""
     from datetime import date as _date
@@ -55,7 +59,8 @@ def journal_calendar_api(request):
         return JsonResponse({'error': 'invalid params'}, status=400)
 
     qs = JournalEntry.objects.filter(
-        entry_date__year=year, entry_date__month=month
+        owner=request.user,
+        entry_date__year=year, entry_date__month=month,
     ).prefetch_related('images').order_by('entry_date', 'created_at')
 
     cal = {}
@@ -76,9 +81,12 @@ def journal_calendar_api(request):
     return JsonResponse({'year': year, 'month': month, 'entries': cal})
 
 
+@login_required
 def journal_entries_api(request):
     """Return filtered journal entries (up to 60)."""
-    qs = JournalEntry.objects.prefetch_related(
+    qs = JournalEntry.objects.filter(
+        owner=request.user,
+    ).prefetch_related(
         'images', 'mentioned_nodes'
     ).order_by('-entry_date', '-created_at')
 

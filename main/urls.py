@@ -1,5 +1,9 @@
 from django.urls import path
 from . import views
+from .views_auth import (
+    login_view, logout_view, register_view, profile_view, captcha_refresh,
+)
+from .views_notifications import notifications_view, sync_respond_api
 from .views import (
     groups_view,
     assign_group_api,
@@ -29,6 +33,19 @@ from .views_smart_features import (
 )
 
 urlpatterns = [
+
+    # ======================
+    # AUTH
+    # ======================
+    path('login/',       login_view,       name='login'),
+    path('logout/',      logout_view,      name='logout'),
+    path('register/',    register_view,    name='register'),
+    path('profile/',     profile_view,     name='profile'),
+    path('api/captcha/', captcha_refresh,  name='captcha_refresh'),
+    path('api/nodes/public-search/', views.public_node_search, name='public_node_search'),
+    path('notifications/',           notifications_view,       name='notifications'),
+    path('api/sync/<int:notif_id>/respond/', sync_respond_api, name='sync_respond'),
+    path('export/',                  views.export_graph,       name='export_graph'),
 
     # ======================
     # HOME

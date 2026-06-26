@@ -273,6 +273,60 @@ animation:spin .7s linear infinite;vertical-align:middle;}
 .history-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;}
 .history-tag{font-size:10px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#a5b4fc;border-radius:10px;padding:1px 6px;}
 .empty-state{padding:24px;text-align:center;font-size:13px;color:var(--text-muted);}
+
+/* ══ Privacy toggle list ═══════════════════════════════ */
+.privacy-list{display:flex;flex-direction:column;gap:6px;}
+.privacy-item{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:9px;padding:7px 12px;
+}
+.pi-icon{font-size:13px;color:var(--text-muted);flex-shrink:0;}
+.pi-label{flex:1;font-size:12.5px;font-weight:600;color:var(--text);}
+.pi-sub{font-size:11px;color:var(--text-muted);}
+.pi-exists{font-size:10px;padding:2px 7px;border-radius:10px;
+  background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);flex-shrink:0;}
+.pi-toggle{
+  flex-shrink:0;border:none;cursor:pointer;
+  font-size:15px;background:none;padding:2px 5px;border-radius:6px;
+  transition:background .15s;line-height:1;
+}
+.pi-toggle:hover{background:rgba(255,255,255,.08);}
+.pi-toggle[data-pub="1"]{filter:none;}
+.pi-toggle[data-pub="0"]{opacity:.6;}
+
+/* public node link search */
+.pi-link-btn{
+  flex-shrink:0;border:none;cursor:pointer;font-size:13px;
+  background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);
+  color:#a5b4fc;padding:3px 8px;border-radius:6px;transition:.15s;
+}
+.pi-link-btn:hover{background:rgba(99,102,241,.22);}
+.pi-link-btn.linked{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.25);color:#6ee7b7;}
+.pi-search-wrap{margin-top:6px;position:relative;}
+.pi-search-input{
+  width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:8px;padding:6px 10px;color:var(--text);font-size:12px;
+  font-family:'Vazirmatn',sans-serif;box-sizing:border-box;
+}
+.pi-search-input:focus{border-color:var(--primary-border);outline:none;}
+.pi-search-results{
+  position:absolute;z-index:50;width:100%;top:calc(100% + 4px);
+  background:var(--surface);border:1px solid var(--primary-border);
+  border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;display:none;
+}
+.pi-result-item{
+  padding:8px 12px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;
+  transition:background .1s;border-bottom:1px solid var(--border);
+}
+.pi-result-item:last-child{border-bottom:none;}
+.pi-result-item:hover{background:var(--primary-glow);}
+.pi-result-owner{font-size:10px;color:var(--text-muted);}
+.pi-linked-badge{
+  display:inline-flex;align-items:center;gap:4px;margin-top:3px;
+  font-size:11px;padding:2px 8px;border-radius:10px;
+  background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);
+}
 </style>
 {% endblock %}
 
@@ -668,18 +722,146 @@ async function analyzeJournal(){
   finally{btn.disabled=false;btn.innerHTML='✦ تحلیل دوباره';}
 }
 
+// privacy & link state
+const nodePrivacy = {};
+const relPrivacy  = {};
+const nodeLinks   = {};   // {username: {id, display_name, owner_username, ...}}
+
+function togglePrivacy(btn){
+  const key  = btn.dataset.key;
+  const type = btn.dataset.type;
+  const map  = type === 'node' ? nodePrivacy : relPrivacy;
+  map[key]   = !map[key];
+  btn.dataset.pub = map[key] ? '1' : '0';
+  btn.textContent = map[key] ? '🌐' : '🔒';
+  btn.title       = map[key] ? 'عمومی — کلیک برای خصوصی کردن' : 'خصوصی — کلیک برای عمومی کردن';
+}
+
+function togglePublicSearch(uname){
+  const wrap = document.getElementById(`psw-${uname}`);
+  const btn  = document.getElementById(`plb-${uname}`);
+  if(nodeLinks[uname]){
+    // unlink
+    delete nodeLinks[uname];
+    document.getElementById(`pli-${uname}`).innerHTML = '';
+    btn.textContent = '🔍';
+    btn.classList.remove('linked');
+    btn.title = 'وصل به شبکه عمومی';
+    wrap.style.display = 'none';
+    return;
+  }
+  const isOpen = wrap.style.display === 'block';
+  wrap.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen) wrap.querySelector('input').focus();
+}
+
+let _searchTimers = {};
+async function searchPublicNode(evt, uname){
+  const q = evt.target.value.trim();
+  const box = document.getElementById(`psr-${uname}`);
+  clearTimeout(_searchTimers[uname]);
+  if(q.length < 2){ box.style.display='none'; return; }
+  _searchTimers[uname] = setTimeout(async () => {
+    try{
+      const r = await fetch(`/api/nodes/public-search/?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if(!d.results?.length){
+        box.innerHTML='<div class="pi-result-item" style="color:var(--text-muted);">نتیجه‌ای نبود</div>';
+        box.style.display='block';
+        return;
+      }
+      box.innerHTML = d.results.map(n => `
+        <div class="pi-result-item" onclick="linkPublicNode('${uname}', ${JSON.stringify(n).replace(/"/g,'&quot;')})">
+          <div style="flex:1">
+            <div style="font-weight:600">${n.display_name}</div>
+            <div class="pi-result-owner">از شبکه @${n.owner_username} · @${n.username}</div>
+          </div>
+          <span style="font-size:10px;color:#6ee7b7;">🌐 عمومی</span>
+        </div>
+      `).join('');
+      box.style.display = 'block';
+    }catch(e){ box.style.display='none'; }
+  }, 300);
+}
+
+function linkPublicNode(uname, nodeData){
+  nodeLinks[uname] = nodeData;
+  // نمایش badge لینک شده
+  document.getElementById(`pli-${uname}`).innerHTML =
+    `<span class="pi-linked-badge">🔗 لینک شده به @${nodeData.owner_username} (${nodeData.display_name})</span>`;
+  // بستن dropdown
+  document.getElementById(`psr-${uname}`).style.display = 'none';
+  document.getElementById(`psw-${uname}`).style.display = 'none';
+  // آپدیت دکمه
+  const btn = document.getElementById(`plb-${uname}`);
+  btn.textContent = '🔗';
+  btn.classList.add('linked');
+  btn.title = 'لینک شده — کلیک برای لغو';
+}
+
 function renderResult(r){
   const exSet=new Set(ALL_NODES.map(n=>n.username));
   let html='';
+
   if(r.summary||r.my_mood){
     html+=`<div class="r-section"><div class="r-section-title">خلاصه</div><div class="summary-box">${r.summary||''}`;
     if(r.my_mood) html+=`<div class="mood-row"><span class="mood-badge">خلق‌وخوی من: ${r.my_mood}</span></div>`;
     if(r.my_insights?.length) html+=`<div class="mood-row">${r.my_insights.map(i=>`<span class="mood-badge" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#a5b4fc;">💡 ${i}</span>`).join('')}</div>`;
     html+='</div></div>';
   }
-  if(r.nodes?.length) html+=`<div class="r-section"><div class="r-section-title">افراد (${r.nodes.length})</div><div class="chip-group">${r.nodes.map(n=>`<span class="ec ec-node${exSet.has(n.username)?' exists':''}">◉ ${n.name||n.username}${exSet.has(n.username)?' <small>(موجود)</small>':''}</span>`).join('')}</div></div>`;
-  if(r.relationships?.length) html+=`<div class="r-section"><div class="r-section-title">روابط (${r.relationships.length})</div><div class="chip-group">${r.relationships.map(rel=>`<span class="ec ec-rel">⟶ ${rel.from} → ${rel.to}: ${rel.type}${rel.strength?' · '+rel.strength+'/5':''}</span>`).join('')}</div></div>`;
-  if(r.events?.length) html+=`<div class="r-section"><div class="r-section-title">رویدادها (${r.events.length})</div><div class="chip-group">${r.events.map(ev=>`<span class="ec ec-event">◷ ${ev.title}${ev.date?' ('+ev.date+')':''}</span>`).join('')}</div></div>`;
+
+  // ── Nodes با privacy toggle + public link search ────
+  if(r.nodes?.length){
+    html+=`<div class="r-section"><div class="r-section-title">افراد (${r.nodes.length}) <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— 🔒 پرایوت &nbsp;|&nbsp; 🌐 پابلیک</span></div><div class="privacy-list">`;
+    for(const n of r.nodes){
+      const uname = n.username;
+      const label = n.name||uname;
+      const exists = exSet.has(uname);
+      nodePrivacy[uname] = nodePrivacy[uname] || false;
+      html+=`<div class="privacy-item" id="ni-${uname}">
+        <span class="pi-icon">◉</span>
+        <div style="flex:1;min-width:0;">
+          <div><span class="pi-label">${label}</span> <span class="pi-sub">@${uname}</span></div>
+          <div id="pli-${uname}"></div>
+          <div class="pi-search-wrap" id="psw-${uname}" style="display:none;">
+            <input class="pi-search-input" placeholder="🔍 نام یا فامیلی طرف رو بنویس..."
+              oninput="searchPublicNode(event,'${uname}')" autocomplete="off">
+            <div class="pi-search-results" id="psr-${uname}"></div>
+          </div>
+        </div>
+        ${exists?'<span class="pi-exists">موجود</span>':''}
+        <button class="pi-link-btn" id="plb-${uname}"
+          title="وصل به شبکه عمومی" onclick="togglePublicSearch('${uname}')">🔍</button>
+        <button class="pi-toggle" data-key="${uname}" data-type="node" data-pub="0"
+          title="خصوصی — کلیک برای عمومی کردن" onclick="togglePrivacy(this)">🔒</button>
+      </div>`;
+    }
+    html+='</div></div>';
+  }
+
+  // ── Relationships با privacy toggle ─────────────────
+  if(r.relationships?.length){
+    html+=`<div class="r-section"><div class="r-section-title">روابط (${r.relationships.length}) <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— 🔒 پرایوت &nbsp;|&nbsp; 🌐 پابلیک</span></div><div class="privacy-list">`;
+    for(const rel of r.relationships){
+      const key = `${rel.from}||${rel.to}||${rel.type||''}`;
+      relPrivacy[key] = relPrivacy[key] || false;
+      html+=`<div class="privacy-item">
+        <span class="pi-icon">⟶</span>
+        <span class="pi-label">${rel.from} → ${rel.to} <span class="pi-sub">${rel.type||''}${rel.strength?' · '+rel.strength+'/5':''}</span></span>
+        <button class="pi-toggle" data-key="${key}" data-type="rel" data-pub="0"
+          title="خصوصی — کلیک برای عمومی کردن" onclick="togglePrivacy(this)">🔒</button>
+      </div>`;
+    }
+    html+='</div></div>';
+  }
+
+  // ── Events (بدون toggle — همیشه پرایوت) ────────────
+  if(r.events?.length){
+    html+=`<div class="r-section"><div class="r-section-title">رویدادها (${r.events.length})</div><div class="chip-group">`;
+    html+=r.events.map(ev=>`<span class="ec ec-event">◷ ${ev.title}${ev.date?' ('+ev.date+')':''}</span>`).join('');
+    html+='</div></div>';
+  }
+
   const LABELS={personality:'شخصیت',mood:'خلق‌وخو',interests:'علایق',preferences:'سلایق',strengths:'نقاط قوت',weaknesses:'نقاط ضعف',goals:'اهداف',values:'ارزش‌ها',communication_style:'شیوه ارتباط',relationship_quality:'کیفیت رابطه',notable_facts:'نکات مهم'};
   if(r.attributes?.length){
     html+='<div class="r-section"><div class="r-section-title">اطلاعات عمیق افراد</div>';
@@ -695,8 +877,10 @@ function renderResult(r){
     }
     html+='</div>';
   }
+
   if(!r.nodes?.length&&!r.relationships?.length&&!r.events?.length&&!r.attributes?.length)
     html='<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:8px 0;">موجودیت مهمی یافت نشد</div>';
+
   document.getElementById('resultBody').innerHTML=html;
   document.getElementById('applyRow').style.display='flex';
   document.getElementById('resultCard').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -707,10 +891,15 @@ async function applyResult(){
   const btn=document.querySelector('#applyRow .btn-primary');
   btn.disabled=true;btn.textContent='در حال ذخیره...';
   try{
+    const payload = Object.assign({}, lastResult, {
+      node_privacy: nodePrivacy,   // {username: true/false}
+      rel_privacy:  relPrivacy,    // {"from||to||type": true/false}
+      node_links:   nodeLinks,     // {username: {id, display_name, owner_username, ...}}
+    });
     const r=await fetch('/api/journal/apply/',{
       method:'POST',
       headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
-      body:JSON.stringify(lastResult)
+      body:JSON.stringify(payload)
     });
     const d=await r.json();
     const c=d.created||{};
