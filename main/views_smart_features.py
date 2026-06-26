@@ -351,13 +351,14 @@ JSON:
         return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
 
 
+@login_required
 def alerts_view(request):
     """Full /alerts/ page."""
-    user = request.user if request.user.is_authenticated else None
-    alerts = _compute_alerts(user)
+    alerts = _compute_alerts(request.user)
     return render(request, 'alerts/alerts.html', {'alerts': alerts})
 
 
+@login_required
 @csrf_exempt
 def alert_action_api(request):
     """POST {alert_id, alert_type, node_id, title, action, outcome} → ذخیره اقدام کاربر."""
@@ -372,7 +373,7 @@ def alert_action_api(request):
     node_id = body.get('node_id')
     if node_id:
         try:
-            node = Node.objects.get(pk=node_id)
+            node = Node.objects.get(pk=node_id, owner=request.user)
         except Node.DoesNotExist:
             pass
 
@@ -383,6 +384,7 @@ def alert_action_api(request):
         title=body.get('title', ''),
         action=body.get('action', 'dismissed'),
         outcome=body.get('outcome', ''),
+        owner=request.user,
     )
     # کش هشدارها رو پاک کن تا دفعه بعد تازه لود بشه
     cache.delete('alerts_list')
@@ -460,6 +462,7 @@ def _build_nx(user=None):
     return G, all_nodes, all_rels
 
 
+@login_required
 def psychology_view(request):
     """
     Comprehensive network psychology & sociology analysis page.
@@ -1003,10 +1006,11 @@ def psychology_view(request):
     return render(request, 'psychology/psychology.html', context)
 
 
+@login_required
 @csrf_exempt
 def psychology_ai_api(request):
-    """POST → comprehensive AI psychology+sociology narrative. Cached 6h."""
-    cache_key = f'psych_ai_{date.today().strftime("%Y%m%d")}'
+    """POST → comprehensive AI psychology+sociology narrative. Cached 6h per user."""
+    cache_key = f'psych_ai_{request.user.id}_{date.today().strftime("%Y%m%d")}'
     body = {}
     try:
         body = json.loads(request.body or '{}')
@@ -1166,6 +1170,7 @@ def psychology_ai_api(request):
 #  DAILY TIPS
 # ═══════════════════════════════════════════════════════════════
 
+@login_required
 def daily_tips_view(request):
     """Daily briefing page /daily/."""
     today = date.today()
@@ -1234,8 +1239,9 @@ def daily_tips_api(request):
     near_holidays = upcoming_holidays(14)
     near_hol_str  = ', '.join(f'{h["jalali"]} ({h["holiday"]})' for h in near_holidays) if near_holidays else 'ندارد'
 
-    # ── کش ──────────────────────────────────────────────────────────────────
-    cache_key = f'daily_tips_{today.strftime("%Y%m%d")}'
+    # ── کش — per user so each user gets their own tips ──────────────────────
+    uid = request.user.id if request.user.is_authenticated else 0
+    cache_key = f'daily_tips_{uid}_{today.strftime("%Y%m%d")}'
     cached = cache.get(cache_key)
     if cached:
         return JsonResponse({'ok': True, 'result': cached, 'from_cache': True})

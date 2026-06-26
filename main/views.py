@@ -109,7 +109,7 @@ def home(request):
     }
     return render(request, 'home.html', context)
 
-class UpdateNodeView(UpdateView):
+class UpdateNodeView(LoginRequiredMixin, UpdateView):
     model = Node
     form_class = NodeForm
     template_name = 'nodes/node_form.html'
@@ -286,9 +286,10 @@ class RelationshipDeleteView(LoginRequiredMixin, DeleteView):
 
 
 
+@login_required
 def information_detail(request, info_id):
-    info = get_object_or_404(Information, id=info_id)
-    
+    info = get_object_or_404(Information, id=info_id, node__owner=request.user)
+
     context = {
         'info': info,
         'node': info.node,
@@ -299,12 +300,13 @@ def information_detail(request, info_id):
             'incoming': info.node.relationships_incoming() if hasattr(info.node, 'relationships_incoming') else []
         },
     }
-    
+
     return render(request, 'information_detail.html', context)
 
 
 logger = logging.getLogger(__name__)
 
+@login_required
 def graph_level_data(request, level=0):
 
     try:
@@ -619,7 +621,7 @@ def assign_group_api(request):
         if not group_name:
             return JsonResponse({'error': 'group_name لازم است'}, status=400)
         try:
-            grp = GroupModel.objects.get(name=group_name)
+            grp = GroupModel.objects.get(name=group_name, owner=request.user)
             for n in nodes:
                 n.groups.remove(grp)
         except GroupModel.DoesNotExist:
@@ -627,7 +629,7 @@ def assign_group_api(request):
     else:
         if not group_name:
             return JsonResponse({'error': 'group_name لازم است'}, status=400)
-        grp, _ = GroupModel.objects.get_or_create(name=group_name)
+        grp, _ = GroupModel.objects.get_or_create(name=group_name, owner=request.user)
         for n in nodes:
             n.groups.add(grp)
 
@@ -676,7 +678,7 @@ def insights_view(request):
 
     try:
         import networkx as nx
-        G, _, _ = _build_graph()
+        G, _, _ = _build_graph(request.user)
 
         if G.number_of_nodes() > 1:
             deg_c  = nx.degree_centrality(G)
@@ -761,11 +763,12 @@ def insights_view(request):
     })
 
 
+@login_required
 def node_ai_summary(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
 
-    node = get_object_or_404(Node, pk=pk)
+    node = get_object_or_404(Node, pk=pk, owner=request.user)
     rels = Relationship.objects.filter(
         Q(source=node) | Q(target=node)
     ).select_related('source', 'target')
@@ -810,10 +813,12 @@ def node_ai_summary(request, pk):
         return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
 
+@login_required
 def chat_view(request):
     return render(request, 'chat/chat.html')
 
 
+@login_required
 def chat_api(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -891,7 +896,7 @@ def chat_api(request):
     ) or "یادداشتی ثبت نشده"
 
     # اقدامات اخیر روی هشدارها (برای AI تا الگوهای رابطه رو بهتر بفهمه)
-    recent_actions = AlertAction.objects.order_by('-created_at')[:8]
+    recent_actions = AlertAction.objects.filter(owner=request.user).order_by('-created_at')[:8]
     actions_text = "\n".join(
         f"- {a.created_at.strftime('%Y-%m-%d')}: [{a.get_action_display()}] {a.title}"
         + (f" → نتیجه: {a.outcome}" if a.outcome else "")
