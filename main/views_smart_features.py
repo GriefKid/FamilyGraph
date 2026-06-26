@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.utils import timezone
 from openai import OpenAI
 
 from .models import Node, Relationship, Event, Information, JournalEntry, AppSettings, AlertAction
@@ -81,7 +82,7 @@ def _extract_json(raw: str) -> dict:
 
 def _compute_alerts(user=None):
     """Compute all active alerts — no AI, fast."""
-    today = date.today()
+    today = timezone.localdate()
     alerts = []
     user_filter = {'owner': user} if user and user.is_authenticated else {}
 
@@ -209,15 +210,19 @@ def _compute_alerts(user=None):
                 status='active', **user_filter,
             ).select_related('source', 'target')
 
+            # پیش‌واکشی یک‌باره نودهایی که در ۹۰ روز اخیر ذکر شدن — جلوگیری از N+1
+            recently_mentioned_ids = set(
+                JournalEntry.objects.filter(
+                    created_at__date__gte=cutoff90, **user_filter
+                ).values_list('mentioned_nodes__id', flat=True)
+            )
+            recently_mentioned_ids.discard(None)
+
             for rel in active_rels:
                 other = rel.target if rel.source_id == root.id else rel.source
                 if other.id == root.id or other.id in seen_decay:
                     continue
-                # ذکر در خاطرات ۹۰ روز اخیر
-                mentioned = other.journal_entries.filter(
-                    created_at__date__gte=cutoff90, **user_filter
-                ).exists()
-                if not mentioned:
+                if other.id not in recently_mentioned_ids:
                     seen_decay.add(other.id)
                     alerts.append({
                         'id':       f'decay_{rel.id}',
@@ -447,15 +452,11 @@ def delete_group_api(request):
 #  PSYCHOLOGY / SOCIOLOGY ANALYSIS
 # ═══════════════════════════════════════════════════════════════
 
-def _build_nx(user=None):
+def _build_nx(user):
     import networkx as nx
     G = nx.Graph()
-    if user and user.is_authenticated:
-        all_nodes = list(Node.objects.filter(owner=user))
-        all_rels  = list(Relationship.objects.filter(owner=user).select_related('source', 'target'))
-    else:
-        all_nodes = list(Node.objects.all())
-        all_rels  = list(Relationship.objects.select_related('source', 'target'))
+    all_nodes = list(Node.objects.filter(owner=user))
+    all_rels  = list(Relationship.objects.filter(owner=user).select_related('source', 'target'))
     for n in all_nodes:
         G.add_node(n.id, label=n.display_name())
     for r in all_rels:
@@ -486,7 +487,7 @@ def psychology_view(request):
     import networkx as nx
     import math
 
-    user = request.user if request.user.is_authenticated else None
+    user = request.user
     G, all_nodes, all_rels = _build_nx(user)
     n_nodes = G.number_of_nodes()
     n_edges = G.number_of_edges()
@@ -495,10 +496,10 @@ def psychology_view(request):
         return render(request, 'psychology/psychology.html', {'empty': True})
 
     # ── Owner filter shortcut ────────────────────────────────────
-    ufilter = {'owner': user} if user else {}
+    ufilter = {'owner': user}
 
     # ── Root node ────────────────────────────────────────────────
-    root = user.root_node if user else None
+    root = user.root_node
 
     # ═══════════════════════════════════════════════════════════
     # 1. DUNBAR'S NUMBER (Robin Dunbar, 1992)
@@ -1021,7 +1022,7 @@ def psychology_ai_api(request):
     if cached and not (request.GET.get('refresh') or body.get('refresh')):
         return JsonResponse({'ok': True, 'result': cached, 'from_cache': True})
 
-    user = request.user if request.user.is_authenticated else None
+    user = request.user
     G, all_nodes, all_rels = _build_nx(user)
     n_nodes = G.number_of_nodes()
     n_edges = G.number_of_edges()
@@ -1052,8 +1053,8 @@ def psychology_ai_api(request):
         except Exception:
             pass
 
-    ufilter = {'owner': user} if user else {}
-    root = user.root_node if user else None
+    ufilter = {'owner': user}
+    root = user.root_node
 
     # Dunbar layers for root
     dunbar = {'intimate': 0, 'close': 0, 'friends': 0, 'acquaintances': 0, 'weak': 0}
@@ -1174,7 +1175,7 @@ def psychology_ai_api(request):
 @login_required
 def daily_tips_view(request):
     """Daily briefing page /daily/."""
-    today = date.today()
+    today = timezone.localdate()
     is_hol, hol_name = is_holiday(today)
     upcoming = upcoming_holidays(30)
 
@@ -1197,14 +1198,14 @@ def daily_tips_view(request):
 @csrf_exempt
 def daily_tips_api(request):
     """POST → AI daily network tips — با تقویم شمسی و تعطیلات ایرانی."""
-    today       = date.today()
+    today       = timezone.localdate()
     is_hol, hol_name = is_holiday(today)
     day_name    = jalali_day_name(today)
     jalali_date = jalali_str(today)
     season      = season_fa(today)
 
-    req_user = request.user if request.user.is_authenticated else None
-    ufilter  = {'owner': req_user} if req_user else {}
+    req_user = request.user
+    ufilter  = {'owner': req_user}
 
     n_nodes = Node.objects.filter(**ufilter).count()
     n_edges = Relationship.objects.filter(**ufilter).count()
@@ -1219,7 +1220,7 @@ def daily_tips_api(request):
     weak_rels  = list(Relationship.objects.filter(strength__lte=2, **ufilter).select_related('target')[:5])
     weak_names = [r.target.display_name() for r in weak_rels]
 
-    root = req_user.root_node if req_user else None
+    root = req_user.root_node
     cutoff14 = today - timedelta(days=14)
     mentioned_ids = set(
         JournalEntry.objects.filter(entry_date__gte=cutoff14, **ufilter).values_list('mentioned_nodes__id', flat=True)

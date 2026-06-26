@@ -51,15 +51,11 @@ COMMUNITY_PALETTE = [
     "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
 ]
 
-def _build_graph(user=None):
-    """Build a networkx Graph from DB (filtered by user). Returns (G, nodes_list, rels_list)."""
+def _build_graph(user):
+    """Build a networkx Graph from DB filtered by user. Returns (G, nodes_list, rels_list)."""
     import networkx as nx
-    if user is not None and user.is_authenticated:
-        all_nodes = list(Node.objects.filter(owner=user))
-        all_rels  = list(Relationship.objects.filter(owner=user).select_related('source', 'target'))
-    else:
-        all_nodes = list(Node.objects.all())
-        all_rels  = list(Relationship.objects.select_related('source', 'target'))
+    all_nodes = list(Node.objects.filter(owner=user))
+    all_rels  = list(Relationship.objects.filter(owner=user).select_related('source', 'target'))
     G = nx.Graph()
     for n in all_nodes:
         G.add_node(n.id)
@@ -308,96 +304,8 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def graph_level_data(request, level=0):
-
-    try:
-        level = int(level)
-        if level > 20:
-            return JsonResponse({'error': 'حداکثر 20 level', 'nodes': [], 'relationships': []})
-
-        cache_key = f'graph_level_{level}'
-        cached = cache.get(cache_key)
-        if cached:
-            return JsonResponse(cached)
-
-        root_node = Node.objects.filter(username="root").first()
-
-        if not root_node:
-            return JsonResponse({
-                'nodes': [],
-                'relationships': [],
-                'error': 'root node not found'
-            })
-
-        if not root_node:
-            return JsonResponse({
-                'nodes': [],
-                'relationships': [],
-                'level': 0,
-                'error': 'no nodes found'
-            })
-
-        nodes = [root_node]
-        relationships = []
-        nodes_per_level = min(50, 10 ** level)
-        
-        if level == 0:
-            pass
-            
-        else:
-            current_parents = [root_node]
-            for depth in range(1, level + 1):
-                next_parents = []
-                current_rels = Relationship.objects.filter(
-                    source__in=current_parents
-                ).select_related('target')[:nodes_per_level]
-
-                for rel in current_rels:
-                    if rel.target not in nodes:
-                        nodes.append(rel.target)
-                        next_parents.append(rel.target)
-                    relationships.append({
-                        'id': f"e{rel.id}",
-                        'source': rel.source.id,
-                        'target': rel.target.id,
-                        'label': rel.rel or f"L{depth}"
-                    })
-                
-                current_parents = next_parents[:nodes_per_level]
-                if not current_parents:
-                    break
-        
-        node_data = []
-        seen_ids = set()
-        for node in nodes:
-            if node.id not in seen_ids:
-                seen_ids.add(node.id)
-                node_data.append({
-                    'id': str(node.id),
-                    'label': node.username or f"Node-{node.id}",
-                    'username': node.username or "",
-                    'level': min(level, len(node_data))
-                })
-        
-        result = {
-            'nodes': node_data,
-            'relationships': relationships,
-            'level': level,
-            'total_levels': 100,
-            'nodes_loaded': len(node_data),
-            'memory_usage': f"{len(node_data) * 100:.0f}KB"
-        }
-        
-        cache.set(cache_key, result, 300)
-        return JsonResponse(result)
-        
-    except Exception as e:
-        logger.error(f"Graph level {level} error: {str(e)}")
-        return JsonResponse({
-            'error': str(e),
-            'nodes': [],
-            'relationships': [],
-            'level': level
-        }, status=500)
+    """Legacy V1 endpoint — replaced by /api/graph/all/ in V3."""
+    return JsonResponse({'nodes': [], 'relationships': [], 'level': level, 'deprecated': True})
 
 class InformationListView(LoginRequiredMixin, ListView):
     model = Information
@@ -633,7 +541,6 @@ def assign_group_api(request):
         for n in nodes:
             n.groups.add(grp)
 
-    cache.delete('graph_all_data')
     return JsonResponse({'ok': True, 'count': len(nodes)})
 
 
@@ -833,7 +740,7 @@ def chat_api(request):
         return JsonResponse({'error': 'message is empty'}, status=400)
 
     # ─── root node (کاربر اصلی که داره چت می‌کنه) ───────────────────────────
-    root_node = request.user.root_node if request.user.is_authenticated else None
+    root_node = request.user.root_node
 
     # ─── serialize graph (فقط داده‌های این کاربر) ────────────────────────────
     all_nodes = Node.objects.filter(owner=request.user)
@@ -858,7 +765,7 @@ def chat_api(request):
     # روابط از دید من (root)
     if root_node:
         my_rels = Relationship.objects.filter(
-            Q(source=root_node) | Q(target=root_node)
+            Q(source=root_node) | Q(target=root_node), owner=request.user
         ).select_related('source', 'target')
         rels_text = "\n".join(
             f"- من ↔ {(r.target if r.source == root_node else r.source).display_name()}"
@@ -1022,6 +929,7 @@ def graph_all_api(request):
 # Settings (root node)
 # ════════════════════════════════════════════════════════════════
 
+@login_required
 def settings_view(request):
     # صفحه تنظیمات به پروفایل ادغام شده
     return redirect('profile')

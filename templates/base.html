@@ -1090,11 +1090,11 @@ async function _loadNotifList(){
       return;
     }
     list.innerHTML = d.alerts.slice(0,7).map(a=>`
-      <div class="notif-item p-${a.priority}" onclick="window.location='/alerts/'">
+      <div class="notif-item p-${_esc(a.priority)}" onclick="window.location='/alerts/'">
         <div class="notif-dot"></div>
         <div>
-          <div class="notif-item-title">${a.title}</div>
-          <div class="notif-item-body">${a.body}</div>
+          <div class="notif-item-title">${_esc(a.title)}</div>
+          <div class="notif-item-body">${_esc(a.body)}</div>
         </div>
       </div>
     `).join('');
@@ -1125,6 +1125,9 @@ _loadBadge();
 function getCookie(n){
   const v = document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)');
   return v ? v.pop() : '';
+}
+function _esc(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 </script>

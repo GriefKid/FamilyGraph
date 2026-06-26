@@ -163,6 +163,9 @@ class Relationship(models.Model):
             raise ValidationError("A node cannot have a relationship with itself.")
 
     def save(self, *args, **kwargs):
+        # جلوگیری از self-loop حتی در create برنامه‌نویسی (clean فقط در form صدا زده میشه)
+        if self.source_id == self.target_id:
+            raise ValidationError("A node cannot have a relationship with itself.")
         # تشخیص تغییر strength برای ثبت تاریخچه
         if self.pk:
             try:

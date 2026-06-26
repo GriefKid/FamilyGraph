@@ -14,7 +14,11 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['*'] if DEBUG else []
+_allowed_raw = os.environ.get('ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = (
+    _allowed_raw.split(',') if _allowed_raw
+    else (['*'] if DEBUG else ['localhost', '127.0.0.1'])
+)
 
 INSTALLED_APPS = [
     'jazzmin',
@@ -114,7 +118,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Tehran'
 
 USE_I18N = True
 
