@@ -141,6 +141,32 @@
 .attr-val{font-size:11.5px;background:var(--card);border:1px solid var(--border);color:var(--text-soft);border-radius:14px;padding:2px 9px;}
 .attr-val-str{font-size:12px;color:var(--text-soft);}
 .apply-row{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border);background:var(--surface);}
+.apply-success{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--success);padding:10px 14px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:9px;}
+.apply-check{font-size:16px;}
+
+/* ══ Profile completion panel ════════════════════════ */
+.pc-section-title{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin:14px 0 8px;}
+.pc-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px;}
+.pc-head{
+  display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:pointer;
+  transition:background .15s;
+}
+.pc-head:hover{background:var(--card-hov);}
+.pc-name{flex:1;font-size:13px;font-weight:600;color:var(--text);}
+.pc-new-badge{font-size:10px;font-weight:700;background:rgba(99,102,241,.15);border:1px solid var(--primary-border);color:var(--primary-light);border-radius:12px;padding:2px 9px;}
+.pc-chevron{font-size:14px;color:var(--text-muted);transition:transform .15s;}
+.pc-form{padding:0 14px 14px;border-top:1px solid var(--border);}
+.pc-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.pc-field{display:flex;flex-direction:column;gap:4px;}
+.pc-field label{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);}
+.pc-field input{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text);
+  border-radius:7px;padding:7px 10px;font-size:12px;font-family:'Vazirmatn',sans-serif;
+  transition:border-color .15s;
+}
+.pc-field input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-glow);}
+.pc-foot{display:flex;align-items:center;gap:10px;margin-top:10px;}
+.pc-saved{font-size:12px;color:var(--success);font-weight:600;}
 
 /* ══ Calendar ═════════════════════════════════════════ */
 .cal-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
@@ -889,12 +915,12 @@ function renderResult(r){
 async function applyResult(){
   if(!lastResult)return;
   const btn=document.querySelector('#applyRow .btn-primary');
-  btn.disabled=true;btn.textContent='در حال ذخیره...';
+  btn.disabled=true; btn.textContent='در حال ذخیره...';
   try{
     const payload = Object.assign({}, lastResult, {
-      node_privacy: nodePrivacy,   // {username: true/false}
-      rel_privacy:  relPrivacy,    // {"from||to||type": true/false}
-      node_links:   nodeLinks,     // {username: {id, display_name, owner_username, ...}}
+      node_privacy: nodePrivacy,
+      rel_privacy:  relPrivacy,
+      node_links:   nodeLinks,
     });
     const r=await fetch('/api/journal/apply/',{
       method:'POST',
@@ -903,11 +929,95 @@ async function applyResult(){
     });
     const d=await r.json();
     const c=d.created||{};
-    const parts=[c.nodes?.length?`${c.nodes.length} نود`:'',c.relationships?.length?`${c.relationships.length} رابطه`:'',c.events?.length?`${c.events.length} رویداد`:'',c.attributes?.length?`${c.attributes.length} پروفایل`:''].filter(Boolean);
-    alert(`✓ ذخیره شد: ${parts.join('، ')||'تغییری نبود'}`);
-    closeResult();location.reload();
+
+    // نودهای واقعاً جدید
+    const newNodes = (c.nodes||[]).filter(n=>n.is_new);
+    const parts=[
+      newNodes.length?`${newNodes.length} نود جدید`:'',
+      c.relationships?.length?`${c.relationships.length} رابطه`:'',
+      c.events?.length?`${c.events.length} رویداد`:'',
+      c.attributes?.length?`${c.attributes.length} پروفایل`:'',
+    ].filter(Boolean);
+
+    // اگه نود جدید داریم → پنل تکمیل پروفایل نشون بده
+    if(newNodes.length){
+      showProfileCompletion(newNodes, parts.join('، '));
+    } else {
+      document.getElementById('applyRow').style.display='none';
+      document.getElementById('resultBody').innerHTML=
+        `<div class="apply-success"><span class="apply-check">✓</span> ذخیره شد${parts.length?' — '+parts.join('، '):''}
+         <button class="btn btn-sm" style="margin-right:12px" onclick="closeResult();location.reload()">بستن</button></div>`;
+    }
   }catch(e){alert('خطا در ذخیره');}
-  finally{btn.disabled=false;btn.textContent='✓ ذخیره در شبکه';}
+  finally{btn.disabled=false; btn.textContent='✓ ذخیره در شبکه';}
+}
+
+// ── پنل تکمیل پروفایل نودهای جدید ──────────────────────────
+function showProfileCompletion(newNodes, savedSummary){
+  document.getElementById('applyRow').style.display='none';
+  let html=`<div class="apply-success"><span class="apply-check">✓</span> ذخیره شد — ${savedSummary}</div>`;
+  html+=`<div class="pc-section-title">تکمیل پروفایل افراد جدید <span style="font-size:11px;color:var(--text-muted);font-weight:400">(اختیاری)</span></div>`;
+  for(const n of newNodes){
+    html+=`
+    <div class="pc-card" id="pc-${n.id}">
+      <div class="pc-head" onclick="togglePcForm(${n.id})">
+        <span class="pc-name">◉ ${_esc(n.display_name||n.username)}</span>
+        <span class="pc-new-badge">جدید</span>
+        <span class="pc-chevron" id="pcc-${n.id}">⌄</span>
+      </div>
+      <div class="pc-form" id="pcf-${n.id}" style="display:none">
+        <div class="pc-fields">
+          <div class="pc-field"><label>نام</label><input id="pcfn-${n.id}" type="text" placeholder="نام اول"></div>
+          <div class="pc-field"><label>نام خانوادگی</label><input id="pcfl-${n.id}" type="text" placeholder="فامیلی"></div>
+          <div class="pc-field"><label>شغل</label><input id="pcfc-${n.id}" type="text" placeholder="مثلاً مهندس نرم‌افزار"></div>
+          <div class="pc-field"><label>تاریخ تولد</label><input id="pcfb-${n.id}" type="date"></div>
+          <div class="pc-field"><label>تلفن</label><input id="pcfp-${n.id}" type="text" placeholder="09..."></div>
+        </div>
+        <div class="pc-foot">
+          <button class="btn btn-sm btn-primary" onclick="saveNodeProfile(${n.id})">ذخیره</button>
+          <span class="pc-saved" id="pcs-${n.id}" style="display:none">✓ ذخیره شد</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  html+=`<div style="margin-top:14px;text-align:center">
+    <button class="btn btn-sm" onclick="closeResult();location.reload()">پایان ← بازگشت</button>
+  </div>`;
+  document.getElementById('resultBody').innerHTML=html;
+}
+
+function togglePcForm(id){
+  const f=document.getElementById(`pcf-${id}`);
+  const c=document.getElementById(`pcc-${id}`);
+  const open=f.style.display==='block';
+  f.style.display=open?'none':'block';
+  c.textContent=open?'⌄':'⌃';
+}
+
+async function saveNodeProfile(id){
+  const get=s=>document.getElementById(`${s}-${id}`)?.value.trim()||'';
+  const payload={
+    first_name: get('pcfn'), last_name: get('pcfl'),
+    career: get('pcfc'), birth_day: get('pcfb'), phone_number: get('pcfp'),
+  };
+  try{
+    const r=await fetch(`/api/nodes/${id}/quick-update/`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:JSON.stringify(payload)
+    });
+    const d=await r.json();
+    if(d.ok){
+      const s=document.getElementById(`pcs-${id}`);
+      s.style.display='inline'; s.textContent='✓ ذخیره شد';
+      setTimeout(()=>s.style.display='none',2500);
+    }
+  }catch(e){ alert('خطا در ذخیره پروفایل'); }
+}
+
+// helper escape برای XSS (اگه هنوز تعریف نشده)
+if(typeof _esc==='undefined') function _esc(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ════════════════════════════════════════════════════════

@@ -1209,9 +1209,13 @@ def journal_apply_api(request):
             owner=req_user,
             defaults=defaults,
         )
-        if is_new:
-            created['nodes'].append(username)
-        else:
+        created['nodes'].append({
+            'id':           node.id,
+            'username':     node.username,
+            'display_name': node.display_name(),
+            'is_new':       is_new,
+        })
+        if not is_new:
             changed = False
             if node_privacy.get(username) is not None and node.is_public != is_pub:
                 node.is_public = is_pub
@@ -1227,27 +1231,47 @@ def journal_apply_api(request):
             if changed:
                 node.save()
 
-    # ── Relationships ──────────────────────────────────────
+    # ── Relationships — یک یال per pair (merge در هر جهت) ──
     for rd in data.get('relationships', []):
         frm      = (rd.get('from') or '').strip()
         to       = (rd.get('to')   or '').strip()
-        rel_type = rd.get('type', '')
-        strength = int(rd.get('strength') or 3)
+        rel_type = (rd.get('type') or '').strip()
+        strength = min(5, max(1, int(rd.get('strength') or 3)))
         src = resolve_node(frm)
         tgt = resolve_node(to)
         if not src or not tgt or src == tgt:
             continue
         rel_key = f"{frm}||{to}||{rel_type}"
         is_pub  = bool(rel_privacy.get(rel_key, False))
-        rel_obj, is_new = Relationship.objects.get_or_create(
-            source=src, target=tgt, rel=rel_type,
-            defaults={'strength': min(5, max(1, strength)), 'is_public': is_pub, 'owner': req_user}
-        )
-        if is_new:
+
+        # بررسی یال موجود در هر دو جهت
+        existing = Relationship.objects.filter(
+            Q(source=src, target=tgt) | Q(source=tgt, target=src),
+            owner=req_user
+        ).first()
+
+        if existing:
+            # اضافه کردن نوع رابطه به یال موجود — اگه تکراری نبود
+            cur_types = [t.strip() for t in (existing.rel or '').split('،') if t.strip()]
+            changed = False
+            if rel_type and rel_type not in cur_types:
+                cur_types.append(rel_type)
+                existing.rel = '، '.join(cur_types)
+                changed = True
+            if existing.strength < strength:
+                existing.strength = strength
+                changed = True
+            if rel_privacy.get(rel_key) is not None and existing.is_public != is_pub:
+                existing.is_public = is_pub
+                changed = True
+            if changed:
+                existing.save()
+        else:
+            Relationship.objects.create(
+                source=src, target=tgt, rel=rel_type,
+                strength=strength, is_public=is_pub, owner=req_user
+            )
             created['relationships'].append(f"{src.username}→{tgt.username}")
-        elif rel_privacy.get(rel_key) is not None:
-            rel_obj.is_public = is_pub
-            rel_obj.save(update_fields=['is_public'])
 
     # ── Events ────────────────────────────────────────────
     for ed in data.get('events', []):
@@ -1424,3 +1448,40 @@ def public_node_search(request):
             'picture_url':   n.picture.url if n.picture else '',
         })
     return JsonResponse({'results': results})
+
+
+# ─────────────────────────────────────────────────────────────────
+# Quick Node Update (for inline profile completion in journal)
+# ─────────────────────────────────────────────────────────────────
+
+@login_required
+@csrf_exempt
+def node_quick_update(request, pk):
+    """آپدیت سریع فیلدهای پایه یک نود — برای فرم inline در journal."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    node = get_object_or_404(Node, pk=pk, owner=request.user)
+
+    FIELDS = ['first_name', 'last_name', 'nickname', 'career', 'phone_number']
+    for field in FIELDS:
+        if field in data:
+            setattr(node, field, (data[field] or '').strip())
+
+    if 'birth_day' in data:
+        val = (data['birth_day'] or '').strip()
+        if val:
+            try:
+                from datetime import date as _date
+                node.birth_day = _date.fromisoformat(val)
+            except Exception:
+                pass
+        else:
+            node.birth_day = None
+
+    node.save()
+    return JsonResponse({'ok': True, 'display_name': node.display_name()})

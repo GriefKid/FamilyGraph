@@ -43,6 +43,7 @@ urlpatterns = [
     path('profile/',     profile_view,     name='profile'),
     path('api/captcha/', captcha_refresh,  name='captcha_refresh'),
     path('api/nodes/public-search/', views.public_node_search, name='public_node_search'),
+    path('api/nodes/<int:pk>/quick-update/', views.node_quick_update, name='node_quick_update'),
     path('notifications/',           notifications_view,       name='notifications'),
     path('api/sync/<int:notif_id>/respond/', sync_respond_api, name='sync_respond'),
     path('export/',                  views.export_graph,       name='export_graph'),
