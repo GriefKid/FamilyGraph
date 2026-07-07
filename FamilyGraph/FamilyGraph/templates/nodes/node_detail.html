@@ -1,266 +1,1460 @@
 {% extends "base.html" %}
-
-{% block title %}
-{{ node.username }}
+{% block title %}{{ node.display_name }} — FamilyGraph{% endblock %}
+{% block page_title %}◉ افراد <span class="page-title-sep">›</span> {{ node.display_name }}{% endblock %}
+{% block nav_nodes %}active{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'node_update' node.id %}" class="btn btn-sm">✎ ویرایش</a>
+  <a href="{% url 'node_delete' node.id %}" class="btn btn-sm btn-danger">✕ حذف</a>
 {% endblock %}
 
 {% block extra_css %}
-
 <style>
 
-/* PROFILE */
-
-.profile{
-display:flex;
-align-items:center;
-gap:20px;
-flex-wrap:wrap;
+/* ─── HERO CARD ─── */
+.hero{
+  background:var(--card);
+  border:1px solid var(--border-accent);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  box-shadow:0 8px 40px rgba(0,0,0,.55), 0 0 80px rgba(99,102,241,.06);
+  margin-bottom:18px;
 }
 
-.avatar{
-width:90px;
-height:90px;
-border-radius:50%;
-overflow:hidden;
-border:2px solid var(--border);
+.hero-banner{
+  height:100px;
+  position:relative;
+  background:linear-gradient(135deg,
+    rgba(99,102,241,.35) 0%,
+    rgba(139,92,246,.22) 40%,
+    rgba(6,182,212,.12) 80%,
+    rgba(59,130,246,.08) 100%
+  );
+  overflow:hidden;
+}
+.hero-banner::before{
+  content:'';
+  position:absolute; inset:0;
+  background:repeating-linear-gradient(
+    -45deg,
+    rgba(255,255,255,.015) 0px,
+    rgba(255,255,255,.015) 1px,
+    transparent 1px,
+    transparent 20px
+  );
+}
+.hero-banner::after{
+  content:'';
+  position:absolute;
+  bottom:0; left:0; right:0;
+  height:60%;
+  background:linear-gradient(to top, var(--card), transparent);
 }
 
-.avatar img{
-width:100%;
-height:100%;
-object-fit:cover;
+.hero-body{
+  display:flex;
+  align-items:flex-end;
+  gap:20px;
+  padding:0 26px 22px;
 }
 
-.avatar-placeholder{
-width:90px;
-height:90px;
-border-radius:50%;
-background:var(--primary);
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:28px;
-color:white;
-font-weight:bold;
+.hero-av{
+  margin-top:-48px;
+  flex-shrink:0;
+  position:relative;
+  z-index:1;
+}
+.av-ring{
+  padding:3px;
+  border-radius:50%;
+  background:var(--grad-brand);
+  box-shadow:0 0 28px rgba(99,102,241,.5), 0 4px 16px rgba(0,0,0,.6);
+  outline:4px solid var(--card);
+  display:inline-flex;
+}
+.av-inner{
+  width:80px; height:80px;
+  border-radius:50%;
+  overflow:hidden;
+  display:block;
+}
+.av-inner img{ width:100%; height:100%; object-fit:cover; }
+.av-ph{
+  width:80px; height:80px;
+  border-radius:50%;
+  background:linear-gradient(135deg,#1e1e38,#2a2a50);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:30px;
+  color:var(--primary-light);
 }
 
-.profile-info{
-flex:1;
+.hero-info{
+  flex:1;
+  padding-top:16px;
+}
+.hero-name{
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:-.3px;
+  margin-bottom:2px;
+  line-height:1.2;
+}
+.hero-username{
+  font-size:12px;
+  color:var(--text-muted);
+  margin-bottom:10px;
+}
+.hero-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.hero-tag{
+  font-size:11.5px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  color:var(--text-soft);
+  padding:3px 10px;
+  border-radius:20px;
+  display:flex;
+  gap:4px;
+  align-items:center;
+}
+.hero-tag strong{ color:var(--primary-light); font-weight:600; }
+
+/* ─── HERO FOOTER: STATS + METRICS ─── */
+.hero-footer{
+  display:flex;
+  gap:0;
+  border-top:1px solid var(--border);
+}
+.hf-stat{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:14px 10px;
+  border-left:1px solid var(--border);
+  transition:background var(--t);
+}
+.hf-stat:first-child{ border-left:none; }
+.hf-stat:hover{ background:rgba(99,102,241,.04); }
+.hf-num{
+  font-size:22px;
+  font-weight:800;
+  background:var(--grad-brand);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  line-height:1;
+}
+.hf-label{
+  font-size:10.5px;
+  color:var(--text-muted);
+  margin-top:3px;
+  letter-spacing:.4px;
 }
 
-.name{
-font-size:22px;
-font-weight:bold;
-margin-bottom:4px;
+.hero-metrics{
+  padding:12px 26px 16px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.metric-tag{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:4px 12px;
+  font-size:11.5px;
+  color:var(--text-soft);
+}
+.metric-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* ─── SECTION ─── */
+.section{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  margin-bottom:14px;
+  box-shadow:0 4px 20px rgba(0,0,0,.38);
+  transition:border-color var(--t);
+}
+.section:hover{ border-color:var(--border-strong); }
+
+.section-hd{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:13px 18px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.section-hd-title{
+  font-size:12.5px;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--text-soft);
+}
+.section-hd-title::before{
+  content:'';
+  width:3px; height:12px;
+  border-radius:2px;
+  background:var(--grad-brand);
 }
 
-.username{
-color:#94a3b8;
-margin-bottom:10px;
+/* ─── RELATIONSHIPS ─── */
+.rel-list{ padding:4px 10px; }
+
+.rel-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 8px;
+  border-radius:var(--radius-sm);
+  transition:background var(--t);
+  cursor:default;
+}
+.rel-row:hover{ background:rgba(99,102,241,.06); }
+
+.rel-avatars{
+  display:flex;
+  align-items:center;
+  gap:0;
+}
+.rel-av{
+  width:34px; height:34px;
+  border-radius:50%;
+  background:var(--grad-brand);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:13px;
+  font-weight:700;
+  color:#fff;
+  border:2px solid var(--card);
+  flex-shrink:0;
+  font-size:12px;
+  box-shadow:0 0 10px rgba(99,102,241,.3);
+}
+.rel-av-secondary{
+  background:linear-gradient(135deg,#1e1e38,#2a2a50);
+  color:var(--primary-light);
+  margin-right:-10px;
+  z-index:0;
+}
+.rel-av-primary{ z-index:1; }
+
+.rel-line{
+  font-size:12px;
+  color:var(--text-soft);
+  margin:0 12px;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+.rel-nodes{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:12.5px;
+}
+.rel-me{ font-weight:700; color:var(--text); }
+.rel-other a{
+  color:var(--primary-light);
+  text-decoration:none;
+  font-weight:500;
+}
+.rel-other a:hover{ text-decoration:underline; }
+.rel-arrow{ color:var(--text-dim); font-size:11px; }
+.rel-type{ font-size:11px; color:var(--text-muted); margin-top:1px; }
+
+.rel-right{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:5px;
 }
 
-.meta{
-display:flex;
-gap:10px;
-flex-wrap:wrap;
-margin-bottom:12px;
+.strength-row{
+  display:flex;
+  gap:3px;
+  align-items:center;
+}
+.sp{
+  width:12px; height:4px;
+  border-radius:2px;
+  background:var(--border);
+  transition:background var(--t);
+}
+.sp.on{ background:var(--primary); }
+.sp.on.s4{ background:#a5b4fc; }
+.sp.on.s5{ background:#c4b5fd; box-shadow:0 0 5px rgba(196,181,253,.6); }
+
+.rel-status{
+  font-size:10px;
+  padding:1px 7px;
+  border-radius:10px;
+}
+.rel-status.active{ background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.22); }
+.rel-status.distant{ background:rgba(245,158,11,.10); color:#fbbf24; border:1px solid rgba(245,158,11,.20); }
+.rel-status.inactive{ background:rgba(255,255,255,.05); color:var(--text-muted); border:1px solid var(--border); }
+
+/* ─── EVENTS ─── */
+.timeline{ padding:10px 18px; display:flex; flex-direction:column; gap:0; }
+.tl-item{ display:flex; gap:14px; align-items:flex-start; position:relative; padding-bottom:14px; }
+.tl-item:last-child{ padding-bottom:6px; }
+.tl-item::before{
+  content:'';
+  position:absolute;
+  right:7px; top:20px; bottom:0;
+  width:1px;
+  background:linear-gradient(to bottom, var(--primary-border), transparent);
+}
+.tl-item:last-child::before{ display:none; }
+.tl-dot{
+  width:16px; height:16px;
+  border-radius:50%;
+  background:var(--grad-brand);
+  flex-shrink:0;
+  margin-top:2px;
+  box-shadow:0 0 10px rgba(99,102,241,.5);
+  position:relative; z-index:1;
+}
+.tl-content{ flex:1; }
+.tl-title{ font-size:13px; font-weight:600; margin-bottom:2px; }
+.tl-date{ font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+.tl-desc{ font-size:12px; color:var(--text-soft); line-height:1.55; }
+
+/* ─── JOURNAL ENTRIES ─── */
+.journal-preview{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 14px;
+}
+.je-item{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  overflow:hidden;
+  cursor:pointer;
+  transition:border-color var(--t);
+}
+.je-item:hover{ border-color:var(--primary-border); }
+.je-top{
+  display:flex;
+  gap:10px;
+  padding:10px 14px;
+  align-items:flex-start;
+}
+.je-img{
+  width:52px; height:52px;
+  border-radius:var(--radius-sm);
+  object-fit:cover;
+  border:1px solid var(--border);
+  flex-shrink:0;
+}
+.je-info{ flex:1; overflow:hidden; }
+.je-date{ font-size:10.5px; color:var(--text-muted); margin-bottom:3px; }
+.je-text{ font-size:12.5px; color:var(--text-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.5; }
+.je-arrow{ color:var(--text-dim); font-size:12px; flex-shrink:0; margin-top:2px; transition:transform var(--t); }
+.je-item.open .je-arrow{ transform:rotate(180deg); }
+.je-full{
+  display:none;
+  border-top:1px solid var(--border);
+  padding:12px 14px;
+}
+.je-full.open{ display:block; }
+.je-full-text{ font-size:12.5px; color:var(--text-soft); line-height:1.8; margin-bottom:8px; }
+.je-imgs{ display:flex; gap:6px; flex-wrap:wrap; }
+.je-imgs a img{ height:72px; border-radius:6px; object-fit:cover; border:1px solid var(--border); }
+
+/* ─── INFO ─── */
+.info-list{ padding:12px 16px; display:flex; flex-direction:column; gap:8px; }
+.info-item{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px 14px;
+  font-size:13px;
+  color:var(--text-soft);
 }
 
-.meta span{
-background:rgba(0,0,0,.2);
-padding:6px 12px;
-border-radius:8px;
-font-size:13px;
+/* ─── AI CARD ─── */
+.ai-card{
+  background:rgba(10,10,30,.5);
+  border:1px solid var(--border-accent);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.5), 0 0 60px rgba(99,102,241,.05);
+  margin-bottom:14px;
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
 }
-
-/* RELATIONS */
-
-.rel-list{
-display:flex;
-flex-direction:column;
-gap:10px;
+.light .ai-card{ background:rgba(255,255,255,.8); }
+.ai-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 20px;
+  border-bottom:1px solid var(--border-accent);
+  background:rgba(99,102,241,.04);
 }
-
-.rel{
-display:flex;
-justify-content:space-between;
-padding:12px;
-border-radius:10px;
-border:1px solid var(--border);
+.ai-head-title{
+  font-size:13px;
+  font-weight:700;
+  color:var(--primary-light);
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
-
-.rel a{
-color:var(--primary);
-text-decoration:none;
+.ai-body{
+  padding:20px;
+  font-size:13.5px;
+  line-height:2;
+  color:var(--text-soft);
+  min-height:60px;
 }
+.ai-body p{ margin:0; }
+.ai-body p+p{ margin-top:10px; }
 
-/* INFO */
-
-.info-list{
-display:flex;
-flex-wrap:wrap;
-gap:10px;
+.btn-ai{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 16px;
+  background:var(--grad-brand);
+  color:#fff;
+  border:none;
+  border-radius:var(--radius-sm);
+  font-family:'Vazirmatn',sans-serif;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  transition:all var(--t);
+  box-shadow:0 0 18px rgba(99,102,241,.38);
 }
+.btn-ai:hover{ opacity:.88; transform:translateY(-1px); box-shadow:0 0 28px rgba(99,102,241,.5); }
+.btn-ai:disabled{ opacity:.35; cursor:not-allowed; transform:none; }
 
-.info{
-background:rgba(0,0,0,.2);
-padding:8px 12px;
-border-radius:8px;
-font-size:13px;
-border:1px solid var(--border);
-}
-
-.empty{
-color:#94a3b8;
-font-size:14px;
-}
+.empty-sec{ padding:28px 20px; text-align:center; color:var(--text-muted); font-size:13px; }
 
 </style>
-
 {% endblock %}
 
 {% block content %}
 
-<!-- NODE CARD -->
+<!-- ══ HERO ══ -->
+<div class="hero">
+  <div class="hero-banner"></div>
 
-<div class="card">
+  <div class="hero-body">
+    <div class="hero-av">
+      <div class="av-ring">
+        {% if node.picture %}
+          <div class="av-inner"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
+        {% else %}
+          <div class="av-ph">{{ node.display_name|first|upper }}</div>
+        {% endif %}
+      </div>
+    </div>
 
-<div class="card-title">
-نود
+    <div class="hero-info">
+      <div class="hero-name">{{ node.display_name }}</div>
+      <div class="hero-username">
+        @{{ node.username }}
+        {% if request.user.root_node and node.id == request.user.root_node.id %}
+        <span class="chip" style="font-size:10px;padding:1px 7px;margin-right:6px;">★ من</span>
+        {% endif %}
+        {% if node.is_public %}<span class="chip chip-success" style="font-size:10px;padding:1px 7px;">🌐 عمومی</span>{% endif %}
+      </div>
+      <div class="hero-tags">
+        {% if node.career %}<span class="hero-tag">💼 <strong>{{ node.career }}</strong></span>{% endif %}
+        {% if node.birth_day %}<span class="hero-tag">🎂 <strong>{{ node.birth_day|date:"j F Y" }}</strong></span>{% endif %}
+        {% if node.phone_number %}<span class="hero-tag" dir="ltr">📞 <strong>{{ node.phone_number }}</strong></span>{% endif %}
+        {% if node.nickname and node.nickname != node.display_name %}<span class="hero-tag">✦ <strong>{{ node.nickname }}</strong></span>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer stats -->
+  <div class="hero-footer">
+    <div class="hf-stat">
+      <div class="hf-num">{{ relationships|length }}</div>
+      <div class="hf-label">رابطه</div>
+    </div>
+    <div class="hf-stat">
+      <div class="hf-num">{{ events|length }}</div>
+      <div class="hf-label">رویداد</div>
+    </div>
+    <div class="hf-stat">
+      <div class="hf-num">{{ informations|length }}</div>
+      <div class="hf-label">اطلاعات</div>
+    </div>
+    {% if journal_entries %}
+    <div class="hf-stat">
+      <div class="hf-num">{{ journal_entries|length }}</div>
+      <div class="hf-label">یادداشت</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Network metrics -->
+  {% if community_idx is not None or degree_centrality is not None %}
+  <div class="hero-metrics">
+    {% if community_idx is not None %}
+    <div class="metric-tag">
+      <div class="metric-dot" style="background:{{ community_color }};box-shadow:0 0 6px {{ community_color }}66;"></div>
+      Community <strong style="color:var(--text);margin-right:3px;">#{{ community_idx|add:1 }}</strong>
+    </div>
+    {% endif %}
+    {% if degree_centrality is not None %}
+    <div class="metric-tag">
+      <div class="metric-dot" style="background:#a5b4fc;"></div>
+      Degree <strong style="color:var(--text);margin-right:3px;">{{ degree_centrality }}</strong>
+    </div>
+    {% endif %}
+    {% if betweenness_centrality is not None %}
+    <div class="metric-tag">
+      <div class="metric-dot" style="background:#34d399;"></div>
+      Betweenness <strong style="color:var(--text);margin-right:3px;">{{ betweenness_centrality }}</strong>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 
-<div class="profile">
+<!-- ══ INTERACTIONS (V4) ══ -->
+{% if not is_root_node %}
+<style>
+.ix-status-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.ix-health{ font-size:13px; font-weight:600; }
+.ix-health .ix-sub{ font-size:11px; color:var(--text-muted); font-weight:400; margin-right:6px; }
+.ix-closeness{ background:var(--card); color:var(--text); border:1px solid var(--border-strong); border-radius:8px; padding:6px 10px; font-family:'Vazirmatn',sans-serif; font-size:12px; cursor:pointer; }
+.ix-log{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px; border:1px dashed var(--border-strong); border-radius:12px; margin-bottom:14px; }
+.ix-kind, .ix-feel{ background:rgba(99,102,241,.06); border:1px solid var(--border-strong); color:var(--text); border-radius:8px; padding:6px 11px; font-size:12px; cursor:pointer; font-family:'Vazirmatn',sans-serif; transition:.15s; }
+.ix-kind.active, .ix-feel.active{ background:rgba(99,102,241,.25); border-color:#6366f1; font-weight:700; }
+.ix-note{ flex:1; min-width:140px; background:transparent; border:1px solid var(--border-strong); border-radius:8px; padding:6px 10px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:12px; }
+.ix-date{ background:transparent; border:1px solid var(--border-strong); border-radius:8px; padding:5px 8px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:12px; }
+.ix-submit{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; border-radius:8px; padding:7px 18px; font-size:12px; font-weight:700; cursor:pointer; font-family:'Vazirmatn',sans-serif; }
+.ix-msg{ font-size:11px; min-width:70px; }
+.ix-item{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--border); font-size:12.5px; }
+.ix-item:last-child{ border-bottom:none; }
+.ix-item-kind{ font-weight:600; min-width:75px; }
+.ix-item-date{ color:var(--text-muted); font-size:11.5px; min-width:70px; }
+.ix-item-note{ color:var(--text-muted); flex:1; }
+.ix-empty{ color:var(--text-muted); font-size:12.5px; text-align:center; padding:14px 0; }
+</style>
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">⚡ تعامل‌ها</span>
+    <span class="chip chip-gray" id="ixCount">{{ interactions|length }}</span>
+  </div>
 
-{% if node.picture %}
+  <div class="ix-status-row">
+    <div class="ix-health" id="ixHealth">
+      {% if node_health and node_health.status != 'unknown' %}
+        {{ node_health.label }}
+        <span class="ix-sub">
+          آخرین تعامل: {% if node_health.days_since == 0 %}امروز{% else %}{{ node_health.days_since }} روز پیش{% endif %}
+          {% if node_health.expected %}· انتظار: هر {{ node_health.expected }} روز{% endif %}
+        </span>
+      {% elif node_health %}
+        ⚪ هنوز تعاملی ثبت نشده
+        {% if node_health.expected %}<span class="ix-sub">انتظار: هر {{ node_health.expected }} روز</span>{% endif %}
+      {% else %}
+        ⚪ برای سلامت رابطه، این شخص باید به نود «من» وصل باشه
+      {% endif %}
+    </div>
+    <select class="ix-closeness" id="ixCloseness" onchange="setCloseness(this.value)">
+      <option value="">دایره نزدیکی: خودکار</option>
+      {% for val, label in closeness_choices %}
+      <option value="{{ val }}" {% if node_closeness == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
 
-<div class="avatar">
-<img src="{{ node.picture.url }}">
+  {% if trend %}
+  <div style="margin-bottom:14px;">
+    <div style="display:flex;align-items:flex-end;gap:3px;height:48px;">
+      {% for t in trend %}
+      <div title="{{ t.label }} — {{ t.n }} تعامل"
+           style="flex:1;height:{{ t.h }}%;min-height:3px;border-radius:3px 3px 0 0;background:{{ t.color }};opacity:.85;"></div>
+      {% endfor %}
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">
+      📈 روند ۱۲ ماه اخیر — ارتفاع = تعداد تعامل، رنگ = حس (🟢 خوب · 🔵 خنثی · 🔴 ناخوشایند)
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="ix-log">
+    <button class="ix-kind active" data-kind="call">📞 تلفنی</button>
+    <button class="ix-kind" data-kind="meet">🤝 حضوری</button>
+    <button class="ix-kind" data-kind="message">💬 پیام</button>
+    <button class="ix-kind" data-kind="online">🌐 آنلاین</button>
+    <span style="width:1px;height:22px;background:var(--border-strong);"></span>
+    <button class="ix-feel" data-feel="1">😊</button>
+    <button class="ix-feel active" data-feel="0">😐</button>
+    <button class="ix-feel" data-feel="-1">😕</button>
+    <input class="ix-note" id="ixNote" placeholder="یادداشت کوتاه (اختیاری)" maxlength="300">
+    <input class="ix-date" id="ixDate" type="date">
+    <button class="ix-submit" onclick="logInteraction()">ثبت</button>
+    <span class="ix-msg" id="ixMsg"></span>
+  </div>
+
+  <div id="ixList">
+    {% for i in interactions %}
+    <div class="ix-item">
+      <span class="ix-item-kind">{{ i.get_kind_display }}</span>
+      <span class="ix-item-date">{{ i.date|date:"Y/m/d" }}</span>
+      <span>{% if i.feeling == 1 %}😊{% elif i.feeling == -1 %}😕{% else %}😐{% endif %}</span>
+      <span class="ix-item-note">{{ i.note }}</span>
+    </div>
+    {% empty %}
+    <div class="ix-empty" id="ixEmpty">هنوز تعاملی ثبت نشده — اولین تعامل رو همین بالا ثبت کن ↑</div>
+    {% endfor %}
+  </div>
 </div>
 
-{% else %}
+<!-- ══ FOLLOWUPS (V4) ══ -->
+<style>
+.fu-add{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.fu-text{ flex:1; min-width:180px; background:transparent; border:1px solid var(--border-strong); border-radius:8px; padding:7px 10px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:12.5px; }
+.fu-date{ background:transparent; border:1px solid var(--border-strong); border-radius:8px; padding:5px 8px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:12px; }
+.fu-btn{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none; border-radius:8px; padding:7px 18px; font-size:12px; font-weight:700; cursor:pointer; font-family:'Vazirmatn',sans-serif; }
+.fu-item{ display:flex; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--border); font-size:13px; }
+.fu-item:last-child{ border-bottom:none; }
+.fu-check{ width:17px; height:17px; accent-color:#6366f1; cursor:pointer; flex-shrink:0; }
+.fu-item-text{ flex:1; }
+.fu-item.done .fu-item-text{ text-decoration:line-through; color:var(--text-muted); }
+.fu-due{ font-size:11px; color:var(--text-muted); white-space:nowrap; }
+.fu-due.overdue{ color:#f87171; font-weight:700; }
+.fu-due.today{ color:#fbbf24; font-weight:700; }
+.fu-del{ background:none; border:none; color:#475569; cursor:pointer; font-size:13px; padding:0 4px; }
+.fu-del:hover{ color:#f87171; }
+.fu-done-hd{ font-size:11px; color:var(--text-muted); margin:12px 0 4px; }
+.fu-empty{ color:var(--text-muted); font-size:12.5px; text-align:center; padding:12px 0; }
+</style>
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">📌 موضوعات باز</span>
+    <span class="chip chip-gray" id="fuCount">{{ followups_open|length }}</span>
+  </div>
 
-<div class="avatar-placeholder">
-{{ node.username|first }}
+  <div class="fu-add">
+    <input class="fu-text" id="fuText" placeholder="مثلاً: قرار شد کتابشو پس بدم / بپرسم امتحانش چی شد" maxlength="300">
+    <input class="fu-date" id="fuDate" type="date" title="سررسید (اختیاری)">
+    <button class="fu-btn" onclick="fuAdd()">+ افزودن</button>
+    <span class="ix-msg" id="fuMsg"></span>
+  </div>
+
+  <div id="fuList">
+    {% for f in followups_open %}
+    <div class="fu-item" id="fu{{ f.id }}">
+      <input type="checkbox" class="fu-check" onchange="fuToggle({{ f.id }})">
+      <span class="fu-item-text">{{ f.text }}</span>
+      {% if f.due_date %}
+        <span class="fu-due {% if f.due_date < today %}overdue{% elif f.due_date == today %}today{% endif %}">
+          {% if f.due_date < today %}⏰ گذشته: {% elif f.due_date == today %}⏰ امروز{% else %}📅 {% endif %}{% if f.due_date != today %}{{ f.due_date|date:"Y/m/d" }}{% endif %}
+        </span>
+      {% endif %}
+      <button class="fu-del" onclick="fuDelete({{ f.id }})" title="حذف">✕</button>
+    </div>
+    {% empty %}
+    <div class="fu-empty" id="fuEmpty">موضوع بازی نیست — قول‌ها و سوال‌هایی که نباید یادت بره رو اینجا بنویس</div>
+    {% endfor %}
+  </div>
+
+  {% if followups_done %}
+  <div class="fu-done-hd">انجام‌شده‌های اخیر:</div>
+  {% for f in followups_done %}
+  <div class="fu-item done" id="fu{{ f.id }}">
+    <input type="checkbox" class="fu-check" checked onchange="fuToggle({{ f.id }})">
+    <span class="fu-item-text">{{ f.text }}</span>
+    <button class="fu-del" onclick="fuDelete({{ f.id }})" title="حذف">✕</button>
+  </div>
+  {% endfor %}
+  {% endif %}
 </div>
 
+<!-- ══ MONEY (V6) ══ -->
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">💰 حساب مالی</span>
+    {% if node_debt_balance != 0 %}
+    <span class="chip {% if node_debt_balance > 0 %}chip-mint{% else %}chip-pink{% endif %}" style="font-weight:800;">
+      {% if node_debt_balance > 0 %}{{ node_debt_balance_fmt }} به تو بدهکاره{% else %}{{ node_debt_balance_fmt }} بهش بدهکاری{% endif %}
+    </span>
+    {% else %}
+    <span class="chip chip-gray">بی‌حساب ✓</span>
+    {% endif %}
+  </div>
+
+  {% if node_debts %}
+  <div style="margin-bottom:10px;">
+    {% for d in node_debts %}
+    <div class="fu-item" id="nd{{ d.id }}">
+      <span>{% if d.direction == 'i_owe' %}💸{% else %}💰{% endif %}</span>
+      <span style="font-weight:800;direction:ltr;" class="{% if d.direction == 'i_owe' %}lg-neg{% else %}lg-pos{% endif %}">{{ d.remaining_fmt }}</span>
+      <span style="font-size:11.5px;color:var(--text-muted);flex:1;">
+        {{ d.currency }}{% if d.note %} · {{ d.note }}{% endif %}
+        {% if d.due_fa %} · سررسید: <b {% if d.overdue %}style="color:#f87171"{% endif %}>{{ d.due_fa }}{% if d.overdue %} (گذشته!){% endif %}</b>{% endif %}
+      </span>
+      <button class="fu-del" onclick="ndPay({{ d.id }})" title="تسویه" style="color:#34d399;">✓</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="fu-add">
+    <select class="ix-closeness" id="ndDir">
+      <option value="i_owe">💸 ازش قرض گرفتم</option>
+      <option value="they_owe">💰 بهش قرض دادم</option>
+    </select>
+    <input class="fu-text" id="ndAmount" placeholder="مبلغ (تومان)" inputmode="numeric" style="min-width:110px;flex:0 1 140px;">
+    <input class="fu-date" id="ndDue" type="date" title="سررسید (اختیاری)">
+    <input class="fu-text" id="ndNote" placeholder="بابت؟ (اختیاری)" maxlength="300">
+    <button class="fu-btn" onclick="ndCreate()">ثبت</button>
+    <span class="ix-msg" id="ndMsg"></span>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">
+    دفتر کامل: <a href="/ledger/" style="color:#a5b4fc;">💰 قرض و طلب</a>
+  </div>
+</div>
+<style>.lg-pos{color:#34d399}.lg-neg{color:#f87171}</style>
+
+<!-- ══ LIFE EVENTS + GOAL (V10) ══ -->
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">🎗 رویدادهای زندگی</span>
+    <span class="chip chip-gray">{{ life_events|length }}</span>
+  </div>
+  <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;">
+    سوگ، جراحی، کنکور، عروسی… ثبت کنی، اپ آیین پیگیریش رو یادت می‌ندازه (روز ۳، ۷، چهلم…)
+  </div>
+  {% for le in life_events %}
+  <div class="fu-item" id="le{{ le.id }}">
+    <span>{{ le.get_kind_display }}</span>
+    {% if le.title %}<span style="color:var(--text-soft);font-size:12px;">{{ le.title }}</span>{% endif %}
+    <span style="font-size:11px;color:var(--text-muted);margin-right:auto;">{{ le.date|date:"Y/m/d" }}</span>
+    <button class="fu-del" onclick="leDelete({{ le.id }})" title="حذف">✕</button>
+  </div>
+  {% endfor %}
+  <div class="fu-add" style="margin-top:8px;">
+    <select class="ix-closeness" id="leKind">
+      {% for val, label in life_event_kinds %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+    </select>
+    <input class="fu-date" id="leDate" type="date">
+    <input class="fu-text" id="leTitle" placeholder="توضیح کوتاه (اختیاری)" maxlength="200">
+    <button class="fu-btn" onclick="leAdd()">+ ثبت</button>
+    <span class="ix-msg" id="leMsg"></span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">🎯 هدف روی این رابطه</span>
+    {% if active_goal and goal_progress is not None %}
+    <span class="chip {% if goal_progress >= 0 %}chip-mint{% else %}chip-pink{% endif %}" style="font-weight:800;">
+      پیشرفت: {% if goal_progress >= 0 %}+{% endif %}{{ goal_progress }} امتیاز
+    </span>
+    {% endif %}
+  </div>
+  {% if active_goal %}
+  <div style="font-size:13.5px;font-weight:700;">«{{ active_goal.text }}»</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+    از {{ active_goal.created_at|date:"Y/m/d" }}
+    {% if active_goal.baseline_score is not None %} · امتیاز شروع: {{ active_goal.baseline_score }}{% endif %}
+    {% if node_health and node_health.score is not None %} · الان: {{ node_health.score }}{% endif %}
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px;">
+    <button class="fu-btn" style="background:linear-gradient(135deg,#10b981,#06b6d4);" onclick="goalClose({{ active_goal.id }}, 'achieved')">🎉 رسیدم!</button>
+    <button class="fu-del" style="font-size:11px;border:1px solid var(--border);border-radius:8px;padding:6px 14px;" onclick="goalClose({{ active_goal.id }}, 'abandoned')">بی‌خیالش</button>
+  </div>
+  {% else %}
+  <div class="fu-add">
+    <input class="fu-text" id="goalText" placeholder="مثلاً: می‌خوام صمیمی‌تر شیم / ماهی یه بار ببینمش" maxlength="300">
+    <button class="fu-btn" onclick="goalAdd()">🎯 ثبت هدف</button>
+    <span class="ix-msg" id="goalMsg"></span>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+    امتیاز سلامت الان به عنوان نقطه‌ی شروع ثبت می‌شه و هر شنبه پیشرفتت رو بهت می‌گم
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══ CONNECT PATH (V5) ══ -->
+<style>
+.cn-btns{ display:flex; gap:9px; flex-wrap:wrap; }
+.cn-btn{ padding:8px 17px; border-radius:10px; border:1px solid var(--primary-border);
+  background:rgba(99,102,241,.1); color:#a5b4fc; font-size:12.5px; font-weight:700;
+  cursor:pointer; font-family:'Vazirmatn',sans-serif; transition:.18s; }
+.cn-btn:hover{ background:rgba(99,102,241,.25); transform:translateY(-1px); }
+.cn-path{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:12px 0; }
+.cn-node{ padding:6px 13px; border-radius:999px; font-size:12.5px; font-weight:700;
+  background:rgba(99,102,241,.1); border:1px solid var(--border-strong); }
+.cn-node.me{ background:linear-gradient(135deg,rgba(99,102,241,.3),rgba(139,92,246,.25)); border-color:#818cf8; }
+.cn-arrow{ color:var(--text-muted); font-size:13px; }
+.cn-mutual{ display:inline-flex; align-items:center; gap:5px; padding:4px 11px; margin:3px;
+  border-radius:999px; font-size:11.5px; background:rgba(16,185,129,.08);
+  border:1px solid rgba(16,185,129,.25); color:#6ee7b7; }
+.cn-step{ display:flex; gap:12px; padding:11px 0; border-bottom:1px dashed var(--border); }
+.cn-step:last-child{ border-bottom:none; }
+.cn-step-n{ width:26px; height:26px; border-radius:50%; flex-shrink:0; display:flex;
+  align-items:center; justify-content:center; font-size:12px; font-weight:800;
+  background:linear-gradient(135deg,#6366f1,#a855f7); color:#fff; }
+.cn-opener{ margin-top:12px; padding:12px 14px; border-radius:12px; font-size:13px;
+  background:rgba(16,185,129,.07); border:1px dashed rgba(16,185,129,.35); }
+.cn-warning{ margin-top:8px; padding:10px 14px; border-radius:12px; font-size:12px;
+  background:rgba(244,63,94,.06); border:1px dashed rgba(244,63,94,.3); color:#fda4af; }
+</style>
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">🌉 مسیر آشنایی و تقویت رابطه</span>
+  </div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+    می‌خوای با {{ node.display_name }} دوست بشی یا رابطه‌تون رو قوی‌تر/کاری‌تر کنی؟
+    از گرافت مسیر و از AI پلن قدم‌به‌قدم بگیر.
+  </div>
+  <div class="cn-btns">
+    <button class="cn-btn" onclick="cnLoad()">🗺 تحلیل مسیر گراف</button>
+    <button class="cn-btn" onclick="cnPlan('friendship')">💛 پلن دوستی</button>
+    <button class="cn-btn" onclick="cnPlan('work')">💼 پلن رابطه کاری</button>
+    <span class="ix-msg" id="cnMsg"></span>
+  </div>
+  <div id="cnInfo"></div>
+  <div id="cnPlanBox"></div>
+</div>
 {% endif %}
 
-<div class="profile-info">
+<!-- ══ RELATIONSHIPS ══ -->
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">💞 روابط</span>
+    <span class="chip chip-gray">{{ relationships|length }}</span>
+  </div>
+  {% if relationships %}
+    <div class="rel-list">
+      {% for r in relationships %}
+      <div class="rel-row">
 
-<div class="name">
-{{ node.name|default:"بدون نام" }}
+        <div class="rel-avatars">
+          <div class="rel-av rel-av-primary">{{ r.source.display_name|first|upper }}</div>
+          <div class="rel-av rel-av-secondary">{{ r.target.display_name|first|upper }}</div>
+        </div>
+
+        <div class="rel-line">
+          <div class="rel-nodes">
+            {% if r.source == node %}
+              <span class="rel-me">{{ r.source.display_name }}</span>
+              <span class="rel-arrow">→</span>
+              <span class="rel-other"><a href="{% url 'node_detail' r.target.id %}">{{ r.target.display_name }}</a></span>
+            {% else %}
+              <span class="rel-other"><a href="{% url 'node_detail' r.source.id %}">{{ r.source.display_name }}</a></span>
+              <span class="rel-arrow">→</span>
+              <span class="rel-me">{{ r.target.display_name }}</span>
+            {% endif %}
+          </div>
+          {% if r.rel %}<div class="rel-type">{{ r.rel }}</div>{% endif %}
+        </div>
+
+        <div class="rel-right">
+          <div class="strength-row">
+            {% for i in "12345" %}
+            <div class="sp {% if forloop.counter <= r.strength %}on {% if r.strength >= 5 %}s5{% elif r.strength >= 4 %}s4{% endif %}{% endif %}"></div>
+            {% endfor %}
+          </div>
+          <span class="rel-status {{ r.status }}">
+            {% if r.status == 'active' %}فعال{% elif r.status == 'distant' %}دور{% else %}غیرفعال{% endif %}
+          </span>
+        </div>
+
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-sec">هیچ رابطه‌ای ثبت نشده</div>
+  {% endif %}
 </div>
 
-<div class="username">
-@{{ node.username }}
+<!-- ══ شناخت‌نامه (V9) ══ -->
+<style>
+.ins-wrap{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.ins-score{ width:82px; height:82px; border-radius:50%; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; flex-shrink:0; color:#fff; font-weight:800; }
+.ins-score .s{ font-size:25px; line-height:1; } .ins-score .t{ font-size:9px; opacity:.85; margin-top:2px; }
+.ins-chips{ display:flex; gap:5px; flex-wrap:wrap; margin:4px 0 8px; }
+.ins-chip{ font-size:10.5px; padding:2px 10px; border-radius:999px;
+  background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.3); color:#a5b4fc; }
+.ins-chip.red{ background:rgba(239,68,68,.1); border-color:rgba(239,68,68,.35); color:#fda4af; }
+.ins-chip.green{ background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.35); color:#6ee7b7; }
+.ins-label{ font-size:10.5px; color:var(--text-muted); margin-top:6px; }
+.ins-tip{ margin-top:10px; padding:10px 13px; border-radius:11px; font-size:12.5px;
+  background:rgba(16,185,129,.06); border:1px dashed rgba(16,185,129,.3); }
+</style>
+{% if node_insight and not is_root_node %}
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">💠 شناخت‌نامه</span>
+    {% if node_insight.friendship_score is not None %}
+    <span class="chip chip-indigo" style="font-weight:800;">نمره دوستی: {{ node_insight.friendship_score }}/100</span>
+    {% endif %}
+  </div>
+  <div class="ins-wrap">
+    {% if node_insight.friendship_score is not None %}
+    <div class="ins-score" style="background:{% if node_insight.friendship_score >= 70 %}linear-gradient(135deg,#10b981,#06b6d4){% elif node_insight.friendship_score >= 40 %}linear-gradient(135deg,#f59e0b,#ec4899){% else %}linear-gradient(135deg,#ef4444,#ec4899){% endif %}">
+      <span class="s">{{ node_insight.friendship_score }}</span><span class="t">نمره دوستی</span>
+    </div>
+    {% endif %}
+    <div style="flex:1;min-width:220px;">
+      <div style="font-size:13px;line-height:1.9;">{{ node_insight.personality }}</div>
+      {% if node_insight.communication_style %}
+      <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px;">🗣 {{ node_insight.communication_style }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% if node_insight.values %}<div class="ins-label">ارزش‌ها:</div><div class="ins-chips">{% for v in node_insight.values %}<span class="ins-chip green">{{ v }}</span>{% endfor %}</div>{% endif %}
+  {% if node_insight.interests %}<div class="ins-label">علایق:</div><div class="ins-chips">{% for v in node_insight.interests %}<span class="ins-chip">{{ v }}</span>{% endfor %}</div>{% endif %}
+  {% if node_insight.strengths %}<div class="ins-label">قوت رابطه:</div><div class="ins-chips">{% for v in node_insight.strengths %}<span class="ins-chip green">{{ v }}</span>{% endfor %}</div>{% endif %}
+  {% if node_insight.red_flags %}<div class="ins-label">⚠️ هشدارها:</div><div class="ins-chips">{% for v in node_insight.red_flags %}<span class="ins-chip red">{{ v }}</span>{% endfor %}</div>{% endif %}
+  {% if node_insight.relationship_quality %}<div style="font-size:12px;color:var(--text-soft);margin-top:4px;">📊 {{ node_insight.relationship_quality }}</div>{% endif %}
+  {% if node_insight.tip %}<div class="ins-tip">💡 {{ node_insight.tip }}</div>{% endif %}
 </div>
-
-<div class="meta">
-
-{% if node.career %}
-<span>💼 {{ node.career }}</span>
 {% endif %}
 
-{% if node.birth_day %}
-<span>🎂 {{ node.birth_day }}</span>
+<!-- ══ AI SUMMARY ══ -->
+<div class="ai-card">
+  <div class="ai-head">
+    <span class="ai-head-title">✦ تحلیل هوشمند</span>
+    <span style="display:flex;gap:8px;">
+      {% if not is_root_node %}
+      <button class="btn-ai" id="relBtn" onclick="analyzeRelation()">💠 تحلیل رابطه</button>
+      {% endif %}
+      <button class="btn-ai" id="aiBtn" onclick="loadSummary()">✦ تولید خلاصه</button>
+    </span>
+  </div>
+  <div class="ai-body" id="aiBody">
+    <span style="color:var(--text-muted);font-style:italic;font-size:13px;">
+      «💠 تحلیل رابطه» = نمره و شناخت‌نامه از روی داده‌های ثبت‌شده · «✦ تولید خلاصه» = روایت کامل
+    </span>
+  </div>
+</div>
+
+<!-- ══ EVENTS ══ -->
+{% if events %}
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">📅 رویدادهای مشترک</span>
+    <span class="chip chip-gray">{{ events|length }}</span>
+  </div>
+  <div class="timeline">
+    {% for ev in events %}
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-content">
+        <div class="tl-title">{{ ev.title }}</div>
+        <div class="tl-date">{{ ev.date|date:"j F Y" }}</div>
+        {% if ev.description %}<div class="tl-desc">{{ ev.description }}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
 {% endif %}
 
+<!-- ══ JOURNAL ══ -->
+{% if journal_entries %}
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">📓 یادداشت‌های مرتبط</span>
+    <span class="chip chip-gray">{{ journal_entries|length }}</span>
+  </div>
+  <div class="journal-preview">
+    {% for entry in journal_entries %}
+    <div class="je-item" id="je{{ entry.id }}" onclick="toggleJe('{{ entry.id }}')">
+      <div class="je-top">
+        {% with fi=entry.images.first %}
+        {% if fi %}<img class="je-img" src="{{ fi.image.url }}" alt="">{% endif %}
+        {% endwith %}
+        <div class="je-info">
+          <div class="je-date">
+            {% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}
+            {% if entry.mood %} · {{ entry.mood }}{% endif %}
+          </div>
+          <div class="je-text">{{ entry.text|truncatechars:80 }}</div>
+        </div>
+        <span class="je-arrow">▾</span>
+      </div>
+      <div class="je-full" id="jef{{ entry.id }}">
+        <p class="je-full-text">{{ entry.text }}</p>
+        {% with imgs=entry.images.all %}
+        {% if imgs %}
+        <div class="je-imgs">
+          {% for img in imgs %}
+          <a href="{{ img.image.url }}" target="_blank"><img src="{{ img.image.url }}" alt=""></a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 </div>
-
-<a href="{% url 'node_update' node.id %}" class="btn">
-ویرایش
-</a>
-
-<a href="{% url 'node_delete' node.id %}" class="btn btn-danger">
-حذف
-</a>
-
-</div>
-
-</div>
-
-</div>
-
-
-<!-- RELATIONS -->
-
-<div class="card">
-
-<div class="card-title">
-روابط
-</div>
-
-{% if relationships %}
-
-<div class="rel-list">
-
-{% for r in relationships %}
-
-<div class="rel">
-
-<div>
-<a href="/nodes/{{ r.father.id }}/">
-{{ r.father.username }}
-</a>
-
-→
-
-<a href="/nodes/{{ r.child.id }}/">
-{{ r.child.username }}
-</a>
-</div>
-
-<div>
-{{ r.rel }}
-</div>
-
-</div>
-
-{% endfor %}
-
-</div>
-
-{% else %}
-
-<div class="empty">
-هیچ رابطه‌ای ثبت نشده
-</div>
-
 {% endif %}
 
-</div>
-
-
-<!-- INFO -->
-
-<div class="card">
-
-<div class="card-title">
-اطلاعات
-</div>
-
+<!-- ══ INFO ══ -->
 {% if informations %}
-
-<div class="info-list">
-
-{% for info in informations %}
-
-<div class="info">
-{{ info.data }}
+<div class="section">
+  <div class="section-hd">
+    <span class="section-hd-title">💡 اطلاعات</span>
+    <span class="chip chip-gray">{{ informations|length }}</span>
+  </div>
+  <div class="info-list">
+    {% for info in informations %}
+    <div class="info-item">{{ info.data }}</div>
+    {% endfor %}
+  </div>
 </div>
-
-{% endfor %}
-
-</div>
-
-{% else %}
-
-<div class="empty">
-اطعاتی ثبت نشده
-</div>
-
 {% endif %}
 
-</div>
+<script>
+// ═══ V4: Interactions ═══
+let ixKind = 'call', ixFeel = 0;
 
+document.querySelectorAll('.ix-kind').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.ix-kind').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); ixKind = b.dataset.kind;
+});
+document.querySelectorAll('.ix-feel').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.ix-feel').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); ixFeel = parseInt(b.dataset.feel);
+});
+(function(){
+  const d = document.getElementById('ixDate');
+  if(d){ d.value = new Date().toISOString().slice(0,10); d.max = d.value; }
+})();
+
+function renderHealth(h){
+  const el = document.getElementById('ixHealth');
+  if(!el || !h) return;
+  if(h.status === 'unknown'){
+    el.innerHTML = '⚪ هنوز تعاملی ثبت نشده' +
+      (h.expected ? ` <span class="ix-sub">انتظار: هر ${h.expected} روز</span>` : '');
+    return;
+  }
+  const days = h.days_since === 0 ? 'امروز' : h.days_since + ' روز پیش';
+  el.innerHTML = `${h.label} <span class="ix-sub">آخرین تعامل: ${days}` +
+    (h.expected ? ` · انتظار: هر ${h.expected} روز` : '') + '</span>';
+}
+
+async function logInteraction(){
+  const msg = document.getElementById('ixMsg');
+  msg.style.color = 'var(--text-muted)'; msg.textContent = 'در حال ثبت…';
+  try{
+    const res = await fetch('/api/interactions/log/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({
+        node_id: {{ node.id }},
+        kind:    ixKind,
+        feeling: ixFeel,
+        note:    document.getElementById('ixNote').value,
+        date:    document.getElementById('ixDate').value,
+      })
+    });
+    const d = await res.json();
+    if(!d.ok){ msg.style.color = '#f43f5e'; msg.textContent = d.error || 'خطا'; return; }
+    msg.style.color = '#34d399'; msg.textContent = '✓ ثبت شد';
+    document.getElementById('ixNote').value = '';
+    // اضافه کردن به بالای لیست
+    const empty = document.getElementById('ixEmpty');
+    if(empty) empty.remove();
+    const i = d.interaction;
+    const row = document.createElement('div');
+    row.className = 'ix-item';
+    row.innerHTML = `
+      <span class="ix-item-kind">${i.kind_label}</span>
+      <span class="ix-item-date">${i.date_fa || i.date}</span>
+      <span>${i.feeling_emoji}</span>
+      <span class="ix-item-note"></span>`;
+    row.querySelector('.ix-item-note').textContent = i.note || '';
+    document.getElementById('ixList').prepend(row);
+    const cnt = document.getElementById('ixCount');
+    cnt.textContent = (parseInt(cnt.textContent) || 0) + 1;
+    if(d.health) renderHealth(d.health);
+    // یادآوری موضوعات باز
+    if(d.open_followups && d.open_followups.length){
+      msg.style.color = '#fbbf24';
+      msg.textContent = `✓ ثبت شد — ${d.open_followups.length} موضوع باز باهاش داری ↓`;
+      setTimeout(() => { msg.textContent = ''; }, 6000);
+    } else {
+      setTimeout(() => { msg.textContent = ''; }, 2500);
+    }
+  }catch(e){
+    msg.style.color = '#f43f5e'; msg.textContent = 'خطا در ارتباط با سرور';
+  }
+}
+
+async function setCloseness(tier){
+  try{
+    const res = await fetch('/api/nodes/{{ node.id }}/closeness/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({ closeness: tier })
+    });
+    const d = await res.json();
+    if(d.ok && d.health) renderHealth(d.health);
+    else if(!d.ok) alert(d.error || 'خطا در ذخیره');
+  }catch(e){ alert('خطا در ارتباط با سرور'); }
+}
+
+// ═══ V4: FollowUps ═══
+async function fuAdd(){
+  const text = document.getElementById('fuText').value.trim();
+  const due  = document.getElementById('fuDate').value;
+  const msg  = document.getElementById('fuMsg');
+  if(!text){ msg.style.color='#f43f5e'; msg.textContent='متن خالیه'; return; }
+  msg.style.color = 'var(--text-muted)'; msg.textContent = '…';
+  try{
+    const res = await fetch('/api/followups/create/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({ node_id: {{ node.id }}, text: text, due_date: due })
+    });
+    const d = await res.json();
+    if(!d.ok){ msg.style.color='#f43f5e'; msg.textContent = d.error || 'خطا'; return; }
+    msg.style.color='#34d399'; msg.textContent='✓';
+    document.getElementById('fuText').value = '';
+    document.getElementById('fuDate').value = '';
+    const empty = document.getElementById('fuEmpty');
+    if(empty) empty.remove();
+    document.getElementById('fuList').prepend(fuRow(d.followup));
+    const cnt = document.getElementById('fuCount');
+    cnt.textContent = (parseInt(cnt.textContent) || 0) + 1;
+    setTimeout(() => { msg.textContent=''; }, 2000);
+  }catch(e){ msg.style.color='#f43f5e'; msg.textContent='خطای سرور'; }
+}
+
+function fuRow(f){
+  const row = document.createElement('div');
+  row.className = 'fu-item';
+  row.id = 'fu' + f.id;
+  let due = '';
+  if(f.due_date){
+    const cls = f.overdue ? 'overdue' : (f.days_left === 0 ? 'today' : '');
+    const txt = f.overdue ? '⏰ گذشته: ' + f.due_fa
+              : (f.days_left === 0 ? '⏰ امروز' : '📅 ' + f.due_fa);
+    due = `<span class="fu-due ${cls}">${txt}</span>`;
+  }
+  row.innerHTML = `
+    <input type="checkbox" class="fu-check" onchange="fuToggle(${f.id})">
+    <span class="fu-item-text"></span>
+    ${due}
+    <button class="fu-del" onclick="fuDelete(${f.id})" title="حذف">✕</button>`;
+  row.querySelector('.fu-item-text').textContent = f.text;
+  return row;
+}
+
+async function fuToggle(id){
+  try{
+    const res = await fetch(`/api/followups/${id}/toggle/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken':getCookie('csrftoken')}
+    });
+    const d = await res.json();
+    if(!d.ok){ alert(d.error || 'خطا'); return; }
+    const row = document.getElementById('fu' + id);
+    if(row) row.classList.toggle('done', d.followup.done);
+    const cnt = document.getElementById('fuCount');
+    const cur = parseInt(cnt.textContent) || 0;
+    cnt.textContent = Math.max(0, cur + (d.followup.done ? -1 : 1));
+  }catch(e){ alert('خطای سرور'); }
+}
+
+async function fuDelete(id){
+  if(!confirm('حذف بشه؟')) return;
+  try{
+    const res = await fetch(`/api/followups/${id}/delete/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken':getCookie('csrftoken')}
+    });
+    const d = await res.json();
+    if(!d.ok){ alert(d.error || 'خطا'); return; }
+    const row = document.getElementById('fu' + id);
+    const wasOpen = row && !row.classList.contains('done');
+    if(row) row.remove();
+    if(wasOpen){
+      const cnt = document.getElementById('fuCount');
+      cnt.textContent = Math.max(0, (parseInt(cnt.textContent) || 0) - 1);
+    }
+  }catch(e){ alert('خطای سرور'); }
+}
+
+// ═══ V9: تحلیل رابطه از داده‌های اپ ═══
+function insScoreBg(s){ return s >= 70 ? 'linear-gradient(135deg,#10b981,#06b6d4)'
+  : (s >= 40 ? 'linear-gradient(135deg,#f59e0b,#ec4899)' : 'linear-gradient(135deg,#ef4444,#ec4899)'); }
+function escIns(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function analyzeRelation(){
+  const btn = document.getElementById('relBtn');
+  const body = document.getElementById('aiBody');
+  btn.disabled = true; btn.textContent = '💠 در حال تحلیل…';
+  try{
+    const r = await fetch('/api/nodes/{{ node.id }}/relation-analyze/', {
+      method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}});
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = '💠 تحلیل رابطه';
+    if(!d.ok){ body.innerHTML = `<span style="color:#f43f5e;font-size:13px;">${escIns(d.error||'خطا')}</span>`; return; }
+    const R = d.result || {};
+    const score = parseInt(R.friendship_score) || 0;
+    const chips = (arr, cls) => (arr||[]).map(x => `<span class="ins-chip ${cls||''}">${escIns(x)}</span>`).join('');
+    body.innerHTML = `
+      <div class="ins-wrap">
+        <div class="ins-score" style="background:${insScoreBg(score)}">
+          <span class="s">${score}</span><span class="t">نمره دوستی</span>
+        </div>
+        <div style="flex:1;min-width:220px;">
+          <div style="font-size:13px;line-height:1.9;">${escIns(R.personality||'')}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:3px;">🗣 ${escIns(R.communication_style||'')}</div>
+        </div>
+      </div>
+      ${(R.score_reasons||[]).length ? `<div class="ins-label">چرا این نمره:</div><div class="ins-chips">${chips(R.score_reasons)}</div>` : ''}
+      ${(R.strengths||[]).length ? `<div class="ins-label">قوت رابطه:</div><div class="ins-chips">${chips(R.strengths,'green')}</div>` : ''}
+      ${(R.red_flags||[]).length ? `<div class="ins-label">⚠️ هشدارها:</div><div class="ins-chips">${chips(R.red_flags,'red')}</div>` : ''}
+      ${R.relationship_quality ? `<div style="font-size:12px;color:var(--text-soft);margin-top:4px;">📊 ${escIns(R.relationship_quality)}</div>` : ''}
+      ${R.tip ? `<div class="ins-tip">💡 ${escIns(R.tip)}</div>` : ''}
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn-ai" onclick="saveRelation()">✓ ذخیره در شناخت‌نامه</button>
+        <label style="font-size:11.5px;color:var(--text-soft);display:flex;gap:5px;align-items:center;">
+          <input type="checkbox" id="insStrChk" checked style="accent-color:#a855f7">
+          قدرت یال هم بشه ${R.suggested_strength||3}
+        </label>
+        <span class="ix-msg" id="insMsg"></span>
+      </div>`;
+    body.dataset.result = JSON.stringify(R);
+  }catch(e){
+    btn.disabled = false; btn.textContent = '💠 تحلیل رابطه';
+    body.innerHTML = '<span style="color:#f43f5e;font-size:13px;">خطا در ارتباط با سرور</span>';
+  }
+}
+async function saveRelation(){
+  const body = document.getElementById('aiBody');
+  const R = JSON.parse(body.dataset.result || '{}');
+  const m = document.getElementById('insMsg');
+  try{
+    const r = await fetch('/api/import/telegram/save-relation/', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({
+        node_id: {{ node.id }}, data: R,
+        set_strength: document.getElementById('insStrChk').checked,
+        strength: R.suggested_strength || 3 })
+    });
+    const d = await r.json();
+    if(d.ok){ m.style.color='#34d399'; m.textContent='✓ ذخیره شد — رفرش کنی کارت شناخت‌نامه رو می‌بینی'; }
+    else { m.style.color='#f43f5e'; m.textContent = d.error||'خطا'; }
+  }catch(e){ m.style.color='#f43f5e'; m.textContent='خطای سرور'; }
+}
+
+// ═══ V10: Life Events + Goal ═══
+async function leAdd(){
+  const msg = document.getElementById('leMsg');
+  msg.style.color='var(--text-muted)'; msg.textContent='…';
+  try{
+    const r = await fetch('/api/life-events/create/', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({
+        node_id: {{ node.id }},
+        kind: document.getElementById('leKind').value,
+        date: document.getElementById('leDate').value,
+        title: document.getElementById('leTitle').value,
+      })
+    });
+    const d = await r.json();
+    if(d.ok) location.reload();
+    else { msg.style.color='#f43f5e'; msg.textContent = d.error || 'خطا'; }
+  }catch(e){ msg.style.color='#f43f5e'; msg.textContent='خطای سرور'; }
+}
+async function leDelete(id){
+  if(!confirm('این رویداد حذف بشه؟ (یادآورهاش هم می‌رن)')) return;
+  try{
+    const r = await fetch(`/api/life-events/${id}/delete/`, {
+      method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')} });
+    const d = await r.json();
+    if(d.ok) document.getElementById('le'+id).remove();
+    else alert(d.error || 'خطا');
+  }catch(e){ alert('خطای سرور'); }
+}
+async function goalAdd(){
+  const msg = document.getElementById('goalMsg');
+  const text = document.getElementById('goalText').value.trim();
+  if(!text){ msg.style.color='#f43f5e'; msg.textContent='هدف رو بنویس'; return; }
+  msg.style.color='var(--text-muted)'; msg.textContent='…';
+  try{
+    const r = await fetch('/api/goals/create/', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({ node_id: {{ node.id }}, text: text })
+    });
+    const d = await r.json();
+    if(d.ok) location.reload();
+    else { msg.style.color='#f43f5e'; msg.textContent = d.error || 'خطا'; }
+  }catch(e){ msg.style.color='#f43f5e'; msg.textContent='خطای سرور'; }
+}
+async function goalClose(id, status){
+  const q = status === 'achieved' ? 'هدف محقق شد؟ 🎉' : 'از این هدف صرف‌نظر می‌کنی؟';
+  if(!confirm(q)) return;
+  try{
+    const r = await fetch(`/api/goals/${id}/close/`, {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({status: status})
+    });
+    const d = await r.json();
+    if(d.ok) location.reload(); else alert(d.error || 'خطا');
+  }catch(e){ alert('خطای سرور'); }
+}
+
+// ═══ V6: Money ═══
+async function ndCreate(){
+  const msg = document.getElementById('ndMsg');
+  const amount = document.getElementById('ndAmount').value;
+  if(!amount.trim()){ msg.style.color='#f43f5e'; msg.textContent='مبلغ؟'; return; }
+  msg.style.color='var(--text-muted)'; msg.textContent='…';
+  try{
+    const r = await fetch('/api/debts/create/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({
+        node_id: {{ node.id }},
+        direction: document.getElementById('ndDir').value,
+        amount: amount,
+        due_date: document.getElementById('ndDue').value,
+        note: document.getElementById('ndNote').value,
+      })
+    });
+    const d = await r.json();
+    if(!d.ok){ msg.style.color='#f43f5e'; msg.textContent = d.error || 'خطا'; return; }
+    location.reload();
+  }catch(e){ msg.style.color='#f43f5e'; msg.textContent='خطای سرور'; }
+}
+async function ndPay(id){
+  if(!confirm('تسویه کامل بشه؟ (برای پرداخت جزئی از صفحه «قرض و طلب» استفاده کن)')) return;
+  try{
+    const r = await fetch(`/api/debts/${id}/pay/`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:'{}'
+    });
+    const d = await r.json();
+    if(d.ok) location.reload(); else alert(d.error || 'خطا');
+  }catch(e){ alert('خطای سرور'); }
+}
+
+// ═══ V5: Connect Path ═══
+function escCn(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+async function cnLoad(){
+  const box = document.getElementById('cnInfo');
+  const msg = document.getElementById('cnMsg');
+  msg.style.color='var(--text-muted)'; msg.textContent='در حال تحلیل…';
+  try{
+    const r = await fetch('/api/connect/{{ node.id }}/');
+    const d = await r.json();
+    msg.textContent='';
+    if(!d.ok){ box.innerHTML = `<div style="color:#f87171;font-size:12.5px;margin-top:10px;">${escCn(d.error||'خطا')}</div>`; return; }
+    let html = '';
+    if(d.path && d.path.length){
+      html += `<div style="font-size:11.5px;color:var(--text-muted);margin-top:12px;">
+        ${d.is_direct ? '✅ رابطه مستقیم دارید — مسیر تقویت:' : `🗺 کوتاه‌ترین مسیر معرفی (${d.hops} گام):`}</div>
+        <div class="cn-path">` +
+        d.path.map((s,i) =>
+          (i? `<span class="cn-arrow">←</span>` : '') +
+          `<span class="cn-node ${s.me?'me':''}">${s.me?'⭐ من':escCn(s.name)}${s.via_rel?`<span style="font-size:10px;color:var(--text-muted);"> · ${escCn(s.via_rel)}</span>`:''}</span>`
+        ).join('') + `</div>`;
+    } else {
+      html += `<div style="font-size:12.5px;color:#fbbf24;margin-top:12px;">🏝 مسیری در گراف نیست — باید از بافت مشترک (گروه، رویداد، علاقه) وارد بشی. پلن AI رو بگیر ↑</div>`;
+    }
+    if(d.mutuals && d.mutuals.length){
+      html += `<div style="font-size:11.5px;color:var(--text-muted);margin-top:8px;">🤝 آشناهای مشترک (بهترین معرف‌ها):</div><div>` +
+        d.mutuals.map(m => `<span class="cn-mutual">${escCn(m.name)} <b>${m.my_strength}+${m.their_strength}</b></span>`).join('') + `</div>`;
+    }
+    if(d.shared_groups && d.shared_groups.length)
+      html += `<div style="font-size:12px;color:var(--text-soft);margin-top:8px;">🎨 گروه مشترک: ${d.shared_groups.map(escCn).join('، ')}</div>`;
+    if(d.shared_events && d.shared_events.length)
+      html += `<div style="font-size:12px;color:var(--text-soft);margin-top:5px;">📅 رویداد مشترک: ${d.shared_events.map(e=>escCn(e.title)).join('، ')}</div>`;
+    box.innerHTML = html;
+  }catch(e){ msg.style.color='#f87171'; msg.textContent='خطا در ارتباط'; }
+}
+
+async function cnPlan(goal){
+  const box = document.getElementById('cnPlanBox');
+  const msg = document.getElementById('cnMsg');
+  msg.style.color='var(--text-muted)'; msg.textContent='✦ AI داره پلن می‌چینه…';
+  try{
+    const r = await fetch('/api/connect/{{ node.id }}/plan/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({goal: goal})
+    });
+    const d = await r.json();
+    msg.textContent='';
+    if(!d.ok){ box.innerHTML = `<div style="color:#f87171;font-size:12.5px;margin-top:10px;">${escCn(d.error||'خطا')}</div>`; return; }
+    const res = d.result || {};
+    let html = `<div style="margin-top:14px;font-size:13px;font-weight:800;">${goal==='work'?'💼 پلن رابطه کاری':'💛 پلن دوستی'}${d.from_cache?' <span style="font-size:10px;color:var(--text-muted);">(کش امروز)</span>':''}</div>`;
+    (res.steps||[]).forEach(s => {
+      html += `<div class="cn-step">
+        <div class="cn-step-n">${s.n||''}</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;">${escCn(s.title||'')} <span style="font-size:10.5px;color:#a5b4fc;">${escCn(s.when||'')}</span></div>
+          <div style="font-size:12.5px;color:var(--text-soft);margin-top:2px;">${escCn(s.how||'')}</div>
+          ${s.why?`<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">چرا: ${escCn(s.why)}</div>`:''}
+        </div></div>`;
+    });
+    if(res.opener) html += `<div class="cn-opener">💬 جمله شروع پیشنهادی: «${escCn(res.opener)}»</div>`;
+    if(res.warning) html += `<div class="cn-warning">⚠️ ${escCn(res.warning)}</div>`;
+    box.innerHTML = html;
+  }catch(e){ msg.style.color='#f87171'; msg.textContent='خطا در ارتباط'; }
+}
+
+function toggleJe(id){
+  const item = document.getElementById('je'+id);
+  const full = document.getElementById('jef'+id);
+  const isOpen = full.classList.toggle('open');
+  item.classList.toggle('open', isOpen);
+}
+
+async function loadSummary(){
+  const btn = document.getElementById('aiBtn');
+  const body = document.getElementById('aiBody');
+  btn.disabled = true;
+  btn.textContent = 'در حال تحلیل...';
+  body.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">✦ در حال پردازش...</span>';
+  try{
+    const res = await fetch('/api/node/{{ node.id }}/summary/', {
+      method:'POST',
+      headers:{'X-CSRFToken': getCookie('csrftoken')}
+    });
+    const data = await res.json();
+    if(data.summary){
+      body.innerHTML = data.summary
+        .split(/\n\n+/)
+        .map(p=>'<p>'+p.replace(/\n/g,'<br>')+'</p>')
+        .join('');
+    } else {
+      body.innerHTML = '<span style="color:#f43f5e">خطا: '+(data.error||'نامشخص')+'</span>';
+    }
+  }catch(e){
+    body.innerHTML = '<span style="color:#f43f5e">خطا در ارتباط با سرور</span>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '↺ تولید دوباره';
+  }
+}
+</script>
 {% endblock %}

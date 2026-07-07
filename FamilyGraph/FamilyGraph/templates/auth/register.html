@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ثبت‌نام — FamilyGraph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{ box-sizing:border-box; margin:0; padding:0; }
+
+:root{
+  --bg:#04040e; --card:rgba(8,8,22,.72);
+  --border:rgba(255,255,255,.08); --text:#e8eaf6;
+  --text-soft:#7878a0; --text-muted:#3e3e60;
+  --primary:#6366f1; --primary-light:#a5b4fc;
+  --secondary:#8b5cf6; --success:#10b981; --danger:#f43f5e;
+}
+
+html,body{ min-height:100vh; font-family:'Vazirmatn',sans-serif; background:var(--bg); color:var(--text); overflow-x:hidden; }
+
+/* ── Background ── */
+.bg{ position:fixed; inset:0; background:
+  radial-gradient(ellipse 80% 60% at 55% -5%, rgba(99,102,241,.18) 0%, transparent 60%),
+  radial-gradient(ellipse 55% 55% at 5% 85%, rgba(139,92,246,.12) 0%, transparent 55%),
+  var(--bg); z-index:0; }
+.bg::after{ content:''; position:absolute; inset:0;
+  background-image: linear-gradient(rgba(99,102,241,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,.035) 1px,transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 40%,transparent 100%); }
+.orb{ position:fixed; border-radius:50%; filter:blur(70px); pointer-events:none; animation:orbFloat 12s ease-in-out infinite; }
+.orb-1{ width:500px;height:500px;top:-150px;right:-100px; background:radial-gradient(circle,rgba(99,102,241,.22) 0%,transparent 65%); }
+.orb-2{ width:380px;height:380px;bottom:-100px;left:-60px; background:radial-gradient(circle,rgba(139,92,246,.18) 0%,transparent 60%); animation-delay:-5s; }
+@keyframes orbFloat{ 0%,100%{transform:translate(0,0) scale(1);} 30%{transform:translate(25px,-40px) scale(1.06);} 60%{transform:translate(-15px,30px) scale(.95);} }
+
+/* ── Layout ── */
+.page{ position:relative; z-index:10; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+
+/* ── Card ── */
+.card{
+  width:100%; max-width:520px;
+  background:var(--card);
+  backdrop-filter:blur(24px) saturate(140%);
+  -webkit-backdrop-filter:blur(24px) saturate(140%);
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:28px;
+  padding:40px 40px 36px;
+  box-shadow:0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(99,102,241,.1), inset 0 1px 0 rgba(255,255,255,.07);
+  animation:cardIn .45s cubic-bezier(.22,.9,.36,1) both;
+  position:relative; overflow:hidden;
+}
+@keyframes cardIn{ from{opacity:0;transform:translateY(28px) scale(.97);} to{opacity:1;transform:translateY(0) scale(1);} }
+.card::before{ content:''; position:absolute; top:0;left:0;right:0;height:1px; background:linear-gradient(90deg,transparent,rgba(99,102,241,.6),rgba(139,92,246,.5),transparent); }
+
+/* ── Progress ── */
+.progress-wrap{ margin-bottom:32px; }
+.progress-steps{ display:flex; align-items:center; gap:0; margin-bottom:12px; }
+.progress-step{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; position:relative; }
+.progress-step:not(:last-child)::after{
+  content:''; position:absolute; top:14px; left:calc(-50% + 14px); right:calc(-50% + 14px);
+  height:2px; background:rgba(255,255,255,.08); z-index:0; transition:background .4s;
+}
+.progress-step.done:not(:last-child)::after{ background:linear-gradient(90deg,#6366f1,#8b5cf6); }
+.step-circle{
+  width:28px; height:28px; border-radius:50%; z-index:1;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:800;
+  background:rgba(255,255,255,.07); border:2px solid rgba(255,255,255,.1);
+  color:var(--text-soft); transition:all .3s;
+}
+.progress-step.active .step-circle{ background:linear-gradient(135deg,#6366f1,#8b5cf6); border-color:transparent; color:#fff; box-shadow:0 0 18px rgba(99,102,241,.55); }
+.progress-step.done .step-circle{ background:var(--success); border-color:transparent; color:#fff; }
+.step-label{ font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap; }
+.progress-step.active .step-label{ color:var(--primary-light); }
+.progress-step.done .step-label{ color:var(--success); }
+
+/* Progress bar */
+.progress-bar-wrap{ height:3px; background:rgba(255,255,255,.06); border-radius:10px; overflow:hidden; }
+.progress-bar{ height:100%; background:linear-gradient(90deg,#6366f1,#8b5cf6); border-radius:10px; transition:width .4s ease; }
+
+/* ── Step Title ── */
+.step-title{ font-size:18px; font-weight:800; margin-bottom:5px; }
+.step-sub  { font-size:13px; color:var(--text-soft); margin-bottom:24px; }
+
+/* ── Error ── */
+.error-box{ background:rgba(244,63,94,.1); border:1px solid rgba(244,63,94,.25); border-radius:12px; padding:11px 15px; font-size:13px; color:#fb7185; margin-bottom:18px; display:flex; gap:8px; align-items:flex-start; animation:shake .35s ease; }
+@keyframes shake{ 0%,100%{transform:translateX(0);} 20%{transform:translateX(-5px);} 40%{transform:translateX(5px);} 60%{transform:translateX(-4px);} 80%{transform:translateX(4px);} }
+
+/* ── Fields ── */
+.field{ margin-bottom:16px; position:relative; }
+.field label{ display:block; font-size:12px; font-weight:600; color:var(--text-soft); margin-bottom:6px; letter-spacing:.3px; }
+.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.field-inner{ position:relative; display:flex; align-items:center; }
+.field-icon{ position:absolute; right:13px; font-size:14px; opacity:.4; pointer-events:none; }
+.field input,.field select{
+  width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09); border-radius:12px;
+  padding:11px 40px 11px 14px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:14px; transition:all .2s;
+  -webkit-appearance:none; appearance:none;
+}
+.field input[dir=ltr]{ direction:ltr; }
+.field input:focus,.field select:focus{ outline:none; border-color:rgba(99,102,241,.55); background:rgba(99,102,241,.06); box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+.field input::placeholder{ color:var(--text-muted); }
+
+/* Password strength */
+.pw-strength{ margin-top:7px; }
+.pw-bars{ display:flex; gap:4px; margin-bottom:4px; }
+.pw-bar{ flex:1; height:3px; border-radius:3px; background:rgba(255,255,255,.1); transition:all .25s; }
+.pw-hint{ font-size:10px; color:var(--text-muted); }
+
+/* Password toggle */
+.pw-toggle{ position:absolute; left:12px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:15px; padding:0; transition:color .15s; }
+.pw-toggle:hover{ color:var(--primary-light); }
+
+/* ── Public/Private Cards ── */
+.privacy-cards{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:4px; }
+.privacy-card{
+  background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.07); border-radius:18px;
+  padding:20px 16px; cursor:pointer; transition:all .25s; position:relative; overflow:hidden;
+}
+.privacy-card:hover{ border-color:rgba(99,102,241,.3); background:rgba(99,102,241,.06); transform:translateY(-2px); }
+.privacy-card.selected{ border-color:var(--primary); background:rgba(99,102,241,.12); box-shadow:0 0 24px rgba(99,102,241,.25); }
+.privacy-card .check{ position:absolute; top:12px; left:12px; width:20px; height:20px; border-radius:50%; background:rgba(255,255,255,.1); border:2px solid rgba(255,255,255,.15); display:flex; align-items:center; justify-content:center; font-size:10px; transition:all .2s; }
+.privacy-card.selected .check{ background:var(--primary); border-color:transparent; color:#fff; }
+.privacy-icon{ font-size:32px; margin-bottom:10px; }
+.privacy-name{ font-size:14px; font-weight:700; margin-bottom:6px; }
+.privacy-desc{ font-size:11px; color:var(--text-soft); line-height:1.5; }
+.privacy-card.selected .privacy-name{ color:var(--primary-light); }
+
+/* ── CAPTCHA ── */
+.captcha-wrap{ background:rgba(99,102,241,.06); border:1px solid rgba(99,102,241,.15); border-radius:14px; padding:14px 16px; margin-bottom:22px; }
+.captcha-label{ font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:10px; letter-spacing:.3px; }
+.captcha-row{ display:flex; align-items:center; gap:10px; }
+.captcha-question{ background:rgba(0,0,0,.25); border:1px solid rgba(99,102,241,.2); border-radius:10px; padding:9px 14px; font-size:18px; font-weight:700; color:var(--primary-light); white-space:nowrap; flex-shrink:0; letter-spacing:1px; }
+.captcha-eq{ font-size:18px; font-weight:700; color:var(--text-soft); flex-shrink:0; }
+.captcha-input{ flex:1; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:10px 12px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:16px; font-weight:700; text-align:center; transition:all .2s; }
+.captcha-input:focus{ outline:none; border-color:rgba(99,102,241,.5); box-shadow:0 0 0 3px rgba(99,102,241,.1); }
+.captcha-refresh{ background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:16px; flex-shrink:0; transition:all .2s; padding:6px; border-radius:8px; }
+.captcha-refresh:hover{ color:var(--primary-light); background:rgba(99,102,241,.1); }
+
+/* ── Optional badge ── */
+.opt-badge{ font-size:10px; background:rgba(255,255,255,.07); color:var(--text-muted); padding:1px 7px; border-radius:8px; margin-right:6px; font-weight:500; vertical-align:middle; }
+
+/* ── Buttons ── */
+.btn-row{ display:flex; gap:10px; margin-top:6px; }
+.btn-back{ flex:1; padding:12px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09); border-radius:14px; color:var(--text-soft); font-family:'Vazirmatn',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all .2s; }
+.btn-back:hover{ background:rgba(255,255,255,.1); color:var(--text); border-color:rgba(255,255,255,.18); }
+.btn-next{ flex:2; padding:13px; background:linear-gradient(135deg,#6366f1,#8b5cf6); border:none; border-radius:14px; color:#fff; font-family:'Vazirmatn',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:all .22s; box-shadow:0 0 28px rgba(99,102,241,.42),0 4px 14px rgba(0,0,0,.32); }
+.btn-next:hover{ transform:translateY(-2px); box-shadow:0 0 42px rgba(99,102,241,.6),0 8px 20px rgba(0,0,0,.35); }
+.btn-next:disabled{ opacity:.5; cursor:wait; transform:none; }
+.btn-spinner{ display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-left:6px; }
+@keyframes spin{ to{transform:rotate(360deg);} }
+
+/* ── Card Footer ── */
+.card-footer{ margin-top:22px; text-align:center; font-size:13px; color:var(--text-soft); padding-top:18px; border-top:1px solid rgba(255,255,255,.05); }
+.card-footer a{ color:var(--primary-light); text-decoration:none; font-weight:600; transition:color .15s; }
+.card-footer a:hover{ color:#c7d2fe; }
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="page">
+  <div class="card">
+
+    <!-- Progress Steps -->
+    <div class="progress-wrap">
+      <div class="progress-steps">
+        {% for s in "1234" %}
+        <div class="progress-step {% if forloop.counter == step %}active{% elif forloop.counter < step %}done{% endif %}">
+          <div class="step-circle">
+            {% if forloop.counter < step %}✓{% else %}{{ forloop.counter }}{% endif %}
+          </div>
+          <div class="step-label">
+            {% if forloop.counter == 1 %}حساب{% elif forloop.counter == 2 %}پروفایل{% elif forloop.counter == 3 %}حریم{% else %}تأیید{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" style="width:{{ step|add:"-1" }}{% if step == 1 %}0{% elif step == 2 %}33.3{% elif step == 3 %}66.6{% else %}100{% endif %}%"></div>
+      </div>
+    </div>
+
+    {% if error %}
+    <div class="error-box">⚠ {{ error }}</div>
+    {% endif %}
+
+    <!-- ═══════════════════════════════════════ STEP 1 ═══ -->
+    {% if step == 1 %}
+    <div class="step-title">ساخت حساب کاربری</div>
+    <div class="step-sub">اطلاعات ورود خود را وارد کنید</div>
+
+    <form method="post" id="regForm" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="step" value="1">
+
+      <div class="field">
+        <label for="username">نام کاربری *</label>
+        <div class="field-inner">
+          <input type="text" name="username" id="username" placeholder="sajjad_123" dir="ltr"
+            value="{{ reg.username|default:'' }}" autocomplete="username" required autofocus>
+          <span class="field-icon">@</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">فقط حروف انگلیسی، عدد، _ - .  (۳ تا ۳۰ کاراکتر)</div>
+      </div>
+
+      <div class="field">
+        <label for="email">ایمیل <span class="opt-badge">اختیاری</span></label>
+        <div class="field-inner">
+          <input type="email" name="email" id="email" placeholder="example@gmail.com" dir="ltr"
+            value="{{ reg.email|default:'' }}" autocomplete="email">
+          <span class="field-icon">✉</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password">رمز عبور *</label>
+        <div class="field-inner">
+          <input type="password" name="password" id="password" placeholder="حداقل ۸ کاراکتر" dir="ltr"
+            autocomplete="new-password" required oninput="checkPwStrength(this.value)">
+          <span class="field-icon">🔒</span>
+          <button type="button" class="pw-toggle" onclick="togglePw('password','pwEye1')" id="pwEye1">👁</button>
+        </div>
+        <div class="pw-strength" id="pwStrength" style="display:none">
+          <div class="pw-bars">
+            <div class="pw-bar" id="bar1"></div>
+            <div class="pw-bar" id="bar2"></div>
+            <div class="pw-bar" id="bar3"></div>
+            <div class="pw-bar" id="bar4"></div>
+          </div>
+          <div class="pw-hint" id="pwHint"></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password2">تکرار رمز عبور *</label>
+        <div class="field-inner">
+          <input type="password" name="password2" id="password2" placeholder="تکرار رمز" dir="ltr"
+            autocomplete="new-password" required>
+          <span class="field-icon">🔑</span>
+          <button type="button" class="pw-toggle" onclick="togglePw('password2','pwEye2')" id="pwEye2">👁</button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="submit" class="btn-next" id="nextBtn">بعدی ←</button>
+      </div>
+    </form>
+
+    <!-- ═══════════════════════════════════════ STEP 2 ═══ -->
+    {% elif step == 2 %}
+    <div class="step-title">اطلاعات پروفایل</div>
+    <div class="step-sub">این مرحله کاملاً اختیاری‌ست — می‌تونی بعداً پر کنی</div>
+
+    <form method="post" id="regForm" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="step" value="2">
+
+      <div class="field-row">
+        <div class="field">
+          <label>نام <span class="opt-badge">اختیاری</span></label>
+          <div class="field-inner">
+            <input type="text" name="first_name" placeholder="سجاد" value="{{ reg.first_name|default:'' }}">
+            <span class="field-icon">👤</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>نام خانوادگی <span class="opt-badge">اختیاری</span></label>
+          <div class="field-inner">
+            <input type="text" name="last_name" placeholder="انگوتی" value="{{ reg.last_name|default:'' }}">
+            <span class="field-icon">👤</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>تاریخ تولد <span class="opt-badge">اختیاری</span></label>
+        <div class="field-inner">
+          <input type="date" name="birth_date" dir="ltr" value="{{ reg.birth_date|default:'' }}">
+          <span class="field-icon">🎂</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>شغل <span class="opt-badge">اختیاری</span></label>
+        <div class="field-inner">
+          <input type="text" name="career" placeholder="مثلاً: برنامه‌نویس، دانشجو، ..." value="{{ reg.career|default:'' }}">
+          <span class="field-icon">💼</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>شهر <span class="opt-badge">اختیاری</span></label>
+        <div class="field-inner">
+          <input type="text" name="city" placeholder="تهران" value="{{ reg.city|default:'' }}">
+          <span class="field-icon">📍</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <a href="/register/?step=1" class="btn-back">← قبلی</a>
+        <button type="submit" class="btn-next">بعدی ←</button>
+      </div>
+    </form>
+
+    <!-- ═══════════════════════════════════════ STEP 3 ═══ -->
+    {% elif step == 3 %}
+    <div class="step-title">حریم خصوصی</div>
+    <div class="step-sub">این تنظیم رو بعداً هم می‌تونی عوض کنی</div>
+
+    <form method="post" id="regForm">
+      {% csrf_token %}
+      <input type="hidden" name="step" value="3">
+      <input type="hidden" name="is_public" id="isPublicInput" value="false">
+
+      <div class="privacy-cards">
+        <div class="privacy-card" id="cardPrivate" onclick="selectPrivacy(false)">
+          <div class="check" id="checkPrivate"></div>
+          <div class="privacy-icon">🔒</div>
+          <div class="privacy-name">خصوصی</div>
+          <div class="privacy-desc">فقط خودت شبکه‌ات رو می‌بینی. هیچ‌کس دیگه‌ای دسترسی نداره.</div>
+        </div>
+        <div class="privacy-card" id="cardPublic" onclick="selectPrivacy(true)">
+          <div class="check" id="checkPublic"></div>
+          <div class="privacy-icon">🌐</div>
+          <div class="privacy-name">عمومی</div>
+          <div class="privacy-desc">دیگران می‌تونن پروفایلت رو پیدا کنن و اطلاعات مشترک رو باهات به اشتراک بذارن.</div>
+        </div>
+      </div>
+
+      <div id="privacyNote" style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px 0 20px;"></div>
+
+      <div class="btn-row">
+        <a href="/register/?step=2" class="btn-back">← قبلی</a>
+        <button type="submit" class="btn-next" id="step3Btn" disabled>بعدی ←</button>
+      </div>
+    </form>
+
+    <!-- ═══════════════════════════════════════ STEP 4 ═══ -->
+    {% elif step == 4 %}
+    <div class="step-title">تأیید نهایی</div>
+    <div class="step-sub">یه سوال کوچیک — بعدش حساب آماده‌ست!</div>
+
+    <form method="post" id="regForm" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="step" value="4">
+
+      <!-- CAPTCHA -->
+      <div class="captcha-wrap">
+        <div class="captcha-label">تأیید انسان‌بودن</div>
+        <div class="captcha-row">
+          <div class="captcha-question" id="captchaQ">{{ captcha_q }}</div>
+          <span class="captcha-eq">= ?</span>
+          <input type="number" name="captcha" id="captchaAns" class="captcha-input"
+            placeholder="؟" inputmode="numeric" min="0" max="99" required autofocus>
+          <button type="button" class="captcha-refresh" onclick="refreshCaptcha()" title="سوال جدید">↻</button>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div style="background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.14);border-radius:14px;padding:14px 16px;margin-bottom:20px;font-size:13px;line-height:1.9;">
+        <div>👤 <strong style="color:var(--primary-light);">{{ reg.username }}</strong></div>
+        {% if reg.email %}<div>✉ {{ reg.email }}</div>{% endif %}
+        {% if reg.first_name %}<div>📛 {{ reg.first_name }} {{ reg.last_name }}</div>{% endif %}
+        {% if reg.city %}<div>📍 {{ reg.city }}</div>{% endif %}
+        <div>{% if reg.is_public %}🌐 حساب عمومی{% else %}🔒 حساب خصوصی{% endif %}</div>
+      </div>
+
+      <div class="btn-row">
+        <a href="/register/?step=3" class="btn-back">← قبلی</a>
+        <button type="submit" class="btn-next" id="nextBtn">✓ ثبت‌نام</button>
+      </div>
+    </form>
+    {% endif %}
+
+    <div class="card-footer">
+      حساب دارید؟ <a href="/login/">ورود</a>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Password toggle ──
+function togglePw(id, eyeId){
+  const inp = document.getElementById(id);
+  const eye = document.getElementById(eyeId);
+  if(inp.type==='password'){ inp.type='text'; eye.textContent='🙈'; }
+  else{ inp.type='password'; eye.textContent='👁'; }
+}
+
+// ── Password strength ──
+function checkPwStrength(pw){
+  const wrap = document.getElementById('pwStrength');
+  const hint = document.getElementById('pwHint');
+  if(!wrap) return;
+  if(!pw){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+
+  let score = 0;
+  const checks = [
+    pw.length >= 8,
+    /[A-Z]/.test(pw),
+    /\d/.test(pw),
+    /[^a-zA-Z0-9]/.test(pw) || pw.length >= 12
+  ];
+  score = checks.filter(Boolean).length;
+
+  const colors = ['#ef4444','#f97316','#eab308','#22c55e'];
+  const labels = ['خیلی ضعیف','ضعیف','متوسط','قوی'];
+  for(let i=1;i<=4;i++){
+    const bar = document.getElementById('bar'+i);
+    bar.style.background = i <= score ? colors[score-1] : 'rgba(255,255,255,.1)';
+  }
+  hint.textContent = labels[score-1] || '';
+  hint.style.color = colors[score-1] || 'var(--text-muted)';
+}
+
+// ── Privacy selection (step 3) ──
+let privacySelected = null;
+function selectPrivacy(isPublic){
+  privacySelected = isPublic;
+  document.getElementById('isPublicInput').value = isPublic ? 'true' : 'false';
+
+  document.getElementById('cardPrivate').classList.toggle('selected', !isPublic);
+  document.getElementById('cardPublic').classList.toggle('selected', isPublic);
+  document.getElementById('checkPrivate').textContent = !isPublic ? '✓' : '';
+  document.getElementById('checkPublic').textContent  =  isPublic ? '✓' : '';
+
+  const note = document.getElementById('privacyNote');
+  if(isPublic){
+    note.textContent = '🌐 دیگران می‌تونن شبکه‌ات رو ببینن — می‌تونی بعداً هم عوض کنی';
+    note.style.color = 'var(--primary-light)';
+  } else {
+    note.textContent = '🔒 فقط خودت می‌بینی — کاملاً شخصی';
+    note.style.color = 'var(--text-soft)';
+  }
+  document.getElementById('step3Btn').disabled = false;
+}
+
+// ── Captcha refresh ──
+async function refreshCaptcha(){
+  try{
+    const r = await fetch('/api/captcha/');
+    const d = await r.json();
+    document.getElementById('captchaQ').textContent = d.question;
+    document.getElementById('captchaAns').value = '';
+    document.getElementById('captchaAns').focus();
+  }catch(e){}
+}
+
+// ── Submit loading ──
+const regForm = document.getElementById('regForm');
+if(regForm) regForm.addEventListener('submit', function(){
+  const btn = document.getElementById('nextBtn');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span> در حال پردازش...'; }
+});
+</script>
+</body>
+</html>

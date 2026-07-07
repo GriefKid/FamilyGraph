@@ -68,19 +68,28 @@
 
 	<div class="rel-row">
 		<div class="rel-label">
-			پدر
+			طرف اول
 		</div>
 		<div class="rel-value">
-			{{ relationship.father.username }} ({{ relationship.father.id }})
+			<a href="{% url 'node_detail' relationship.source.id %}" style="color:#a5b4fc;text-decoration:none;">{{ relationship.source.display_name }}</a>
 		</div>
 	</div>
 
 	<div class="rel-row">
 		<div class="rel-label">
-			فرزند
+			طرف دوم
 		</div>
 		<div class="rel-value">
-			{{ relationship.child.username }} ({{ relationship.child.id }})
+			<a href="{% url 'node_detail' relationship.target.id %}" style="color:#a5b4fc;text-decoration:none;">{{ relationship.target.display_name }}</a>
+		</div>
+	</div>
+
+	<div class="rel-row">
+		<div class="rel-label">
+			قدرت
+		</div>
+		<div class="rel-value">
+			{{ relationship.strength }}/5 · {% if relationship.status == 'active' %}🟢 فعال{% elif relationship.status == 'distant' %}🟡 دور{% else %}⚪ غیرفعال{% endif %}
 		</div>
 	</div>
 

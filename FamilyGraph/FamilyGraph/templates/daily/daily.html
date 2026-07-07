@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}بریفینگ روزانه · FamilyGraph{% endblock %}
+{% block page_title %}✨ بریفینگ روزانه{% endblock %}
+{% block nav_daily %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.db-wrap{ max-width:780px; margin:0 auto; }
+
+/* ── هدر سلام ── */
+.db-hero{
+  background:linear-gradient(135deg, rgba(99,102,241,.14), rgba(168,85,247,.1), rgba(236,72,153,.07));
+  border:1px solid rgba(99,102,241,.25); border-radius:20px;
+  padding:22px 24px; margin-bottom:18px;
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+}
+.db-hi{ font-size:21px; font-weight:800; }
+.db-date{ font-size:12px; color:var(--text-soft); margin-top:4px; }
+.db-hol{ display:inline-block; font-size:11px; font-weight:700; padding:2px 10px; border-radius:10px;
+  background:rgba(245,158,11,.15); color:#fbbf24; border:1px solid rgba(245,158,11,.3); margin-right:6px; }
+.db-streak{
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:10px 18px; border-radius:16px;
+  background:linear-gradient(135deg, rgba(245,158,11,.16), rgba(236,72,153,.12));
+  border:1px solid rgba(245,158,11,.35); transition:transform .2s;
+}
+.db-streak:hover{ transform:scale(1.05); }
+.db-streak .n{ font-size:22px; font-weight:800; color:#fbbf24; line-height:1; }
+.db-streak .l{ font-size:10px; color:var(--text-muted); }
+
+/* ── نبض ── */
+.db-pulse{ display:grid; grid-template-columns:repeat(auto-fit,minmax(105px,1fr)); gap:10px; margin-bottom:18px; }
+.db-p{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:11px; text-align:center; }
+.db-p .n{ font-size:18px; font-weight:800; }
+.db-p .l{ font-size:9.5px; color:var(--text-muted); margin-top:2px; }
+
+/* ── ماموریت‌ها ── */
+.db-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.db-title{ font-size:14.5px; font-weight:800; margin-bottom:4px; }
+.db-sub{ font-size:11.5px; color:var(--text-muted); margin-bottom:14px; }
+.mission{
+  display:flex; gap:13px; align-items:flex-start; padding:14px; border-radius:14px;
+  border:1px solid var(--border); margin-bottom:10px; background:rgba(255,255,255,.02);
+  transition:opacity .4s ease, transform .4s ease, border-color .2s;
+}
+.mission:hover{ border-color:var(--primary-border); }
+.mission.done{ opacity:0; transform:translateX(-30px); }
+.mission-icon{
+  width:40px; height:40px; border-radius:12px; flex-shrink:0; font-size:19px;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, rgba(99,102,241,.2), rgba(168,85,247,.15));
+  border:1px solid rgba(99,102,241,.3);
+}
+.mission.p-high .mission-icon{ background:linear-gradient(135deg, rgba(239,68,68,.2), rgba(236,72,153,.15)); border-color:rgba(239,68,68,.35); }
+.mission-body{ flex:1; min-width:0; }
+.mission-title{ font-size:13.5px; font-weight:800; }
+.mission-why{ font-size:11.5px; color:var(--text-soft); margin-top:3px; line-height:1.8; }
+.mission-acts{ display:flex; gap:6px; flex-shrink:0; flex-direction:column; }
+.m-btn{ padding:6px 14px; border-radius:9px; font-size:11px; font-weight:700; cursor:pointer;
+  font-family:'Vazirmatn',sans-serif; transition:.15s; white-space:nowrap; }
+.m-done{ background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.35); color:#34d399; }
+.m-done:hover{ background:rgba(16,185,129,.25); }
+.m-skip{ background:none; border:1px solid var(--border); color:var(--text-muted); }
+.m-skip:hover{ border-color:var(--border-strong); }
+.db-clear{ text-align:center; padding:26px 10px; }
+.db-clear .e{ font-size:44px; }
+.db-clear p{ color:var(--text-muted); font-size:13px; margin-top:8px; }
+
+/* ── فلش‌بک ── */
+.fb-item{ display:flex; gap:12px; padding:12px 0; border-bottom:1px dashed var(--border); }
+.fb-item:last-child{ border-bottom:none; }
+.fb-badge{
+  flex-shrink:0; width:44px; height:44px; border-radius:50%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, rgba(6,182,212,.15), rgba(99,102,241,.12));
+  border:1px solid rgba(6,182,212,.3);
+}
+.fb-badge .y{ font-size:14px; font-weight:800; color:#67e8f9; line-height:1; }
+.fb-badge .t{ font-size:8px; color:var(--text-muted); }
+.fb-title{ font-size:12.5px; font-weight:700; }
+.fb-text{ font-size:12px; color:var(--text-soft); margin-top:3px; line-height:1.8; }
+
+/* ── AI ── */
+.db-ai-btn{
+  padding:10px 22px; border:none; border-radius:12px; cursor:pointer;
+  background:linear-gradient(135deg,#6366f1,#a855f7); color:#fff;
+  font-family:'Vazirmatn',sans-serif; font-size:13px; font-weight:800; transition:.2s;
+}
+.db-ai-btn:hover{ transform:translateY(-2px); box-shadow:0 6px 22px rgba(139,92,246,.4); }
+.db-ai-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
+.tip-item{ display:flex; gap:11px; padding:11px 0; border-bottom:1px dashed var(--border); }
+.tip-item:last-child{ border-bottom:none; }
+.tip-emoji{ font-size:20px; flex-shrink:0; }
+.tip-title{ font-size:13px; font-weight:800; }
+.tip-action{ font-size:12.5px; color:var(--text-soft); margin-top:2px; line-height:1.8; }
+.tip-meta{ font-size:10.5px; color:var(--text-muted); margin-top:3px; }
+.day-msg{ padding:11px 14px; border-radius:12px; font-size:13px; margin-bottom:10px;
+  background:rgba(99,102,241,.07); border:1px dashed rgba(99,102,241,.3); }
+.focus-box{ margin-top:10px; padding:11px 14px; border-radius:12px; font-size:12.5px;
+  background:rgba(236,72,153,.06); border:1px dashed rgba(236,72,153,.3); }
+.db-hols{ display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+.db-hol-chip{ font-size:10.5px; padding:3px 11px; border-radius:999px;
+  background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25); color:#fcd34d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="db-wrap">
+
+  <!-- سلام -->
+  <div class="db-hero">
+    <div>
+      <div class="db-hi">{{ greeting }} {{ first_name }} 👋</div>
+      <div class="db-date">
+        {{ day_name }}، {{ jalali_full }} · {{ season }}
+        {% if is_holiday and holiday_name %}<span class="db-hol">🎉 {{ holiday_name }}</span>{% endif %}
+      </div>
+      {% if upcoming_holidays %}
+      <div class="db-hols">
+        {% for h in upcoming_holidays %}<span class="db-hol-chip">{{ h.jalali }} · {{ h.holiday }}</span>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <a href="/weekly/" style="text-decoration:none;font-size:11.5px;font-weight:700;color:#67e8f9;
+         padding:8px 14px;border-radius:12px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);">📊 گزارش هفته</a>
+      <a href="/checkin/" style="text-decoration:none;" title="{% if checked_today %}امروز چک-این کردی ✓{% else %}چک-این امروز یادت نره!{% endif %}">
+        <div class="db-streak">
+          <span class="n">🔥 {{ streak }}</span>
+          <span class="l">{% if checked_today %}روز پیاپی ✓{% else %}روز — امروز مونده!{% endif %}</span>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- نبض شبکه -->
+  <div class="db-pulse">
+    <div class="db-p"><div class="n" style="color:#34d399">{{ health_counts.green|default:0 }}</div><div class="l">🟢 رابطه سالم</div></div>
+    <div class="db-p"><div class="n" style="color:#fbbf24">{{ health_counts.yellow|default:0 }}</div><div class="l">🟡 نیاز به توجه</div></div>
+    <div class="db-p"><div class="n" style="color:#f87171">{{ health_counts.red|default:0 }}</div><div class="l">🔴 سرد شده</div></div>
+    <div class="db-p"><div class="n" style="color:#a5b4fc">{{ open_fu }}</div><div class="l">📌 موضوع باز</div></div>
+    <div class="db-p">
+      <div class="n" style="color:{% if net_balance >= 0 %}#34d399{% else %}#f87171{% endif %};direction:ltr;font-size:14px;">{{ net_balance_fmt }}</div>
+      <div class="l">⚖️ {% if net_balance >= 0 %}طلبکاری{% else %}بدهکاری{% endif %}</div>
+    </div>
+  </div>
+
+  <!-- ماموریت‌های امروز -->
+  <div class="db-card">
+    <div class="db-title">🎯 ماموریت‌های امروز</div>
+    <div class="db-sub">مهم‌ترین کارهای رابطه‌ای امروزت — «انجام دادم» بزنی، خودش تعامل/تسویه/تیک مربوطه رو هم ثبت می‌کنه</div>
+    {% for m in missions %}
+    <div class="mission p-{{ m.priority }}" id="mission{{ forloop.counter }}">
+      <div class="mission-icon">{{ m.icon }}</div>
+      <div class="mission-body">
+        <div class="mission-title">{{ m.title }}</div>
+        <div class="mission-why">{{ m.body|truncatechars:160 }}</div>
+      </div>
+      <div class="mission-acts">
+        <button class="m-btn m-done" onclick="missionAct(this, 'completed')"
+          data-id="{{ m.id }}" data-type="{{ m.type }}" data-node="{{ m.node_id|default:'' }}"
+          data-title="{{ m.title }}" data-el="mission{{ forloop.counter }}">✓ انجام دادم</button>
+        <button class="m-btn m-skip" onclick="missionAct(this, 'dismissed')"
+          data-id="{{ m.id }}" data-type="{{ m.type }}" data-node="{{ m.node_id|default:'' }}"
+          data-title="{{ m.title }}" data-el="mission{{ forloop.counter }}">رد شو</button>
+      </div>
+    </div>
+    {% empty %}
+    <div class="db-clear">
+      <div class="e">🏖</div>
+      <p>هیچ ماموریت فوری‌ای نداری — شبکه‌ات مرتبه! یه چک-این بزن یا به یکی از دوستات سر بزن.</p>
+    </div>
+    {% endfor %}
+    <div style="text-align:left;margin-top:6px;">
+      <a href="/alerts/" style="font-size:11px;color:#a5b4fc;text-decoration:none;">همه‌ی هشدارها ←</a>
+    </div>
+  </div>
+
+  <!-- فلش‌بک -->
+  {% if flashback %}
+  <div class="db-card">
+    <div class="db-title">🕰 امروز در گذشته</div>
+    <div class="db-sub">همین روز، در سال‌های قبل چه خبر بود</div>
+    {% for f in flashback %}
+    <div class="fb-item">
+      <div class="fb-badge"><span class="y">{{ f.years }}</span><span class="t">سال پیش</span></div>
+      <div>
+        <div class="fb-title">{{ f.icon }} {{ f.title }}</div>
+        <div class="fb-text">{{ f.text }}{% if f.mood %} · <b>{{ f.mood }}</b>{% endif %}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- نکته عمیق AI -->
+  <div class="db-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div class="db-title">✦ نکته‌های عمیق امروز</div>
+        <div class="db-sub" style="margin-bottom:0;">AI با توجه به روز، مناسبت‌ها و وضعیت شبکه‌ات پیشنهاد می‌ده — روزی یک بار تازه می‌شه</div>
+      </div>
+      <button class="db-ai-btn" id="tipsBtn" onclick="loadTips()">✦ بگو ببینم</button>
+    </div>
+    <div id="tipsBox" style="margin-top:12px;"></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── ماموریت‌ها: انجام/رد → هشدار مرتبط بسته می‌شه + هوک‌ها (ثبت تعامل/تیک فالوآپ/تسویه قرض) اجرا می‌شن
+async function missionAct(btn, action){
+  const el = document.getElementById(btn.dataset.el);
+  btn.disabled = true;
+  try{
+    const r = await fetch('/api/alerts/action/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({
+        alert_id: btn.dataset.id,
+        alert_type: btn.dataset.type,
+        node_id: btn.dataset.node ? parseInt(btn.dataset.node) : null,
+        title: btn.dataset.title,
+        action: action,
+        outcome: action === 'completed' ? 'از بریفینگ روزانه' : '',
+      })
+    });
+    const d = await r.json();
+    if(d.ok){
+      el.classList.add('done');
+      setTimeout(() => el.remove(), 450);
+    } else { btn.disabled = false; alert(d.error || 'خطا'); }
+  }catch(e){ btn.disabled = false; alert('خطا در ارتباط با سرور'); }
+}
+
+// ── نکته‌های AI ──
+function escT(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+async function loadTips(){
+  const btn = document.getElementById('tipsBtn');
+  const box = document.getElementById('tipsBox');
+  btn.disabled = true; btn.textContent = '⏳ در حال فکر کردن…';
+  try{
+    const r = await fetch('/api/daily/tips/', {
+      method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')} });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = '↺ دوباره';
+    if(!d.ok){ box.innerHTML = `<div style="color:#f87171;font-size:12.5px;">${escT(d.error||'خطا')}</div>`; return; }
+    const R = d.result || {};
+    let html = '';
+    if(R.day_message) html += `<div class="day-msg">💬 ${escT(R.day_message)}</div>`;
+    (R.tips||[]).forEach(t => {
+      html += `<div class="tip-item">
+        <div class="tip-emoji">${escT(t.emoji||'✨')}</div>
+        <div>
+          <div class="tip-title">${escT(t.title||'')}</div>
+          <div class="tip-action">${escT(t.action||'')}</div>
+          <div class="tip-meta">${t.reason?('چرا: '+escT(t.reason)):''}${t.time_needed?(' · ⏱ '+escT(t.time_needed)):''}</div>
+        </div>
+      </div>`;
+    });
+    if(R.focus_person && R.focus_person.name)
+      html += `<div class="focus-box">🎯 <b>آدمِ امروز: ${escT(R.focus_person.name)}</b> — ${escT(R.focus_person.suggestion||'')}</div>`;
+    box.innerHTML = html || '<div style="color:var(--text-muted);font-size:12px;">چیزی برنگشت</div>';
+  }catch(e){
+    btn.disabled = false; btn.textContent = '✦ بگو ببینم';
+    box.innerHTML = '<div style="color:#f87171;font-size:12.5px;">خطا در ارتباط با سرور</div>';
+  }
+}
+</script>
+{% endblock %}

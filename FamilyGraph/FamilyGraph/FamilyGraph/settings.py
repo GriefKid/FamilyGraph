@@ -1,10 +1,24 @@
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-7qj7fqbte&&b_-odt2@cg#h$jk86e6i5)1+1hc*q3bc#10ynar'
 
-DEBUG = True
+# Load .env file if it exists
+load_dotenv(BASE_DIR.parent / '.env')
 
-ALLOWED_HOSTS = []
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-7qj7fqbte&&b_-odt2@cg#h$jk86e6i5)1+1hc*q3bc#10ynar'
+)
+
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+_allowed_raw = os.environ.get('ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = (
+    _allowed_raw.split(',') if _allowed_raw
+    else (['*'] if DEBUG else ['localhost', '127.0.0.1'])
+)
 
 INSTALLED_APPS = [
     'jazzmin',
@@ -17,6 +31,18 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 ]
 
+# ── Custom User Model ─────────────────────────────────────────
+AUTH_USER_MODEL = 'main.User'
+
+# ── Auth URLs & Redirects ──────────────────────────────────────
+LOGIN_URL          = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+
+# ── Session ──────────────────────────────────────────────────
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30   # 30 روز
+SESSION_SAVE_EVERY_REQUEST = False
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -25,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'main.middleware.LoginRequiredMiddleware',
 ]
 
 ROOT_URLCONF = 'FamilyGraph.urls'
@@ -51,12 +78,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'FamilyGraph.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.environ.get('USE_SQLITE') == '1':
+    # موقت — فقط برای backup گرفتن از SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE':   'django.db.backends.postgresql',
+            'NAME':     os.environ.get('DB_NAME',     'familygraph'),
+            'USER':     os.environ.get('DB_USER',     'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST':     os.environ.get('DB_HOST',     'localhost'),
+            'PORT':     os.environ.get('DB_PORT',     '5432'),
+            'OPTIONS': {
+                'connect_timeout': 10,
+            },
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -75,7 +118,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Tehran'
 
 USE_I18N = True
 
@@ -90,3 +133,15 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── Cache (برای کش کردن جواب‌های AI) ──────────────────────────────────────
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': BASE_DIR / 'django_cache',
+        'TIMEOUT': 21600,   # 6 ساعت default
+        'OPTIONS': {
+            'MAX_ENTRIES': 500,
+        }
+    }
+}

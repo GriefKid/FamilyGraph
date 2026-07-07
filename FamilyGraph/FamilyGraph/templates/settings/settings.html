@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}تنظیمات — FamilyGraph{% endblock %}
+{% block page_title %}⚙️ تنظیمات برنامه{% endblock %}
+{% block nav_settings %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.settings-card{
+  background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 4px 20px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
+  overflow:hidden;
+}
+.settings-section{
+  padding:20px 24px;
+  border-bottom:1px solid var(--border);
+}
+.settings-section:last-child{ border-bottom:none; }
+.settings-section h3{
+  font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text);
+}
+.settings-section p{
+  font-size:12px;color:var(--text-muted);margin-bottom:16px;
+}
+.field-row{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.field-label{
+  font-size:13px;color:var(--text-soft);font-weight:600;min-width:100px;
+}
+select.glass-select{
+  background:var(--surface);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:8px;
+  padding:8px 14px;
+  font-family:'Vazirmatn',sans-serif;
+  font-size:13px;
+  flex:1;
+  max-width:300px;
+  cursor:pointer;
+}
+select.glass-select:focus{
+  border-color:var(--primary-border);
+  box-shadow:0 0 0 3px rgba(99,102,241,.11);
+  outline:none;
+}
+.current-root{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(99,102,241,.12);border:1px solid var(--primary-border);
+  border-radius:20px;padding:4px 14px;font-size:13px;color:var(--primary-light);
+}
+.current-root strong{ font-weight:700; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+  {% for msg in messages %}
+  <div style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:13px;color:#6ee7b7;">
+    ✓ {{ msg }}
+  </div>
+  {% endfor %}
+{% endif %}
+
+<div class="settings-card">
+
+  <!-- Root Node -->
+  <div class="settings-section">
+    <h3>نود اصلی (من)</h3>
+    <p>این نود نقطه مرکزی گراف ego-network است و نشان‌دهنده شماست. بر اساس این انتخاب، گراف حول شما ترسیم می‌شود.</p>
+
+    {% if settings.root_node %}
+    <div style="margin-bottom:14px;">
+      <span class="current-root">✓ انتخاب فعلی: <strong>{{ settings.root_node.username }}</strong></span>
+    </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="field-row">
+        <span class="field-label">انتخاب نود:</span>
+        <select name="root_node" class="glass-select">
+          <option value="">— انتخاب نشده —</option>
+          {% for node in nodes %}
+          <option value="{{ node.id }}" {% if node == settings.root_node %}selected{% endif %}>
+            {{ node.username }}{% if node.name %} — {{ node.name }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary">ذخیره</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Info -->
+  <div class="settings-section">
+    <h3>راهنما</h3>
+    <p>بعد از انتخاب نود اصلی، در صفحه گراف حالت ego-network فعال است که تو در مرکز و دوستانت در حلقه‌های اطراف نشان داده می‌شوند.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+      <a href="/" class="btn btn-sm">مشاهده گراف</a>
+      <a href="/insights/" class="btn btn-sm">بینش‌های شبکه</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

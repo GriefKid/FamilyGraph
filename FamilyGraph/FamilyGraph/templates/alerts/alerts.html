@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+{% block title %}هشدارها · FamilyGraph{% endblock %}
+{% block nav_alerts %}active{% endblock %}
+{% block page_title %}🔔 هشدارها و پیشنهادها{% endblock %}
+
+{% block extra_css %}
+<style>
+.alerts-grid{ display:grid; gap:14px; }
+.alert-card{
+  background:var(--card); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border); border-radius:16px; padding:20px 22px;
+  transition:all .2s; position:relative; overflow:hidden;
+}
+.alert-card::before{ content:''; position:absolute; top:0;right:0;left:0; height:2px; }
+.alert-card.p-high::before{ background:linear-gradient(90deg,#f59e0b,#ef4444); }
+.alert-card.p-medium::before{ background:linear-gradient(90deg,#6366f1,#8b5cf6); }
+.alert-card.p-low::before{ background:linear-gradient(90deg,#10b981,#06b6d4); }
+.alert-card:hover{ border-color:var(--primary-border); transform:translateY(-2px); box-shadow:0 8px 28px rgba(0,0,0,.4); }
+
+.alert-header{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.alert-title{ font-size:15px; font-weight:700; }
+.alert-badge{ font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
+.p-high .alert-badge{ background:rgba(245,158,11,.15); color:#fbbf24; border:1px solid rgba(245,158,11,.25); }
+.p-medium .alert-badge{ background:rgba(99,102,241,.15); color:var(--primary-light); border:1px solid var(--primary-border); }
+.p-low .alert-badge{ background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.2); }
+
+.alert-body{ font-size:13px; color:var(--text-soft); line-height:1.6; margin-bottom:14px; }
+.alert-meta{ display:flex; align-items:center; gap:12px; font-size:11px; color:var(--text-muted); margin-bottom:14px; }
+
+.suggest-btn{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:7px 16px; border-radius:8px;
+  background:rgba(99,102,241,.12); border:1px solid var(--primary-border);
+  color:var(--primary-light); font-size:12px; font-weight:600;
+  cursor:pointer; transition:all .2s; font-family:'Vazirmatn',sans-serif;
+}
+.suggest-btn:hover{ background:rgba(99,102,241,.22); box-shadow:0 0 16px rgba(99,102,241,.2); }
+
+.suggestions-panel{
+  display:none; margin-top:16px;
+  background:rgba(99,102,241,.06); border:1px solid var(--primary-border);
+  border-radius:12px; padding:16px;
+  animation:fadeSlide .2s ease;
+}
+@keyframes fadeSlide{ from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
+.sugg-item{ display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-soft); }
+.sugg-item:last-of-type{ border-bottom:none; padding-bottom:0; }
+.sugg-rank{
+  width:22px; height:22px; border-radius:50%;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  color:#fff; font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; margin-top:2px;
+}
+.sugg-action{ font-size:13px; font-weight:600; margin-bottom:3px; }
+.sugg-reason{ font-size:11px; color:var(--text-soft); }
+.sugg-diff{ font-size:10px; padding:2px 7px; border-radius:10px; background:rgba(255,255,255,.06); color:var(--text-muted); display:inline-block; margin-top:4px; }
+.personal-note{ margin-top:12px; padding:10px 12px; background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.15); border-radius:8px; font-size:12px; color:#34d399; font-style:italic; }
+
+.section-label{
+  display:flex; align-items:center; gap:10px;
+  margin-bottom:12px; margin-top:28px;
+}
+.section-label:first-child{ margin-top:0; }
+.section-label-text{ font-size:11px; font-weight:700; letter-spacing:1.1px; text-transform:uppercase; color:var(--text-muted); }
+.section-label-count{ font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; background:rgba(255,255,255,.07); color:var(--text-soft); }
+
+.empty-state{ text-align:center; padding:64px 20px; color:var(--text-muted); }
+.empty-state .big-emoji{ font-size:52px; margin-bottom:16px; }
+.empty-state h3{ font-size:18px; margin-bottom:8px; color:var(--text-soft); }
+
+.alert-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+.act-dismiss-btn{
+  padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600;
+  background:rgba(255,255,255,.05); border:1px solid var(--border);
+  color:var(--text-muted); cursor:pointer; font-family:'Vazirmatn',sans-serif;
+  transition:all .18s;
+}
+.act-dismiss-btn:hover{ background:rgba(244,63,94,.1); border-color:rgba(244,63,94,.3); color:#f87171; }
+.act-done-btn{
+  padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600;
+  background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.2);
+  color:#34d399; cursor:pointer; font-family:'Vazirmatn',sans-serif;
+  transition:all .18s;
+}
+.act-done-btn:hover{ background:rgba(16,185,129,.2); }
+
+.done-form{
+  margin-top:12px; padding:14px; border-radius:12px;
+  background:rgba(16,185,129,.06); border:1px solid rgba(16,185,129,.18);
+  animation:fadeSlide .2s ease;
+}
+.done-form textarea{
+  width:100%; min-height:70px; resize:vertical;
+  background:rgba(0,0,0,.25); border:1px solid var(--border);
+  border-radius:8px; padding:10px; color:var(--text);
+  font-family:'Vazirmatn',sans-serif; font-size:13px;
+  outline:none; margin-bottom:10px;
+  box-sizing:border-box;
+}
+.done-form textarea:focus{ border-color:rgba(16,185,129,.4); }
+.done-form-actions{ display:flex; gap:8px; }
+.done-save-btn{
+  padding:7px 18px; border-radius:8px; font-size:12px; font-weight:700;
+  background:linear-gradient(135deg,#10b981,#06b6d4);
+  border:none; color:#fff; cursor:pointer; font-family:'Vazirmatn',sans-serif;
+}
+.done-cancel-btn{
+  padding:7px 14px; border-radius:8px; font-size:12px;
+  background:transparent; border:1px solid var(--border);
+  color:var(--text-muted); cursor:pointer; font-family:'Vazirmatn',sans-serif;
+}
+.alert-card.removing{ opacity:0; transform:translateX(20px); transition:all .3s ease; }
+
+/* ── Daily Card ───── */
+.daily-card{
+  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08));
+  border:1px solid var(--primary-border);border-radius:16px;padding:18px 22px;
+  margin-bottom:28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.daily-date{ font-size:22px;font-weight:800;color:var(--primary-light); }
+.daily-meta{ font-size:12px;color:var(--text-muted);margin-top:2px; }
+.daily-hol{ font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px;background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.25);margin-right:8px; }
+.daily-tips-wrap{ flex:1; min-width:260px; }
+.daily-tips-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 16px;border-radius:8px;
+  background:rgba(99,102,241,.14);border:1px solid var(--primary-border);
+  color:var(--primary-light);font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .2s;font-family:'Vazirmatn',sans-serif;
+}
+.daily-tips-btn:hover{background:rgba(99,102,241,.24);}
+#daily-tips-result{margin-top:14px;font-size:13px;line-height:1.7;color:var(--text-soft);}
+.tip-item{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-soft);}
+.tip-item:last-child{border-bottom:none;}
+.tip-body{flex:1;}
+.tip-title{font-weight:600;margin-bottom:2px;}
+.tip-why{font-size:11px;color:var(--text-muted);}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Daily Context Card ── #}
+<div class="daily-card">
+  <div>
+    <div class="daily-date">{{ day_name }}</div>
+    <div class="daily-meta">{{ jalali_full }} | {{ season }}
+      {% if is_holiday and holiday_name %}<span class="daily-hol">🎉 {{ holiday_name }}</span>{% endif %}
+    </div>
+    {% if upcoming_holidays %}
+    <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
+      تعطیلات پیش رو:
+      {% for h in upcoming_holidays %}
+        <span style="margin-left:8px;">{{ h.jalali }} — {{ h.holiday }}</span>{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="daily-tips-wrap">
+    <button class="daily-tips-btn" onclick="loadDailyTips(this)">✦ نکات روزانه AI</button>
+    <div id="daily-tips-result"></div>
+  </div>
+</div>
+
+{# ── V4: نوار خلاصه — یه نگاه، کل وضعیت ── #}
+{% if health_counts.green or health_counts.yellow or health_counts.red or open_followups_count or today_events_count %}
+<style>
+.pulse-strip{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px; }
+.pulse-chip{ display:flex; align-items:center; gap:7px; padding:8px 14px; border-radius:12px;
+  background:var(--card); border:1px solid var(--border-soft); font-size:12.5px; font-weight:600; }
+.pulse-num{ font-size:16px; font-weight:800; }
+.pulse-chip a{ color:inherit; text-decoration:none; display:flex; align-items:center; gap:7px; }
+</style>
+<div class="pulse-strip">
+  {% if health_counts.green %}
+  <div class="pulse-chip">🟢 <span class="pulse-num" style="color:#34d399">{{ health_counts.green }}</span> رابطه سالم</div>
+  {% endif %}
+  {% if health_counts.yellow %}
+  <div class="pulse-chip">🟡 <span class="pulse-num" style="color:#fbbf24">{{ health_counts.yellow }}</span> نیاز به توجه</div>
+  {% endif %}
+  {% if health_counts.red %}
+  <div class="pulse-chip">🔴 <span class="pulse-num" style="color:#f87171">{{ health_counts.red }}</span> سرد شده</div>
+  {% endif %}
+  {% if open_followups_count %}
+  <div class="pulse-chip">📌 <span class="pulse-num" style="color:#a5b4fc">{{ open_followups_count }}</span> موضوع باز</div>
+  {% endif %}
+  {% if today_events_count %}
+  <div class="pulse-chip">📅 <span class="pulse-num" style="color:#a5b4fc">{{ today_events_count }}</span> رویداد امروز</div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if not alerts %}
+  <div class="empty-state">
+    <div class="big-emoji">🎉</div>
+    <h3>هیچ هشداری نیست!</h3>
+    <p>شبکه روابطت در حال حاضر نیاز به توجه فوری ندارد.</p>
+  </div>
+{% else %}
+  {% regroup alerts by priority as alert_groups %}
+  {% for grp in alert_groups %}
+    <div class="section-label">
+      <span class="section-label-text">
+        {% if grp.grouper == "high" %}🔴 فوری
+        {% elif grp.grouper == "medium" %}🟡 این هفته
+        {% else %}🟢 یادآوری{% endif %}
+      </span>
+      <span class="section-label-count">{{ grp.list|length }}</span>
+    </div>
+
+    <div class="alerts-grid">
+    {% for alert in grp.list %}
+    <div class="alert-card p-{{ alert.priority }}"
+         data-alert-id="{{ alert.id }}"
+         data-alert-type="{{ alert.type }}"
+         data-node-id="{{ alert.node_id|default:'' }}">
+      <div class="alert-header">
+        <div class="alert-title">{{ alert.title }}</div>
+        <span class="alert-badge">
+          {% if alert.priority == "high" %}فوری{% elif alert.priority == "medium" %}مهم{% else %}یادآوری{% endif %}
+        </span>
+      </div>
+      <div class="alert-body">{{ alert.body }}</div>
+      <div class="alert-meta">
+        <span>🏷 {{ alert.type }}</span>
+        {% if alert.days_until == 0 %}<span>📅 امروز</span>
+        {% elif alert.days_until %}<span>📅 {{ alert.days_until }} روز دیگر</span>{% endif %}
+        {% if alert.node_name %}<span>👤 {{ alert.node_name }}</span>{% endif %}
+      </div>
+
+      {% if alert.node_id %}
+      <button class="suggest-btn"
+        data-node="{{ alert.node_id }}"
+        data-type="{{ alert.type }}"
+        data-title="{{ alert.title }}"
+        onclick="toggleSuggestions(this)">
+        ✦ دریافت پیشنهاد AI
+      </button>
+      <div class="suggestions-panel"></div>
+      {% endif %}
+
+      <!-- دکمه‌های انجام دادم / رد کردن -->
+      <div class="alert-actions">
+        <button class="act-done-btn" onclick="showDoneForm(this)">✓ انجام دادم</button>
+        <button class="act-dismiss-btn" onclick="dismissAlert(this)">✕ رد کردن</button>
+      </div>
+
+      <!-- فرم ثبت نتیجه (hidden) -->
+      <div class="done-form" style="display:none">
+        <textarea placeholder="نتیجه چی شد؟ (اختیاری — به AI کمک می‌کنه الگوهای رابطه‌ات رو بهتر بفهمه)"></textarea>
+        <div class="done-form-actions">
+          <button class="done-save-btn" onclick="saveAction(this)">✓ ذخیره و بستن</button>
+          <button class="done-cancel-btn" onclick="this.closest('.done-form').style.display='none'">انصراف</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── helper: پیدا کردن card والد ───────────────────────────────────────────
+function _card(el){ return el.closest('.alert-card'); }
+function _alertId(card){ return card.dataset.alertId; }
+
+// ── پیشنهاد AI ───────────────────────────────────────────────────────────
+async function toggleSuggestions(btn){
+  const card  = _card(btn);
+  const panel = card.querySelector('.suggestions-panel');
+  if(!panel) return;
+
+  if(panel.style.display === 'block'){
+    panel.style.display = 'none';
+    btn.textContent = '✦ دریافت پیشنهاد AI';
+    return;
+  }
+  if(panel.dataset.loaded){
+    panel.style.display = 'block';
+    btn.textContent = '✕ بستن پیشنهادها';
+    return;
+  }
+
+  btn.textContent = '⏳ در حال تحلیل...';
+  btn.style.opacity = '.7';
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted)">⏳ AI در حال تحلیل...</div>';
+
+  try{
+    const r = await fetch('/api/alerts/recommendation/', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        node_id: parseInt(btn.dataset.node) || null,
+        alert_type: btn.dataset.type,
+        title: btn.dataset.title
+      })
+    });
+    const d = await r.json();
+    if(d.ok && d.result){
+      let html = (d.result.suggestions||[]).map(s=>`
+        <div class="sugg-item">
+          <div class="sugg-rank">${s.rank}</div>
+          <div>
+            <div class="sugg-action">${s.action||''}</div>
+            <div class="sugg-reason">${s.reason||''}</div>
+            <span class="sugg-diff">${s.difficulty||''}</span>
+          </div>
+        </div>`).join('');
+      if(d.result.personal_note)
+        html += `<div class="personal-note">💬 ${d.result.personal_note}</div>`;
+      panel.innerHTML = html;
+      panel.dataset.loaded = '1';
+    } else {
+      panel.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px">${d.error||'خطا'}</div>`;
+    }
+  } catch(e){
+    panel.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px">خطا در ارتباط با سرور</div>`;
+  }
+  btn.textContent = '✕ بستن پیشنهادها';
+  btn.style.opacity = '1';
+}
+
+// ── دکمه‌های انجام دادم / رد کردن ────────────────────────────────────────
+function showDoneForm(btn){
+  _card(btn).querySelector('.done-form').style.display = 'block';
+}
+
+async function dismissAlert(btn){
+  const card = _card(btn);
+  await _postAction(card, 'dismissed', '');
+  _removeCard(card);
+}
+
+async function saveAction(btn){
+  const card    = _card(btn);
+  const outcome = card.querySelector('.done-form textarea').value.trim();
+  await _postAction(card, 'completed', outcome);
+  _removeCard(card);
+}
+
+async function _postAction(card, action, outcome){
+  // گرفتن اطلاعات از data attributes
+  const alertId   = card.dataset.alertId   || '';
+  const alertType = card.dataset.alertType || '';
+  const nodeId    = card.dataset.nodeId    || null;
+  const title     = card.querySelector('.alert-title')?.textContent?.trim() || '';
+  try{
+    await fetch('/api/alerts/action/', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        alert_id:   alertId,
+        alert_type: alertType,
+        node_id:    nodeId ? parseInt(nodeId) : null,
+        title:      title,
+        action:     action,
+        outcome:    outcome,
+      })
+    });
+  } catch(e){ console.error(e); }
+}
+
+function _removeCard(card){
+  card.classList.add('removing');
+  setTimeout(()=> card.remove(), 320);
+}
+
+// ── Daily Tips ───────────────────────────────────────────────────────────
+let _dailyLoaded = false;
+async function loadDailyTips(btn){
+  const res = document.getElementById('daily-tips-result');
+  if(_dailyLoaded){ res.style.display = res.style.display==='none'?'block':'none'; return; }
+  btn.textContent = '⏳ در حال بارگذاری...';
+  btn.style.opacity = '.7';
+  try{
+    const r = await fetch('/api/daily/tips/', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const d = await r.json();
+    if(d.ok && d.result){
+      const t = d.result;
+      let html = '';
+      if(t.day_message) html += `<div style="font-size:12px;color:var(--text-soft);margin-bottom:10px;font-style:italic;">💬 ${t.day_message}</div>`;
+      html += (t.tips||[]).map(tip=>`
+        <div class="tip-item">
+          <span style="font-size:18px;line-height:1">${tip.emoji||'✦'}</span>
+          <div class="tip-body">
+            <div class="tip-title">${tip.tip||''}</div>
+            <div class="tip-why">${tip.why||''}</div>
+          </div>
+        </div>`).join('');
+      res.innerHTML = html;
+    } else {
+      res.innerHTML = `<div style="color:#f87171;font-size:12px">${d.error||'خطا'}</div>`;
+    }
+    _dailyLoaded = true;
+  } catch(e){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">خطا در ارتباط با سرور</div>';
+  }
+  btn.textContent = '✦ نکات روزانه AI';
+  btn.style.opacity = '1';
+}
+</script>
+{% endblock %}

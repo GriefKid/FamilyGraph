@@ -1,0 +1,41 @@
+# ─── Django ───
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+
+# ─── Database ───
+db.sqlite3
+*.db
+
+# ─── Environment ───
+.env
+.env.*
+!.env.example
+
+# ─── Media uploads ───
+media/
+
+# ─── Static collected ───
+staticfiles/
+
+# ─── Virtual environments ───
+venv/
+env/
+.venv/
+ENV/
+
+# ─── IDE ───
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+
+# ─── Logs ───
+*.log
+logs/

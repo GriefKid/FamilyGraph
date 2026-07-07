@@ -49,11 +49,14 @@
 <div class="card delete-container">
 
 	<div class="delete-title">
-		حذف {{ object.username }}؟
+		حذف {{ node.display_name }}؟
 	</div>
 
 	<div class="delete-text">
-		مطمئنی میخوای «{{ object.username }}» رو حذف کنی؟
+		مطمئنی میخوای «{{ node.display_name }}» رو حذف کنی؟
+		{% if rel_count %}
+		<br><span style="color:#f87171;">⚠️ {{ rel_count }} رابطه مرتبط هم حذف می‌شن.</span>
+		{% endif %}
 	</div>
 
 	<form method="post">

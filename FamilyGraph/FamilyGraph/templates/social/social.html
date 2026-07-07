@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}دوستان و اشتراک گذاری - FamilyGraph{% endblock %}
+{% block page_title %}شبکه اجتماعی روابط{% endblock %}
+{% block nav_social %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.social-grid{display:grid;grid-template-columns:330px minmax(0,1fr) 340px;gap:16px;height:calc(100vh - 78px)}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;min-height:0;display:flex;flex-direction:column}
+.panel-head{padding:15px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.panel-title{font-size:14px;font-weight:800;color:var(--text)}
+.panel-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.panel-body{padding:14px;overflow:auto;min-height:0}
+.search-row{display:flex;gap:8px;margin-bottom:12px}
+.social-input,.social-select{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:12px;padding:9px 11px;outline:none}
+.social-input:focus,.social-select:focus{border-color:var(--primary-border);box-shadow:0 0 0 3px var(--primary-glow)}
+.mini-btn{border:none;border-radius:10px;padding:8px 12px;font-family:'Vazirmatn',sans-serif;font-weight:800;font-size:12px;cursor:pointer;background:var(--grad-brand);color:#fff;white-space:nowrap}
+.ghost-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-soft)}
+.danger-btn{background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.25);color:#fb7185}
+.person{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:12px;padding:12px;margin-bottom:9px}
+.person-main{display:flex;align-items:center;gap:10px}
+.avatar{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;flex-shrink:0}
+.person-name{font-weight:800;font-size:13px;color:var(--text)}
+.person-meta{font-size:11px;color:var(--text-muted);margin-top:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.chip{font-size:10px;padding:3px 8px;border-radius:999px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.22);color:var(--primary-light)}
+.person-actions{display:flex;gap:7px;margin-top:10px}
+.request-box{border-top:1px solid var(--border);padding-top:12px;margin-top:12px}
+.chat-shell{display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;height:100%;min-height:0}
+.friend-strip{display:flex;gap:8px;overflow:auto;padding:12px;border-bottom:1px solid var(--border)}
+.friend-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-soft);border-radius:999px;padding:7px 11px;cursor:pointer;white-space:nowrap;font-family:'Vazirmatn',sans-serif}
+.friend-pill.active{border-color:var(--primary-border);background:var(--primary-glow);color:var(--primary-light)}
+.messages{padding:18px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.empty-state{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--text-muted);font-size:13px;line-height:1.9}
+.bubble{max-width:72%;padding:10px 13px;border-radius:13px;font-size:13px;line-height:1.75;border:1px solid var(--border);background:rgba(255,255,255,.045)}
+.bubble.mine{align-self:flex-end;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-color:transparent;color:#fff}
+.bubble .time{display:block;font-size:10px;opacity:.6;margin-top:4px}
+.composer{display:flex;gap:9px;padding:12px;border-top:1px solid var(--border)}
+.analysis{border-top:1px solid var(--border);padding:12px 14px;background:rgba(6,182,212,.045)}
+.analysis h4{font-size:12px;color:var(--text);margin:0 0 6px}
+.analysis p{font-size:12px;color:var(--text-soft);margin:0 0 6px;line-height:1.8}
+.info-card{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:rgba(255,255,255,.025)}
+.info-title{font-size:12px;font-weight:800;color:var(--text);margin-bottom:8px}
+.check-list{display:none;max-height:110px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:8px;margin-top:8px}
+.check-list label{display:block;font-size:12px;color:var(--text-soft);margin-bottom:5px}
+@media(max-width:1100px){.social-grid{grid-template-columns:1fr;height:auto}.panel{min-height:420px}}
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="social-grid">
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">کشف آدم‌ها</div>
+        <div class="panel-sub">پابلیک‌ها پیدا می‌شوند؛ پرایوت‌ها با درخواست وارد رابطه می‌شوند.</div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="search-row">
+        <input id="discoverQ" class="social-input" placeholder="نام، یوزرنیم، شهر یا شغل">
+        <button class="mini-btn" onclick="discover()">جستجو</button>
+      </div>
+      <div id="discoverList"></div>
+
+      <div class="request-box">
+        <div class="panel-title" style="font-size:13px;margin-bottom:8px;">درخواست‌های دریافتی</div>
+        {% for r in incoming %}
+        <div class="person" id="req{{ r.id }}">
+          <div class="person-main">
+            <div class="avatar">{{ r.sender.username|first|upper }}</div>
+            <div>
+              <div class="person-name">{{ r.sender.get_full_name|default:r.sender.username }}</div>
+              <div class="person-meta">@{{ r.sender.username }}</div>
+            </div>
+          </div>
+          {% if r.message %}<div class="person-meta" style="margin-top:8px;">{{ r.message }}</div>{% endif %}
+          <div class="person-actions">
+            <button class="mini-btn" onclick="respondReq({{ r.id }}, 'accept')">قبول</button>
+            <button class="mini-btn danger-btn" onclick="respondReq({{ r.id }}, 'reject')">رد</button>
+          </div>
+        </div>
+        {% empty %}
+        <div class="person-meta">درخواست جدیدی نداری.</div>
+        {% endfor %}
+      </div>
+
+      <div class="request-box">
+        <div class="panel-title" style="font-size:13px;margin-bottom:8px;">در انتظار پاسخ</div>
+        {% for r in outgoing %}
+        <div class="person">
+          <div class="person-name">{{ r.receiver.get_full_name|default:r.receiver.username }}</div>
+          <div class="person-meta">@{{ r.receiver.username }}</div>
+        </div>
+        {% empty %}
+        <div class="person-meta">درخواست باز نداری.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="chat-shell">
+      <div class="friend-strip" id="friendStrip">
+        {% for f in friends %}
+        <button class="friend-pill" data-id="{{ f.friend.id }}" onclick="openChat({{ f.friend.id }}, this)">
+          <span class="avatar" style="width:24px;height:24px;border-radius:8px;font-size:11px;">{{ f.friend.username|first|upper }}</span>
+          {{ f.friend.get_full_name|default:f.friend.username }}
+        </button>
+        {% empty %}
+        <span class="person-meta">بعد از قبول درخواست‌ها، دوستانت اینجا می‌آیند.</span>
+        {% endfor %}
+      </div>
+      <div id="messages" class="messages">
+        <div class="empty-state">یک دوست را انتخاب کن تا چت، تحلیل رابطه، و سیگنال‌های رفتاری‌اش را ببینی.</div>
+      </div>
+      <div id="analysisBox" class="analysis" style="display:none;"></div>
+      <div class="composer">
+        <input id="msgInput" class="social-input" placeholder="پیام به دوستت..." disabled onkeydown="if(event.key==='Enter')sendMsg()">
+        <button class="mini-btn" onclick="sendMsg()">ارسال</button>
+        <button class="mini-btn ghost-btn" onclick="analyzeChat()">تحلیل</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">اشتراک‌گذاری داده‌ها</div>
+        <div class="panel-sub">هر اطلاعات را برای همه، همه دوستان، یا چند دوست مشخص باز کن.</div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="panel-title" style="font-size:13px;margin-bottom:8px;">اشتراک‌های رسیده به من</div>
+      {% for info in incoming_shared %}
+      <div class="info-card">
+        <div class="info-title">{{ info.node.owner.username }} / {{ info.node.display_name }} - #{{ info.id }}</div>
+        <div class="person-meta">{{ info.data|truncatechars:140 }}</div>
+        <div class="chips"><span class="chip">{% if info.visibility == 'friends' %}همه دوست‌ها{% else %}انتخابی{% endif %}</span></div>
+      </div>
+      {% empty %}
+      <div class="person-meta" style="margin-bottom:14px;">فعلا چیزی با تو share نشده.</div>
+      {% endfor %}
+
+      <div class="request-box" style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px;">
+      <div class="panel-title" style="font-size:13px;margin-bottom:8px;">داده‌های من</div>
+      {% for info in infos %}
+      <div class="info-card" data-info="{{ info.id }}">
+        <div class="info-title">{{ info.node.display_name }} - #{{ info.id }}</div>
+        <select class="social-select share-mode" onchange="toggleSelected(this)">
+          <option value="private" {% if info.visibility == 'private' %}selected{% endif %}>فقط خودم</option>
+          <option value="public" {% if info.visibility == 'public' %}selected{% endif %}>همه پابلیک‌ها</option>
+          <option value="friends" {% if info.visibility == 'friends' %}selected{% endif %}>همه دوست‌ها</option>
+          <option value="selected" {% if info.visibility == 'selected' %}selected{% endif %}>دوست‌های انتخابی</option>
+        </select>
+        <div class="check-list" {% if info.visibility == 'selected' %}style="display:block"{% endif %}>
+          {% for f in friends %}
+          <label><input type="checkbox" value="{{ f.friend.id }}" {% if f.friend in info.shared_with.all %}checked{% endif %}> {{ f.friend.get_full_name|default:f.friend.username }}</label>
+          {% endfor %}
+        </div>
+        <button class="mini-btn ghost-btn" style="margin-top:9px;width:100%;" onclick="saveShare(this)">ذخیره سطح دسترسی</button>
+      </div>
+      {% empty %}
+      <div class="empty-state">هنوز اطلاعاتی برای share نداری.</div>
+      {% endfor %}
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+let activeFriend = null;
+
+async function api(url, opts={}){
+  opts.headers = Object.assign({'X-CSRFToken': csrftoken, 'Content-Type':'application/json'}, opts.headers || {});
+  const r = await fetch(url, opts);
+  const data = await r.json();
+  if(!r.ok) throw new Error(data.error || 'خطا');
+  return data;
+}
+function esc(s){return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+async function discover(){
+  const q = document.getElementById('discoverQ').value;
+  const data = await api(`/api/social/discover/?q=${encodeURIComponent(q)}`, {headers:{'Content-Type':'application/json'}});
+  const box = document.getElementById('discoverList');
+  box.innerHTML = data.users.map(u => `
+    <div class="person">
+      <div class="person-main">
+        <div class="avatar">${esc(u.username[0]||'?').toUpperCase()}</div>
+        <div><div class="person-name">${esc(u.name)}</div><div class="person-meta">@${esc(u.username)} ${u.city ? ' - '+esc(u.city) : ''}</div></div>
+      </div>
+      <div class="chips"><span class="chip">${u.is_public ? 'پابلیک' : 'پرایوت'}</span>${u.career ? `<span class="chip">${esc(u.career)}</span>` : ''}</div>
+      <div class="person-actions">
+        ${u.is_friend ? `<button class="mini-btn ghost-btn" disabled>دوست هستید</button>` :
+          u.request_sent ? `<button class="mini-btn ghost-btn" disabled>درخواست فرستاده شد</button>` :
+          `<button class="mini-btn" onclick="sendReq(${u.id})">${u.request_received ? 'قبول درخواست' : 'درخواست دوستی'}</button>`}
+      </div>
+    </div>`).join('') || '<div class="person-meta">چیزی پیدا نشد.</div>';
+}
+async function sendReq(id){ await api(`/api/social/request/${id}/`, {method:'POST', body:JSON.stringify({})}); await discover(); }
+async function respondReq(id, action){ await api(`/api/social/request/respond/${id}/`, {method:'POST', body:JSON.stringify({action})}); location.reload(); }
+async function openChat(id, btn){
+  activeFriend = id;
+  document.querySelectorAll('.friend-pill').forEach(b=>b.classList.remove('active'));
+  btn?.classList.add('active');
+  document.getElementById('msgInput').disabled = false;
+  const data = await api(`/api/social/messages/${id}/`, {headers:{'Content-Type':'application/json'}});
+  renderMessages(data.messages); renderAnalysis(data.analysis);
+}
+function renderMessages(items){
+  const box = document.getElementById('messages');
+  box.innerHTML = items.map(m => `<div class="bubble ${m.mine?'mine':''}">${esc(m.content)}<span class="time">${esc(m.created_at)} - ${esc(m.sender)}</span></div>`).join('') || '<div class="empty-state">هنوز پیامی نیست.</div>';
+  box.scrollTop = box.scrollHeight;
+}
+function renderAnalysis(a){
+  const box = document.getElementById('analysisBox');
+  if(!a){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML = `<h4>تحلیل چت</h4><p>${esc(a.summary)}</p><p><b>حال‌وهوا:</b> ${esc(a.mood)}</p>${(a.signals||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join(' ')}`;
+}
+async function sendMsg(){
+  if(!activeFriend) return;
+  const inp = document.getElementById('msgInput');
+  const content = inp.value.trim();
+  if(!content) return;
+  inp.value = '';
+  await api(`/api/social/messages/${activeFriend}/send/`, {method:'POST', body:JSON.stringify({content})});
+  await openChat(activeFriend, document.querySelector(`.friend-pill[data-id="${activeFriend}"]`));
+}
+async function analyzeChat(){
+  if(!activeFriend) return;
+  const data = await api(`/api/social/messages/${activeFriend}/analyze/`, {method:'POST', body:JSON.stringify({})});
+  renderAnalysis(data.analysis);
+}
+function toggleSelected(sel){ sel.closest('.info-card').querySelector('.check-list').style.display = sel.value === 'selected' ? 'block' : 'none'; }
+async function saveShare(btn){
+  const card = btn.closest('.info-card');
+  const visibility = card.querySelector('.share-mode').value;
+  const friend_ids = [...card.querySelectorAll('.check-list input:checked')].map(x=>x.value);
+  await api(`/api/social/share-info/${card.dataset.info}/`, {method:'POST', body:JSON.stringify({visibility, friend_ids})});
+  btn.textContent = 'ذخیره شد';
+  setTimeout(()=>btn.textContent='ذخیره سطح دسترسی', 1200);
+}
+discover();
+</script>
+{% endblock %}

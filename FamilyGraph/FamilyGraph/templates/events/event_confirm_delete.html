@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}حذف رویداد{% endblock %}
+{% block page_title %}حذف رویداد{% endblock %}
+{% block content %}
+<div style="max-width:400px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px">
+    <p style="margin-bottom:20px">آیا رویداد <strong>{{ event.title }}</strong> حذف شود؟</p>
+    <form method="post" style="display:flex;gap:10px">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger">بله، حذف کن</button>
+      <a href="{% url 'events_list' %}" class="btn">انصراف</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

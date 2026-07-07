@@ -1,248 +1,451 @@
 {% extends "base.html" %}
-
-{% block title %}
-نودها
-{% endblock %}
+{% block title %}افراد — FamilyGraph{% endblock %}
+{% block page_title %}👥 افراد{% endblock %}
+{% block nav_nodes %}active{% endblock %}
+{% block topbar_actions %}<a href="{% url 'node_create' %}" class="btn btn-primary btn-sm">＋ افزودن شخص</a>{% endblock %}
 
 {% block extra_css %}
-
 <style>
 
-.nodes-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:20px;
-flex-wrap:wrap;
-gap:10px;
+.header-row{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:24px;
+  flex-wrap:wrap;
 }
 
-.search{
-padding:8px 12px;
-border-radius:8px;
-border:1px solid var(--border);
-background:var(--card);
-color:var(--text);
-width:220px;
+.stats-strip{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
 }
 
-/* GRID */
+.stat-pill{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 18px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius-xl);
+  font-size:13px;
+  color:var(--text-soft);
+  box-shadow:0 2px 8px rgba(0,0,0,.3);
+  transition:all var(--t);
+}
+.stat-pill:hover{
+  border-color:var(--primary-border);
+  background:var(--card-hov);
+  transform:translateY(-1px);
+}
+.stat-pill-num{
+  font-size:22px;
+  font-weight:800;
+  background:var(--grad-brand);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  line-height:1;
+}
 
+/* Search + filters bar */
+.toolbar{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-bottom:22px;
+  flex-wrap:wrap;
+}
+
+.search-wrap{
+  position:relative;
+  flex:1;
+  min-width:220px;
+}
+.search-icon{
+  position:absolute;
+  right:12px;
+  top:50%;
+  transform:translateY(-50%);
+  color:var(--text-muted);
+  pointer-events:none;
+  font-size:14px;
+}
+.search-input{
+  width:100%;
+  padding:10px 38px 10px 14px;
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
+  font-family:'Vazirmatn',sans-serif;
+  font-size:13px;
+  transition:all var(--t);
+}
+.search-input:focus{
+  outline:none;
+  border-color:var(--primary-border);
+  background:rgba(99,102,241,.04);
+  box-shadow:0 0 0 3px rgba(99,102,241,.09);
+}
+
+.view-toggle{
+  display:flex;
+  gap:2px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:3px;
+}
+.vt-btn{
+  width:32px; height:32px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:6px;
+  border:none;
+  background:none;
+  color:var(--text-muted);
+  cursor:pointer;
+  font-size:14px;
+  transition:var(--t);
+}
+.vt-btn.active{
+  background:var(--primary);
+  color:#fff;
+  box-shadow:0 0 12px rgba(99,102,241,.4);
+}
+
+/* ─── GRID VIEW ─── */
 .node-grid{
-display:grid;
-grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-gap:18px;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(175px,1fr));
+  gap:14px;
 }
-
-/* CARD */
 
 .node-card{
-background:var(--card);
-border:1px solid var(--border);
-border-radius:14px;
-padding:18px;
-display:flex;
-flex-direction:column;
-align-items:center;
-gap:10px;
-transition:.2s;
+  background:var(--card);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:22px 16px 18px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  text-decoration:none;
+  color:var(--text);
+  transition:all .22s cubic-bezier(.4,0,.2,1);
+  cursor:pointer;
+  box-shadow:0 2px 12px rgba(0,0,0,.4);
+  position:relative;
+  overflow:hidden;
 }
-
+.node-card::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(135deg,rgba(99,102,241,0),rgba(139,92,246,0));
+  transition:background .25s;
+  pointer-events:none;
+  border-radius:var(--radius-lg);
+}
 .node-card:hover{
-transform:translateY(-4px);
-border-color:var(--primary);
+  border-color:var(--primary-border);
+  transform:translateY(-5px);
+  box-shadow:0 16px 40px rgba(0,0,0,.55), 0 0 32px rgba(99,102,241,.12);
+}
+.node-card:hover::after{
+  background:linear-gradient(135deg,rgba(99,102,241,.04),rgba(139,92,246,.04));
 }
 
-/* AVATAR */
+.nc-avatar-wrap{
+  position:relative;
+}
+.nc-avatar-ring{
+  padding:2.5px;
+  border-radius:50%;
+  background:var(--border);
+  transition:var(--t);
+}
+.node-card:hover .nc-avatar-ring{
+  background:var(--grad-brand);
+  box-shadow:0 0 20px rgba(99,102,241,.45);
+}
+.nc-avatar-ph{
+  width:70px; height:70px;
+  border-radius:50%;
+  background:linear-gradient(135deg,#1a1a35,#252545);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--primary-light);
+  font-weight:800;
+  font-size:24px;
+  transition:var(--t);
+}
+.node-card:hover .nc-avatar-ph{
+  background:var(--grad-brand);
+  color:#fff;
+}
+.nc-avatar{
+  width:70px; height:70px;
+  border-radius:50%;
+  overflow:hidden;
+}
+.nc-avatar img{ width:100%; height:100%; object-fit:cover; }
 
-.avatar{
-width:70px;
-height:70px;
-border-radius:50%;
-overflow:hidden;
-border:2px solid var(--border);
+/* Root badge */
+.nc-root-badge{
+  position:absolute;
+  top:-2px; left:-2px;
+  width:18px; height:18px;
+  border-radius:50%;
+  background:var(--grad-brand);
+  border:2px solid var(--bg);
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px;
+  color:#fff;
+  font-weight:800;
 }
 
-.avatar img{
-width:100%;
-height:100%;
-object-fit:cover;
+.nc-name{
+  font-size:13px;
+  font-weight:600;
+  text-align:center;
+  margin-top:2px;
+  line-height:1.3;
+}
+.nc-handle{
+  font-size:11px;
+  color:var(--text-muted);
+  text-align:center;
+}
+.nc-career{
+  font-size:11px;
+  background:rgba(99,102,241,.10);
+  color:var(--primary-light);
+  padding:2px 10px;
+  border-radius:20px;
+  border:1px solid var(--primary-border);
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 
-.avatar-placeholder{
-width:70px;
-height:70px;
-border-radius:50%;
-background:var(--primary);
-display:flex;
-align-items:center;
-justify-content:center;
-color:white;
-font-weight:bold;
-font-size:22px;
-}
+/* ─── LIST VIEW ─── */
+.node-list{ display:flex; flex-direction:column; gap:8px; }
 
-/* TEXT */
-
-.username{
-font-size:16px;
-font-weight:bold;
+.node-list-item{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:12px 18px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  text-decoration:none;
+  color:var(--text);
+  transition:all var(--t);
 }
-
-.name{
-font-size:13px;
-color:#94a3b8;
+.node-list-item:hover{
+  border-color:var(--primary-border);
+  background:var(--card-hov);
+  transform:translateX(-3px);
 }
-
-.career{
-font-size:12px;
-opacity:.8;
+.nli-avatar-ring{
+  padding:2px;
+  border-radius:50%;
+  background:var(--border);
+  flex-shrink:0;
+  transition:var(--t);
 }
-
-.node-actions{
-margin-top:6px;
+.node-list-item:hover .nli-avatar-ring{ background:var(--grad-brand); }
+.nli-avatar-ph{
+  width:42px; height:42px;
+  border-radius:50%;
+  background:linear-gradient(135deg,#1a1a35,#252545);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--primary-light);
+  font-weight:800; font-size:16px;
+  transition:var(--t);
 }
+.node-list-item:hover .nli-avatar-ph{ background:var(--grad-brand); color:#fff; }
+.nli-avatar{ width:42px; height:42px; border-radius:50%; overflow:hidden; }
+.nli-avatar img{ width:100%; height:100%; object-fit:cover; }
+.nli-info{ flex:1; }
+.nli-name{ font-size:13px; font-weight:600; }
+.nli-meta{ font-size:11px; color:var(--text-muted); margin-top:2px; display:flex; gap:10px; flex-wrap:wrap; }
+.nli-arrow{ color:var(--text-dim); font-size:12px; flex-shrink:0; }
+
+/* ─── EMPTY STATE ─── */
+.empty-state{
+  grid-column:1/-1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:80px 20px;
+  text-align:center;
+}
+.empty-icon{
+  font-size:48px;
+  opacity:.15;
+  margin-bottom:16px;
+  filter:grayscale(1);
+}
+.empty-text{ color:var(--text-muted); font-size:14px; margin-bottom:24px; line-height:1.8; }
+
+/* ─── PAGINATION ─── */
+.pagination{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-top:28px;
+}
+.page-info{ font-size:12px; color:var(--text-muted); }
+
+/* fade-in animation */
+@keyframes ncFade{
+  from{ opacity:0; transform:translateY(10px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+.node-card,.node-list-item{ animation:ncFade .28s ease both; }
+{% for i in "123456789012345678901234" %}
+.node-card:nth-child({{ forloop.counter }}),.node-list-item:nth-child({{ forloop.counter }}){ animation-delay:{{ forloop.counter0 }}0ms; }
+{% endfor %}
 
 </style>
-
 {% endblock %}
-
 
 {% block content %}
 
-<div class="card">
-
-<div class="nodes-header">
-
-<h3>نودها</h3>
-
-<div style="display:flex; gap:10px;">
-
-<input
-class="search"
-type="text"
-placeholder="جستجو..."
-onkeyup="filterNodes(this.value)"
->
-
-<a href="{% url 'node_create' %}" class="btn">
-+ نود جدید
-</a>
-
+<div class="stats-strip" style="margin-bottom:24px;">
+  <div class="stat-pill">
+    <div class="stat-pill-num">{% if page_obj %}{{ page_obj.paginator.count }}{% else %}{{ nodes|length }}{% endif %}</div>
+    <span>نفر در شبکه</span>
+  </div>
 </div>
 
+<div class="toolbar">
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input class="search-input" type="text" id="searchInput"
+           placeholder="جستجو با نام، username یا شغل..."
+           onkeyup="filterNodes(this.value)">
+  </div>
+  <div class="view-toggle">
+    <button class="vt-btn active" id="vt-grid" onclick="setView('grid')" title="نمایش کارتی">⊞</button>
+    <button class="vt-btn" id="vt-list" onclick="setView('list')" title="نمایش لیستی">☰</button>
+  </div>
 </div>
 
-
+<!-- GRID VIEW -->
 <div class="node-grid" id="nodeGrid">
+  {% for node in nodes %}
+  <a class="node-card"
+     href="{% url 'node_detail' node.id %}"
+     data-search="{{ node.username|lower }} {{ node.first_name|lower }} {{ node.last_name|lower }} {{ node.nickname|lower }} {{ node.career|lower }} {{ node.name|lower }}">
 
-{% for node in nodes %}
+    <div class="nc-avatar-wrap">
+      <div class="nc-avatar-ring">
+        {% if node.picture %}
+          <div class="nc-avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
+        {% else %}
+          <div class="nc-avatar-ph">{{ node.display_name|first|upper }}</div>
+        {% endif %}
+      </div>
+      {% if request.user.root_node and node.id == request.user.root_node.id %}
+      <div class="nc-root-badge" title="نود اصلی (من)">★</div>
+      {% endif %}
+    </div>
 
-<div class="node-card" data-name="{{ node.username|lower }}">
+    <div class="nc-name">{{ node.display_name }}</div>
+    {% if node.username != node.display_name %}
+    <div class="nc-handle">@{{ node.username }}</div>
+    {% endif %}
+    {% if node.career %}
+    <div class="nc-career">{{ node.career }}</div>
+    {% endif %}
 
-{% if node.picture %}
-
-<div class="avatar">
-<img src="{{ node.picture.url }}">
+  </a>
+  {% empty %}
+  <div class="empty-state">
+    <div class="empty-icon">◎</div>
+    <div class="empty-text">
+      هنوز هیچ شخصی اضافه نشده<br>
+      <small>با کلیک روی دکمه «افزودن شخص» شروع کن</small>
+    </div>
+    <a href="{% url 'node_create' %}" class="btn btn-primary">＋ افزودن اولین شخص</a>
+  </div>
+  {% endfor %}
 </div>
 
-{% else %}
+<!-- LIST VIEW (hidden by default) -->
+<div class="node-list" id="nodeList" style="display:none;">
+  {% for node in nodes %}
+  <a class="node-list-item"
+     href="{% url 'node_detail' node.id %}"
+     data-search="{{ node.username|lower }} {{ node.first_name|lower }} {{ node.last_name|lower }} {{ node.nickname|lower }} {{ node.career|lower }} {{ node.name|lower }}">
 
-<div class="avatar-placeholder">
-{{ node.username|first }}
+    <div class="nli-avatar-ring">
+      {% if node.picture %}
+        <div class="nli-avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
+      {% else %}
+        <div class="nli-avatar-ph">{{ node.display_name|first|upper }}</div>
+      {% endif %}
+    </div>
+
+    <div class="nli-info">
+      <div class="nli-name">
+        {{ node.display_name }}
+        {% if request.user.root_node and node.id == request.user.root_node.id %}
+        <span class="chip" style="font-size:9px;padding:1px 6px;margin-right:6px;">من</span>
+        {% endif %}
+      </div>
+      <div class="nli-meta">
+        <span>@{{ node.username }}</span>
+        {% if node.career %}<span>{{ node.career }}</span>{% endif %}
+        {% if node.birth_day %}<span>🎂 {{ node.birth_day|date:"j F" }}</span>{% endif %}
+      </div>
+    </div>
+
+    <span class="nli-arrow">←</span>
+  </a>
+  {% endfor %}
 </div>
-
-{% endif %}
-
-<div class="username">
-{{ node.username }}
-</div>
-
-{% if node.name %}
-
-<div class="name">
-{{ node.name }}
-</div>
-
-{% endif %}
-
-{% if node.career %}
-
-<div class="career">
-{{ node.career }}
-</div>
-
-{% endif %}
-
-<div class="node-actions">
-
-<a href="{% url 'node_detail' node.id %}" class="btn">
-مشاهده
-</a>
-
-</div>
-
-</div>
-
-{% empty %}
-
-<p>هیچ نودی وجود ندارد</p>
-
-{% endfor %}
-
-</div>
-
-</div>
-
-
-<!-- PAGINATION -->
 
 {% if is_paginated %}
-
-<div style="margin-top:20px; text-align:center;">
-
-{% if page_obj.has_previous %}
-
-<a class="btn" href="?page={{ page_obj.previous_page_number }}">
-قبلی
-</a>
-
-{% endif %}
-
-<span style="margin:0 10px;">
-صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}
-</span>
-
-{% if page_obj.has_next %}
-
-<a class="btn" href="?page={{ page_obj.next_page_number }}">
-بعدی
-</a>
-
-{% endif %}
-
+<div class="pagination">
+  {% if page_obj.has_previous %}<a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
+  <span class="page-info">صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
 </div>
-
 {% endif %}
 
 <script>
+let _currentView = localStorage.getItem('nodes-view') || 'grid';
 
-function filterNodes(q){
-
-q = q.toLowerCase()
-
-let cards = document.querySelectorAll(".node-card")
-
-cards.forEach(card=>{
-
-let name = card.dataset.name
-
-card.style.display = name.includes(q) ? "flex" : "none"
-
-})
-
+function setView(v){
+  _currentView = v;
+  localStorage.setItem('nodes-view', v);
+  document.getElementById('nodeGrid').style.display = v === 'grid' ? 'grid' : 'none';
+  document.getElementById('nodeList').style.display = v === 'list' ? 'flex' : 'none';
+  document.getElementById('vt-grid').classList.toggle('active', v === 'grid');
+  document.getElementById('vt-list').classList.toggle('active', v === 'list');
 }
 
-</script>
+// restore saved view
+setView(_currentView);
 
+function filterNodes(q){
+  q = q.toLowerCase().trim();
+  const sel = '#nodeGrid .node-card, #nodeList .node-list-item';
+  document.querySelectorAll(sel).forEach(c=>{
+    const match = !q || (c.dataset.search||'').includes(q);
+    c.style.display = match ? '' : 'none';
+  });
+}
+</script>
 {% endblock %}

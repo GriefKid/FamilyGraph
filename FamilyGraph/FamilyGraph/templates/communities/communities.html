@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}کامیونیتی‌ها — FamilyGraph{% endblock %}
+{% block page_title %}🧩 تشخیص گروه‌های شبکه{% endblock %}
+{% block nav_communities %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.comm-header{
+display:flex;
+gap:14px;
+margin-bottom:24px;
+}
+
+.comm-stat{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+padding:16px 20px;
+flex:1;
+}
+
+.comm-stat-label{
+font-size:11px;
+font-weight:600;
+color:var(--text-muted);
+text-transform:uppercase;
+letter-spacing:.6px;
+margin-bottom:6px;
+}
+
+.comm-stat-value{
+font-size:26px;
+font-weight:700;
+color:var(--primary);
+line-height:1;
+}
+
+.comm-grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+gap:16px;
+}
+
+.comm-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+overflow:hidden;
+}
+
+.comm-card-head{
+display:flex;
+align-items:center;
+gap:12px;
+padding:14px 18px;
+border-bottom:1px solid var(--border);
+}
+
+.comm-dot{
+width:14px;
+height:14px;
+border-radius:50%;
+flex-shrink:0;
+}
+
+.comm-card-title{
+font-size:13px;
+font-weight:700;
+flex:1;
+}
+
+.comm-size-badge{
+font-size:11px;
+padding:2px 9px;
+border-radius:20px;
+background:var(--surface);
+color:var(--text-muted);
+border:1px solid var(--border);
+}
+
+.comm-members{
+padding:10px 12px;
+display:flex;
+flex-direction:column;
+gap:2px;
+}
+
+.comm-member{
+display:flex;
+align-items:center;
+gap:10px;
+padding:7px 8px;
+border-radius:8px;
+text-decoration:none;
+color:var(--text);
+font-size:13px;
+transition:var(--transition);
+}
+
+.comm-member:hover{background:var(--primary-glow);color:var(--primary);}
+
+.comm-member-dot{
+width:8px;
+height:8px;
+border-radius:50%;
+flex-shrink:0;
+}
+
+.error-box{
+background:rgba(244,63,94,.1);
+border:1px solid rgba(244,63,94,.3);
+border-radius:12px;
+padding:20px 24px;
+color:#f43f5e;
+font-size:13px;
+}
+
+.empty-state{
+text-align:center;
+padding:60px 20px;
+color:var(--text-muted);
+font-size:14px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="error-box">{{ error }}</div>
+
+{% elif not communities %}
+<div class="empty-state">نودی در شبکه وجود ندارد</div>
+
+{% else %}
+
+<div class="comm-header">
+  <div class="comm-stat">
+    <div class="comm-stat-label">تعداد گروه‌ها</div>
+    <div class="comm-stat-value">{{ total }}</div>
+  </div>
+  <div class="comm-stat">
+    <div class="comm-stat-label">کل افراد</div>
+    <div class="comm-stat-value">{{ node_count }}</div>
+  </div>
+  <div class="comm-stat">
+    <div class="comm-stat-label">کل روابط</div>
+    <div class="comm-stat-value">{{ edge_count }}</div>
+  </div>
+  <div class="comm-stat">
+    <div class="comm-stat-label">بزرگ‌ترین گروه</div>
+    <div class="comm-stat-value">{{ communities.0.size }}</div>
+  </div>
+</div>
+
+<div class="comm-grid">
+  {% for comm in communities %}
+  <div class="comm-card">
+    <div class="comm-card-head">
+      <div class="comm-dot" style="background:{{ comm.color }}"></div>
+      <span class="comm-card-title">گروه {{ comm.index }}</span>
+      <span class="comm-size-badge">{{ comm.size }} نفر</span>
+    </div>
+    <div class="comm-members">
+      {% for node in comm.members %}
+      <a href="{% url 'node_detail' node.id %}" class="comm-member">
+        <div class="comm-member-dot" style="background:{{ comm.color }}"></div>
+        {{ node.username }}{% if node.name %} — <span style="color:var(--text-muted)">{{ node.name }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}

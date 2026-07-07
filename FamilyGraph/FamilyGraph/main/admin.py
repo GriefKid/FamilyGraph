@@ -1,6 +1,46 @@
 from django.contrib import admin
 from django.contrib.admin import display
-from .models import Node, Relationship, Information
+from .models import (
+    ChatAnalysis,
+    Debt,
+    DirectMessage,
+    FollowUp,
+    FriendRequest,
+    Friendship,
+    Information,
+    Interaction,
+    Node,
+    NodeCloseness,
+    Relationship,
+)
+
+
+@admin.register(Debt)
+class DebtAdmin(admin.ModelAdmin):
+    list_display = ['node', 'direction', 'amount', 'paid', 'due_date', 'settled']
+    list_filter = ['direction', 'settled']
+    raw_id_fields = ['node']
+
+
+@admin.register(FollowUp)
+class FollowUpAdmin(admin.ModelAdmin):
+    list_display = ['text', 'node', 'due_date', 'done']
+    list_filter = ['done']
+    raw_id_fields = ['node']
+
+
+@admin.register(Interaction)
+class InteractionAdmin(admin.ModelAdmin):
+    list_display = ['node', 'kind', 'date', 'feeling', 'note']
+    list_filter = ['kind', 'feeling']
+    raw_id_fields = ['node']
+
+
+@admin.register(NodeCloseness)
+class NodeClosenessAdmin(admin.ModelAdmin):
+    list_display = ['node', 'tier']
+    list_filter = ['tier']
+    raw_id_fields = ['node']
 
 @admin.register(Node)
 class NodeAdmin(admin.ModelAdmin):
@@ -9,16 +49,16 @@ class NodeAdmin(admin.ModelAdmin):
 
 @admin.register(Relationship)
 class RelationshipAdmin(admin.ModelAdmin):
-    list_display = ['rel', 'get_father', 'get_child']
-    raw_id_fields = ['father', 'child']
-    
-    @display(description='پدر')
-    def get_father(self, obj):
-        return obj.father.username or 'N/A'
-    
-    @display(description='فرزند')    
-    def get_child(self, obj):
-        return obj.child.username or 'N/A'
+    list_display = ['rel', 'get_source', 'get_target']
+    raw_id_fields = ['source', 'target']
+
+    @display(description='مبدا')
+    def get_source(self, obj):
+        return obj.source.username or 'N/A'
+
+    @display(description='مقصد')
+    def get_target(self, obj):
+        return obj.target.username or 'N/A'
 
 @admin.register(Information)
 class InformationAdmin(admin.ModelAdmin):
@@ -29,3 +69,28 @@ class InformationAdmin(admin.ModelAdmin):
     @display(description='نمونه داده')
     def data_preview(self, obj):
         return str(obj.data)[:50] + '...' if obj.data else 'خالی'
+
+@admin.register(Friendship)
+class FriendshipAdmin(admin.ModelAdmin):
+    list_display = ['user', 'friend', 'relationship', 'created_at']
+    raw_id_fields = ['user', 'friend', 'relationship']
+
+
+@admin.register(FriendRequest)
+class FriendRequestAdmin(admin.ModelAdmin):
+    list_display = ['sender', 'receiver', 'status', 'created_at', 'responded_at']
+    list_filter = ['status']
+    raw_id_fields = ['sender', 'receiver']
+
+
+@admin.register(DirectMessage)
+class DirectMessageAdmin(admin.ModelAdmin):
+    list_display = ['sender', 'receiver', 'created_at', 'analyzed']
+    list_filter = ['analyzed']
+    raw_id_fields = ['sender', 'receiver']
+
+
+@admin.register(ChatAnalysis)
+class ChatAnalysisAdmin(admin.ModelAdmin):
+    list_display = ['user', 'friend', 'mood', 'updated_at']
+    raw_id_fields = ['user', 'friend']

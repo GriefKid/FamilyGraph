@@ -1,0 +1,1206 @@
+{% extends "base.html" %}
+{% block title %}دفترچه خاطرات — FamilyGraph{% endblock %}
+{% block page_title %}📓 دفترچه خاطرات{% endblock %}
+{% block nav_journal %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ══ Tab nav ══════════════════════════════════════════ */
+.tab-nav{
+  display:flex;gap:6px;margin-bottom:16px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:5px;
+}
+.tab-btn{
+  flex:1;padding:9px 0;font-size:13px;font-weight:600;
+  background:none;border:none;color:var(--text-muted);
+  border-radius:8px;cursor:pointer;transition:var(--transition);
+  font-family:'Vazirmatn',sans-serif;
+}
+.tab-btn.active{
+  background:var(--primary-glow);color:var(--primary-light);
+  border:1px solid var(--primary-border);
+}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+/* ══ Write card ═══════════════════════════════════════ */
+.jcard{
+  background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
+  margin-bottom:16px;
+}
+.jcard-head{
+  padding:11px 18px;border-bottom:1px solid var(--border);background:var(--surface);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.jcard-head h3{font-size:13px;font-weight:700;}
+.jcard-head .hint{font-size:11px;color:var(--text-muted);}
+.jcard-body{padding:16px;}
+
+/* ══ Textarea ══════════════════════════════════════════ */
+.textarea-wrap{position:relative;}
+#journalText{
+  width:100%;min-height:150px;resize:vertical;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;
+  color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13.5px;line-height:1.85;
+  padding:13px 15px;box-sizing:border-box;
+}
+#journalText:focus{border-color:var(--primary-border);box-shadow:0 0 0 3px rgba(99,102,241,.1);outline:none;}
+#journalText::placeholder{color:var(--text-muted);}
+
+/* ══ @mention dropdown ════════════════════════════════ */
+#mentionDropdown{
+  position:absolute;z-index:100;background:var(--surface);
+  border:1px solid var(--primary-border);border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;min-width:200px;display:none;
+}
+.mention-item{
+  padding:8px 14px;cursor:pointer;font-size:12.5px;display:flex;align-items:center;gap:8px;transition:background .12s;
+}
+.mention-item:hover,.mention-item.active{background:var(--primary-glow);}
+.mention-badge{font-size:10px;padding:1px 6px;border-radius:10px;}
+.mention-badge.ex{background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);}
+
+/* ══ Toolbar ══════════════════════════════════════════ */
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.date-input,.date-input-sm{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:6px 10px;font-family:'Vazirmatn',sans-serif;font-size:12px;cursor:pointer;
+}
+.date-input:focus,.date-input-sm:focus{border-color:var(--primary-border);outline:none;}
+.date-label{font-size:11px;color:var(--text-muted);}
+
+/* ══ Tag input ════════════════════════════════════════ */
+.tag-input-row{
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:10px;padding:7px 12px;min-height:38px;cursor:text;margin-bottom:10px;
+}
+.tag-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);
+  color:#a5b4fc;border-radius:14px;padding:2px 10px;font-size:12px;
+}
+.tag-chip button{background:none;border:none;color:#a5b4fc;cursor:pointer;font-size:13px;line-height:1;padding:0 2px;}
+#tagInput{
+  background:none;border:none;outline:none;color:var(--text);
+  font-family:'Vazirmatn',sans-serif;font-size:12px;flex:1;min-width:80px;
+}
+#tagInput::placeholder{color:var(--text-muted);}
+
+/* ══ Image upload ═════════════════════════════════════ */
+.img-drop-zone{
+  border:2px dashed var(--border);border-radius:10px;
+  padding:12px;text-align:center;cursor:pointer;
+  color:var(--text-muted);font-size:12px;transition:var(--transition);margin-bottom:10px;
+}
+.img-drop-zone:hover,.img-drop-zone.drag-over{
+  border-color:var(--primary-border);background:var(--primary-glow);color:var(--text-soft);
+}
+.img-previews{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.img-thumb{position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
+.img-thumb img{width:100%;height:100%;object-fit:cover;}
+.img-thumb .rm-img{
+  position:absolute;top:2px;right:2px;background:rgba(0,0,0,.7);
+  color:#fff;border:none;border-radius:50%;width:16px;height:16px;
+  font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+
+/* ══ Action row ═══════════════════════════════════════ */
+.action-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.char-count{font-size:11px;color:var(--text-muted);margin-right:auto;}
+
+/* ══ Result card ══════════════════════════════════════ */
+.result-card{
+  background:var(--card);backdrop-filter:blur(10px);
+  border:1px solid var(--border-accent);border-radius:14px;overflow:hidden;
+  box-shadow:0 4px 24px rgba(0,0,0,.4);display:none;
+}
+.result-card.show{display:block;}
+.result-head{padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:space-between;}
+.result-head h3{font-size:13px;font-weight:700;color:var(--primary-light);}
+.result-body{padding:16px;display:flex;flex-direction:column;gap:14px;}
+.r-section-title{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px;}
+.summary-box{background:rgba(99,102,241,.08);border:1px solid var(--primary-border);border-radius:9px;padding:10px 14px;font-size:13px;color:var(--text-soft);line-height:1.75;}
+.mood-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}
+.mood-badge{font-size:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:#fcd34d;border-radius:20px;padding:3px 11px;}
+.chip-group{display:flex;flex-wrap:wrap;gap:6px;}
+.ec{display:inline-flex;align-items:center;gap:5px;font-size:12px;border-radius:20px;padding:4px 11px;}
+.ec-node{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);color:#a5b4fc;}
+.ec-node.exists{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.2);color:#6ee7b7;}
+.ec-rel{background:rgba(236,72,153,.1);border:1px solid rgba(236,72,153,.2);color:#f9a8d4;}
+.ec-event{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:#fcd34d;}
+.attr-person{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px;}
+.attr-person-head{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border);background:rgba(99,102,241,.06);font-size:13px;font-weight:700;}
+.attr-person-body{padding:10px 14px;display:flex;flex-direction:column;gap:7px;}
+.attr-row{display:flex;gap:8px;align-items:flex-start;}
+.attr-key{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);min-width:90px;flex-shrink:0;padding-top:3px;}
+.attr-vals{display:flex;flex-wrap:wrap;gap:4px;}
+.attr-val{font-size:11.5px;background:var(--card);border:1px solid var(--border);color:var(--text-soft);border-radius:14px;padding:2px 9px;}
+.attr-val-str{font-size:12px;color:var(--text-soft);}
+.apply-row{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border);background:var(--surface);}
+.apply-success{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--success);padding:10px 14px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:9px;}
+.apply-check{font-size:16px;}
+
+/* ══ Profile completion panel ════════════════════════ */
+.pc-section-title{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);margin:14px 0 8px;}
+.pc-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px;}
+.pc-head{
+  display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:pointer;
+  transition:background .15s;
+}
+.pc-head:hover{background:var(--card-hov);}
+.pc-name{flex:1;font-size:13px;font-weight:600;color:var(--text);}
+.pc-new-badge{font-size:10px;font-weight:700;background:rgba(99,102,241,.15);border:1px solid var(--primary-border);color:var(--primary-light);border-radius:12px;padding:2px 9px;}
+.pc-chevron{font-size:14px;color:var(--text-muted);transition:transform .15s;}
+.pc-form{padding:0 14px 14px;border-top:1px solid var(--border);}
+.pc-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.pc-field{display:flex;flex-direction:column;gap:4px;}
+.pc-field label{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);}
+.pc-field input{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text);
+  border-radius:7px;padding:7px 10px;font-size:12px;font-family:'Vazirmatn',sans-serif;
+  transition:border-color .15s;
+}
+.pc-field input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-glow);}
+.pc-foot{display:flex;align-items:center;gap:10px;margin-top:10px;}
+.pc-saved{font-size:12px;color:var(--success);font-weight:600;}
+
+/* ══ Calendar ═════════════════════════════════════════ */
+.cal-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+.cal-nav{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface);
+}
+.cal-nav h3{font-size:14px;font-weight:700;}
+.cal-nav-btn{
+  background:var(--surface);border:1px solid var(--border);color:var(--text-soft);
+  width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:16px;
+  display:flex;align-items:center;justify-content:center;transition:var(--transition);
+}
+.cal-nav-btn:hover{background:var(--primary-glow);border-color:var(--primary-border);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
+.cal-header{background:var(--surface);padding:8px 4px;text-align:center;font-size:11px;font-weight:700;color:var(--text-muted);}
+.cal-day{
+  background:var(--card);padding:6px 4px;min-height:64px;cursor:default;
+  position:relative;transition:background .15s;
+}
+.cal-day.other-month{opacity:.35;}
+.cal-day.has-entry{cursor:pointer;}
+.cal-day.has-entry:hover{background:var(--primary-glow);}
+.cal-day.today .day-num{
+  background:var(--primary-light);color:#fff;border-radius:50%;
+  width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+}
+.cal-day.selected{background:rgba(99,102,241,.1);border:1px solid var(--primary-border);}
+.day-num{font-size:12px;color:var(--text-soft);margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+.day-dots{display:flex;flex-wrap:wrap;gap:2px;}
+.day-dot{width:6px;height:6px;border-radius:50%;}
+.day-entries-panel{
+  padding:14px 16px;border-top:1px solid var(--border);background:var(--surface);
+  display:none;
+}
+.day-entries-panel.show{display:block;}
+.day-entry-item{
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:10px 14px;margin-bottom:8px;cursor:pointer;transition:var(--transition);
+  display:flex;gap:10px;align-items:flex-start;
+}
+.day-entry-item:hover{border-color:var(--primary-border);background:var(--primary-glow);}
+.day-entry-thumb{width:44px;height:44px;border-radius:7px;object-fit:cover;flex-shrink:0;}
+.day-entry-meta{flex:1;overflow:hidden;}
+.day-entry-preview{font-size:13px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.day-entry-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;}
+.day-entry-tag{font-size:10px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#a5b4fc;border-radius:10px;padding:1px 7px;}
+.day-entry-mood{font-size:11px;color:#fcd34d;margin-top:3px;}
+
+/* ══ Filter bar ═══════════════════════════════════════ */
+.filter-bar{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:12px 16px;margin-bottom:14px;
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+}
+.filter-bar input,.filter-bar select{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:7px 11px;font-family:'Vazirmatn',sans-serif;font-size:12px;
+}
+.filter-bar input:focus,.filter-bar select:focus{
+  border-color:var(--primary-border);outline:none;
+}
+.filter-bar input[type="text"]{flex:1;min-width:140px;}
+.filter-label{font-size:11px;color:var(--text-muted);}
+.filter-clear{
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);
+  color:#f87171;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;
+  font-family:'Vazirmatn',sans-serif;
+}
+.filter-clear:hover{background:rgba(239,68,68,.2);}
+
+/* ══ Entry cards (list tab) ═══════════════════════════ */
+.entry-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:14px;margin-bottom:10px;transition:var(--transition);
+}
+.entry-card:hover{border-color:var(--primary-border);}
+.entry-card-top{display:flex;gap:12px;align-items:flex-start;}
+.entry-card-thumb{width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);}
+.entry-card-ph{width:52px;height:52px;border-radius:8px;background:var(--surface);border:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.entry-card-body{flex:1;overflow:hidden;}
+.entry-card-date{font-size:11px;color:var(--text-muted);margin-bottom:4px;}
+.entry-card-text{font-size:13px;color:var(--text-soft);line-height:1.7;overflow:hidden;max-height:60px;}
+.entry-card-text.expanded{max-height:none;}
+.entry-card-meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;align-items:center;}
+.entry-tag{font-size:10.5px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#a5b4fc;border-radius:12px;padding:2px 9px;}
+.entry-mood-badge{font-size:10.5px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:#fcd34d;border-radius:12px;padding:2px 9px;}
+.entry-person{font-size:10.5px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.15);color:#6ee7b7;border-radius:12px;padding:2px 9px;}
+.entry-ai-badge{font-size:10px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.2);color:#c4b5fd;border-radius:12px;padding:2px 8px;}
+.entry-card-actions{display:flex;gap:6px;margin-top:10px;}
+.entry-btn{
+  font-size:11px;padding:5px 11px;border-radius:7px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text-muted);cursor:pointer;
+  font-family:'Vazirmatn',sans-serif;transition:var(--transition);
+}
+.entry-btn:hover{border-color:var(--primary-border);color:var(--primary-light);}
+.entry-btn.primary{background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.3);color:#a5b4fc;}
+
+/* ══ No-root warning ══════════════════════════════════ */
+.no-root-warn{
+  background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);
+  border-radius:9px;padding:9px 14px;font-size:12px;color:#fcd34d;
+  display:flex;align-items:center;gap:8px;margin-bottom:12px;
+}
+
+/* ══ Spinner ══════════════════════════════════════════ */
+.spinner{display:inline-block;width:13px;height:13px;border-radius:50%;
+border:2px solid rgba(165,180,252,.25);border-top-color:#a5b4fc;
+animation:spin .7s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ══ Sidebar ══════════════════════════════════════════ */
+.journal-layout{display:grid;grid-template-columns:1fr 280px;gap:20px;}
+@media(max-width:860px){.journal-layout{grid-template-columns:1fr;}}
+.history-card{
+  background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;position:sticky;top:72px;
+}
+.history-list{padding:6px;}
+.history-item{
+  padding:9px 12px;border-radius:8px;cursor:pointer;
+  transition:var(--transition);margin-bottom:2px;display:flex;gap:8px;align-items:flex-start;
+}
+.history-item:hover{background:var(--primary-glow);}
+.history-thumb{width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--border);}
+.history-ph{width:40px;height:40px;border-radius:6px;background:var(--surface);border:1px solid var(--border);flex-shrink:0;}
+.history-meta{flex:1;overflow:hidden;}
+.history-date{font-size:11px;color:var(--text-muted);margin-bottom:2px;}
+.history-preview{font-size:12px;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.history-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap;}
+.history-tag{font-size:10px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#a5b4fc;border-radius:10px;padding:1px 6px;}
+.empty-state{padding:24px;text-align:center;font-size:13px;color:var(--text-muted);}
+
+/* ══ Privacy toggle list ═══════════════════════════════ */
+.privacy-list{display:flex;flex-direction:column;gap:6px;}
+.privacy-item{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:9px;padding:7px 12px;
+}
+.pi-icon{font-size:13px;color:var(--text-muted);flex-shrink:0;}
+.pi-label{flex:1;font-size:12.5px;font-weight:600;color:var(--text);}
+.pi-sub{font-size:11px;color:var(--text-muted);}
+.pi-exists{font-size:10px;padding:2px 7px;border-radius:10px;
+  background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);flex-shrink:0;}
+.pi-toggle{
+  flex-shrink:0;border:none;cursor:pointer;
+  font-size:15px;background:none;padding:2px 5px;border-radius:6px;
+  transition:background .15s;line-height:1;
+}
+.pi-toggle:hover{background:rgba(255,255,255,.08);}
+.pi-toggle[data-pub="1"]{filter:none;}
+.pi-toggle[data-pub="0"]{opacity:.6;}
+
+/* public node link search */
+.pi-link-btn{
+  flex-shrink:0;border:none;cursor:pointer;font-size:13px;
+  background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.25);
+  color:#a5b4fc;padding:3px 8px;border-radius:6px;transition:.15s;
+}
+.pi-link-btn:hover{background:rgba(99,102,241,.22);}
+.pi-link-btn.linked{background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.25);color:#6ee7b7;}
+.pi-search-wrap{margin-top:6px;position:relative;}
+.pi-search-input{
+  width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);
+  border-radius:8px;padding:6px 10px;color:var(--text);font-size:12px;
+  font-family:'Vazirmatn',sans-serif;box-sizing:border-box;
+}
+.pi-search-input:focus{border-color:var(--primary-border);outline:none;}
+.pi-search-results{
+  position:absolute;z-index:50;width:100%;top:calc(100% + 4px);
+  background:var(--surface);border:1px solid var(--primary-border);
+  border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;display:none;
+}
+.pi-result-item{
+  padding:8px 12px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;
+  transition:background .1s;border-bottom:1px solid var(--border);
+}
+.pi-result-item:last-child{border-bottom:none;}
+.pi-result-item:hover{background:var(--primary-glow);}
+.pi-result-owner{font-size:10px;color:var(--text-muted);}
+.pi-linked-badge{
+  display:inline-flex;align-items:center;gap:4px;margin-top:3px;
+  font-size:11px;padding:2px 8px;border-radius:10px;
+  background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="journal-layout">
+
+<!-- ══ MAIN COLUMN ══════════════════════════════════ -->
+<div>
+
+  {# V5: میان‌بر چک-این برای روزهای بی‌حوصلگی #}
+  <a href="/checkin/" style="display:flex;align-items:center;gap:10px;padding:11px 16px;margin-bottom:14px;
+     border-radius:13px;text-decoration:none;font-size:13px;font-weight:700;color:#fbbf24;
+     background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(236,72,153,.08));
+     border:1px dashed rgba(245,158,11,.4);">
+    ⚡ حوصله‌ی نوشتن نداری؟ چک-این ۳۰ ثانیه‌ای بزن — فقط چند تا ضربه
+    <span style="margin-right:auto;font-size:15px;">←</span>
+  </a>
+
+  <div class="no-root-warn" id="rootWarn" style="display:none;">
+    ⚠ نود اصلی تنظیم نشده. <a href="/settings/" style="color:#fcd34d;font-weight:700;margin-right:auto;">تنظیم کن ←</a>
+  </div>
+
+  <!-- Tab nav -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="showTab('write')">✎ نوشتن</button>
+    <button class="tab-btn" onclick="showTab('calendar')">📅 تقویم</button>
+    <button class="tab-btn" onclick="showTab('list')">📋 همه یادداشت‌ها</button>
+  </div>
+
+  <!-- ══ TAB: Write ════════════════════════════════ -->
+  <div id="tab-write" class="tab-pane active">
+    <div class="jcard">
+      <div class="jcard-head">
+        <h3>✎ یادداشت جدید</h3>
+        <span class="hint">@ برای mention افراد</span>
+      </div>
+      <div class="jcard-body">
+        <!-- Date -->
+        <div class="toolbar">
+          <span class="date-label">تاریخ:</span>
+          <input type="date" id="entryDate" class="date-input" />
+        </div>
+
+        <!-- Textarea -->
+        <div class="textarea-wrap">
+          <textarea id="journalText"
+            placeholder="امروز با @رضا قهوه خوردیم. گفت تیم‌لیدش آقای کریمی خیلی سخت‌گیره ..."
+            oninput="onTextInput(event)" onkeydown="onTextKeydown(event)"></textarea>
+          <div id="mentionDropdown"></div>
+        </div>
+
+        <!-- Tags -->
+        <div class="tag-input-row" id="tagInputRow" onclick="document.getElementById('tagInput').focus()">
+          <span style="font-size:11px;color:var(--text-muted);flex-shrink:0;">#</span>
+          <div id="tagChips"></div>
+          <input id="tagInput" type="text" placeholder="تگ بزن، Enter بزن..." onkeydown="onTagKey(event)">
+        </div>
+
+        <!-- Image upload -->
+        <div class="img-drop-zone" id="dropZone"
+             onclick="document.getElementById('imgInput').click()"
+             ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFiles(event)">
+          📎 عکس بکش اینجا یا کلیک کن
+        </div>
+        <input type="file" id="imgInput" multiple accept="image/*" style="display:none" onchange="uploadImages(this.files)">
+        <div class="img-previews" id="imgPreviews"></div>
+
+        <!-- Actions -->
+        <div class="action-row">
+          <span class="char-count" id="charCount">۰ کاراکتر</span>
+          <button class="btn btn-sm" onclick="clearAll()">پاک</button>
+          <button class="btn" id="saveBtn" onclick="quickSave()">💾 ذخیره متن</button>
+          <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">✦ تحلیل با AI</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result card -->
+    <div class="result-card" id="resultCard">
+      <div class="result-head">
+        <h3>✦ نتایج استخراج</h3>
+        <button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;" onclick="closeResult()">✕</button>
+      </div>
+      <div class="result-body" id="resultBody"></div>
+      <div class="apply-row" id="applyRow" style="display:none;">
+        <button class="btn btn-primary" onclick="applyResult()">✓ ذخیره در شبکه</button>
+        <button class="btn" onclick="closeResult()">انصراف</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: Calendar ══════════════════════════════ -->
+  <div id="tab-calendar" class="tab-pane">
+    <div class="cal-card">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="changeMonth(-1)">→</button>
+        <h3 id="calTitle">—</h3>
+        <button class="cal-nav-btn" onclick="changeMonth(1)">←</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="day-entries-panel" id="dayEntriesPanel">
+        <div id="dayEntriesList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: List ═════════════════════════════════ -->
+  <div id="tab-list" class="tab-pane">
+    <div class="filter-bar">
+      <input type="text" id="fq" placeholder="🔍 جستجو در متن..." oninput="loadEntries()">
+      <select id="fTag" onchange="loadEntries()">
+        <option value="">همه تگ‌ها</option>
+        {% for tag in all_tags_json|default:"[]"|safe %}{% endfor %}
+      </select>
+      <select id="fPerson" onchange="loadEntries()">
+        <option value="">همه افراد</option>
+      </select>
+      <select id="fMood" onchange="loadEntries()">
+        <option value="">همه خلق‌وخوها</option>
+      </select>
+      <span class="filter-label">از:</span>
+      <input type="date" id="fFrom" class="date-input-sm" onchange="loadEntries()">
+      <span class="filter-label">تا:</span>
+      <input type="date" id="fTo" class="date-input-sm" onchange="loadEntries()">
+      <button class="filter-clear" onclick="clearFilters()">× پاک کردن</button>
+    </div>
+    <div id="entriesList">
+      <div class="empty-state">در حال بارگذاری...</div>
+    </div>
+  </div>
+
+</div><!-- /main col -->
+
+<!-- ══ SIDEBAR ════════════════════════════════════════ -->
+<div>
+  <div class="history-card">
+    <div class="jcard-head"><h3>آخرین یادداشت‌ها</h3></div>
+    {% if entries %}
+    <div class="history-list">
+      {% for entry in entries %}
+      <div class="history-item" onclick="loadEntry('{{ entry.text|escapejs }}','{{ entry.entry_date|default:'' }}',{{ entry.tags|default:'[]'|safe }})">
+        {% with fi=entry.images.first %}
+        {% if fi %}<img class="history-thumb" src="{{ fi.image.url }}" alt="">
+        {% else %}<div class="history-ph"></div>{% endif %}
+        {% endwith %}
+        <div class="history-meta">
+          <div class="history-date">{% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}</div>
+          <div class="history-preview">{{ entry.text|truncatechars:45 }}</div>
+          {% if entry.tags %}
+          <div class="history-tags">
+            {% for t in entry.tags|slice:":3" %}<span class="history-tag">#{{ t }}</span>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">هنوز یادداشتی نوشته نشده</div>
+    {% endif %}
+  </div>
+</div>
+
+</div><!-- /layout -->
+
+<script>
+// ── Data from Django ─────────────────────────────────────
+const ALL_NODES  = {{ nodes_json|safe }};
+const ALL_TAGS   = {{ all_tags_json|safe }};
+const ALL_NODES_U = {{ all_nodes_json|safe }};
+const ALL_MOODS  = {{ all_moods_json|safe }};
+
+// ── State ─────────────────────────────────────────────────
+let lastResult = null, uploadedImages = [], currentTags = [];
+let mentionState = null, activeMentionIdx = 0;
+let calYear, calMonth;
+
+function nodeDisplay(n){
+  if(n.nickname) return n.nickname;
+  const f = [n.first_name,n.last_name].filter(Boolean).join(' ');
+  return f || n.name || n.username;
+}
+const nodeSet = new Set(ALL_NODES.map(n => n.username));
+
+// ── Init ──────────────────────────────────────────────────
+checkRoot();
+document.getElementById('entryDate').valueAsDate = new Date();
+populateFilterDropdowns();
+
+const now = new Date();
+calYear  = now.getFullYear();
+calMonth = now.getMonth()+1;
+
+function checkRoot(){
+  fetch('/api/graph/all/').then(r=>r.json()).then(d=>{
+    if(!d.root_id) document.getElementById('rootWarn').style.display='flex';
+  }).catch(()=>{});
+}
+
+function populateFilterDropdowns(){
+  const tagSel = document.getElementById('fTag');
+  ALL_TAGS.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = '#' + t;
+    tagSel.appendChild(o);
+  });
+  const perSel = document.getElementById('fPerson');
+  ALL_NODES_U.forEach(u => {
+    const o = document.createElement('option');
+    o.value = u; o.textContent = u;
+    perSel.appendChild(o);
+  });
+  const moodSel = document.getElementById('fMood');
+  ALL_MOODS.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    moodSel.appendChild(o);
+  });
+}
+
+// ── Tab system ─────────────────────────────────────────────
+function showTab(name){
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const tabs = ['write','calendar','list'];
+    b.classList.toggle('active', tabs[i] === name);
+  });
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name === 'calendar') renderCalendar(calYear, calMonth);
+  if(name === 'list')     loadEntries();
+}
+
+// ════════════════════════════════════════════════════════
+// WRITE TAB
+// ════════════════════════════════════════════════════════
+
+// ── @mention ──────────────────────────────────────────
+function onTextInput(e){
+  updateCount();
+  const ta = document.getElementById('journalText');
+  const val = ta.value, pos = ta.selectionStart;
+  let atIdx = -1;
+  for(let i=pos-1;i>=0;i--){
+    if(val[i]==='@'){atIdx=i;break;}
+    if(val[i]===' '||val[i]==='\n') break;
+  }
+  if(atIdx>=0) showMention(ta, atIdx, val.slice(atIdx+1,pos));
+  else hideMention();
+}
+function showMention(ta, atIdx, query){
+  const q = query.toLowerCase();
+  let matches = ALL_NODES.filter(n=>
+    nodeDisplay(n).toLowerCase().includes(q)||n.username.toLowerCase().includes(q)
+  ).slice(0,7);
+  if(query && !nodeSet.has(query)) matches.push({_new:true, username:query});
+  if(!matches.length){hideMention();return;}
+  mentionState = {start:atIdx, query};
+  activeMentionIdx = 0;
+  const dd = document.getElementById('mentionDropdown');
+  dd.innerHTML = matches.map((n,i) => {
+    if(n._new) return `<div class="mention-item" data-idx="${i}" data-u="${n.username}" onmousedown="pickMention('${n.username}')">+ جدید: ${n.username}</div>`;
+    return `<div class="mention-item" data-idx="${i}" data-u="${n.username}" onmousedown="pickMention('${n.username}')">
+      ${nodeDisplay(n)} <span style="color:var(--text-muted);font-size:11px">@${n.username}</span>
+      ${nodeSet.has(n.username)?'<span class="mention-badge ex">موجود</span>':''}
+    </div>`;
+  }).join('');
+  dd.style.cssText=`display:block;top:${ta.scrollHeight}px;right:0;left:0;`;
+  updateMentionActive();
+}
+function hideMention(){ mentionState=null; document.getElementById('mentionDropdown').style.display='none'; }
+function pickMention(u){
+  if(!mentionState)return;
+  const ta=document.getElementById('journalText');
+  const {start,query}=mentionState;
+  const before=ta.value.slice(0,start), after=ta.value.slice(start+1+query.length);
+  ta.value=before+'@'+u+' '+after;
+  ta.setSelectionRange(before.length+u.length+2,before.length+u.length+2);
+  hideMention(); updateCount();
+}
+function onTextKeydown(e){
+  if(!mentionState)return;
+  const items=document.querySelectorAll('#mentionDropdown .mention-item');
+  if(e.key==='ArrowDown'){e.preventDefault();activeMentionIdx=Math.min(activeMentionIdx+1,items.length-1);updateMentionActive();}
+  else if(e.key==='ArrowUp'){e.preventDefault();activeMentionIdx=Math.max(activeMentionIdx-1,0);updateMentionActive();}
+  else if(e.key==='Enter'||e.key==='Tab'){if(items[activeMentionIdx]){e.preventDefault();pickMention(items[activeMentionIdx].dataset.u);}}
+  else if(e.key==='Escape') hideMention();
+}
+function updateMentionActive(){
+  document.querySelectorAll('#mentionDropdown .mention-item').forEach((el,i)=>el.classList.toggle('active',i===activeMentionIdx));
+}
+
+// ── Tag input ──────────────────────────────────────────
+function onTagKey(e){
+  const inp = document.getElementById('tagInput');
+  if((e.key==='Enter'||e.key===','||e.key===' ')&&inp.value.trim()){
+    e.preventDefault();
+    addTag(inp.value.replace(/[,\s]/g,'').trim());
+    inp.value='';
+  } else if(e.key==='Backspace' && !inp.value && currentTags.length){
+    currentTags.pop(); renderTags();
+  }
+}
+function addTag(t){
+  t = t.replace(/^#/,'');
+  if(t && !currentTags.includes(t)){ currentTags.push(t); renderTags(); }
+}
+function removeTag(i){ currentTags.splice(i,1); renderTags(); }
+function renderTags(){
+  document.getElementById('tagChips').innerHTML = currentTags.map((t,i)=>
+    `<span class="tag-chip">#${t}<button type="button" onclick="removeTag(${i})">×</button></span>`
+  ).join('');
+}
+
+// ── Image upload ───────────────────────────────────────
+function dragOver(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
+function dragLeave(e){e.currentTarget.classList.remove('drag-over');}
+function dropFiles(e){e.preventDefault();e.currentTarget.classList.remove('drag-over');uploadImages(e.dataTransfer.files);}
+async function uploadImages(files){
+  for(const f of files){
+    if(!f.type.startsWith('image/')) continue;
+    const fd=new FormData(); fd.append('image',f); fd.append('csrfmiddlewaretoken',getCookie('csrftoken'));
+    try{
+      const r=await fetch('/api/journal/upload-image/',{method:'POST',body:fd});
+      const d=await r.json();
+      if(d.id){uploadedImages.push({id:d.id,url:d.url});renderPreviews();}
+    }catch(e){console.error(e);}
+  }
+}
+function renderPreviews(){
+  document.getElementById('imgPreviews').innerHTML=uploadedImages.map((img,i)=>
+    `<div class="img-thumb"><img src="${img.url}"><button class="rm-img" onclick="removeImg(${i})">✕</button></div>`
+  ).join('');
+}
+function removeImg(i){uploadedImages.splice(i,1);renderPreviews();}
+
+// ── Helpers ────────────────────────────────────────────
+function updateCount(){document.getElementById('charCount').textContent=document.getElementById('journalText').value.length+' کاراکتر';}
+function clearAll(){document.getElementById('journalText').value='';currentTags=[];uploadedImages=[];renderTags();renderPreviews();updateCount();}
+function loadEntry(text,date,tags){
+  document.getElementById('journalText').value=text;
+  if(date) document.getElementById('entryDate').value=date;
+  currentTags=(tags||[]).slice();renderTags();updateCount();
+  showTab('write');window.scrollTo({top:0,behavior:'smooth'});
+}
+function closeResult(){document.getElementById('resultCard').classList.remove('show');}
+function getCookie(n){const v=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)');return v?v.pop():'';}
+
+// ── Quick Save (no AI) ──────────────────────────────────
+async function quickSave(){
+  const text=document.getElementById('journalText').value.trim();
+  if(!text){alert('متنی بنویس!');return;}
+  const btn=document.getElementById('saveBtn');
+  btn.disabled=true; btn.textContent='در حال ذخیره...';
+  try{
+    const r=await fetch('/api/journal/save/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:JSON.stringify({
+        text,
+        entry_date:document.getElementById('entryDate').value,
+        tags:currentTags,
+        image_ids:uploadedImages.map(i=>i.id)
+      })
+    });
+    const d=await r.json();
+    if(d.id){
+      alert('✓ ذخیره شد');
+      clearAll();
+      location.reload();
+    } else alert('خطا: '+(d.error||'ناشناخته'));
+  }catch(e){alert('خطا در ذخیره');}
+  finally{btn.disabled=false;btn.textContent='💾 ذخیره متن';}
+}
+
+// ── Analyze with AI ─────────────────────────────────────
+async function analyzeJournal(){
+  const text=document.getElementById('journalText').value.trim();
+  if(!text){alert('متنی بنویس!');return;}
+  const btn=document.getElementById('analyzeBtn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> در حال تحلیل...';
+  document.getElementById('resultBody').innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted)"><span class="spinner"></span> AI در حال خواندن خاطره...</div>';
+  document.getElementById('resultCard').classList.add('show');
+  document.getElementById('applyRow').style.display='none';
+  try{
+    const r=await fetch('/api/journal/analyze/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:JSON.stringify({
+        text,
+        entry_date:document.getElementById('entryDate').value,
+        tags:currentTags,
+        image_ids:uploadedImages.map(i=>i.id),
+        entry_id: window._analyzeEntryId || null,
+      })
+    });
+    window._analyzeEntryId = null;  // reset after use
+    const data=await r.json();
+    if(data.error){document.getElementById('resultBody').innerHTML=`<div style="padding:16px;color:#f43f5e;">خطا: ${data.error}</div>`;return;}
+    lastResult=data.result;
+    renderResult(data.result);
+  }catch(e){document.getElementById('resultBody').innerHTML='<div style="padding:16px;color:#f43f5e;">خطا در ارتباط با سرور</div>';}
+  finally{btn.disabled=false;btn.innerHTML='✦ تحلیل دوباره';}
+}
+
+// privacy & link state
+const nodePrivacy = {};
+const relPrivacy  = {};
+const nodeLinks   = {};   // {username: {id, display_name, owner_username, ...}}
+
+function togglePrivacy(btn){
+  const key  = btn.dataset.key;
+  const type = btn.dataset.type;
+  const map  = type === 'node' ? nodePrivacy : relPrivacy;
+  map[key]   = !map[key];
+  btn.dataset.pub = map[key] ? '1' : '0';
+  btn.textContent = map[key] ? '🌐' : '🔒';
+  btn.title       = map[key] ? 'عمومی — کلیک برای خصوصی کردن' : 'خصوصی — کلیک برای عمومی کردن';
+}
+
+function togglePublicSearch(uname){
+  const wrap = document.getElementById(`psw-${uname}`);
+  const btn  = document.getElementById(`plb-${uname}`);
+  if(nodeLinks[uname]){
+    // unlink
+    delete nodeLinks[uname];
+    document.getElementById(`pli-${uname}`).innerHTML = '';
+    btn.textContent = '🔍';
+    btn.classList.remove('linked');
+    btn.title = 'وصل به شبکه عمومی';
+    wrap.style.display = 'none';
+    return;
+  }
+  const isOpen = wrap.style.display === 'block';
+  wrap.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen) wrap.querySelector('input').focus();
+}
+
+let _searchTimers = {};
+async function searchPublicNode(evt, uname){
+  const q = evt.target.value.trim();
+  const box = document.getElementById(`psr-${uname}`);
+  clearTimeout(_searchTimers[uname]);
+  if(q.length < 2){ box.style.display='none'; return; }
+  _searchTimers[uname] = setTimeout(async () => {
+    try{
+      const r = await fetch(`/api/nodes/public-search/?q=${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if(!d.results?.length){
+        box.innerHTML='<div class="pi-result-item" style="color:var(--text-muted);">نتیجه‌ای نبود</div>';
+        box.style.display='block';
+        return;
+      }
+      box.innerHTML = d.results.map(n => `
+        <div class="pi-result-item" onclick="linkPublicNode('${uname}', ${JSON.stringify(n).replace(/"/g,'&quot;')})">
+          <div style="flex:1">
+            <div style="font-weight:600">${n.display_name}</div>
+            <div class="pi-result-owner">از شبکه @${n.owner_username} · @${n.username}</div>
+          </div>
+          <span style="font-size:10px;color:#6ee7b7;">🌐 عمومی</span>
+        </div>
+      `).join('');
+      box.style.display = 'block';
+    }catch(e){ box.style.display='none'; }
+  }, 300);
+}
+
+function linkPublicNode(uname, nodeData){
+  nodeLinks[uname] = nodeData;
+  // نمایش badge لینک شده
+  document.getElementById(`pli-${uname}`).innerHTML =
+    `<span class="pi-linked-badge">🔗 لینک شده به @${nodeData.owner_username} (${nodeData.display_name})</span>`;
+  // بستن dropdown
+  document.getElementById(`psr-${uname}`).style.display = 'none';
+  document.getElementById(`psw-${uname}`).style.display = 'none';
+  // آپدیت دکمه
+  const btn = document.getElementById(`plb-${uname}`);
+  btn.textContent = '🔗';
+  btn.classList.add('linked');
+  btn.title = 'لینک شده — کلیک برای لغو';
+}
+
+function renderResult(r){
+  const exSet=new Set(ALL_NODES.map(n=>n.username));
+  let html='';
+
+  if(r.summary||r.my_mood){
+    html+=`<div class="r-section"><div class="r-section-title">خلاصه</div><div class="summary-box">${r.summary||''}`;
+    if(r.my_mood) html+=`<div class="mood-row"><span class="mood-badge">خلق‌وخوی من: ${r.my_mood}</span></div>`;
+    if(r.my_insights?.length) html+=`<div class="mood-row">${r.my_insights.map(i=>`<span class="mood-badge" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#a5b4fc;">💡 ${i}</span>`).join('')}</div>`;
+    html+='</div></div>';
+  }
+
+  // ── Nodes با privacy toggle + public link search ────
+  if(r.nodes?.length){
+    html+=`<div class="r-section"><div class="r-section-title">افراد (${r.nodes.length}) <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— 🔒 پرایوت &nbsp;|&nbsp; 🌐 پابلیک</span></div><div class="privacy-list">`;
+    for(const n of r.nodes){
+      const uname = n.username;
+      const label = n.name||uname;
+      const exists = exSet.has(uname);
+      nodePrivacy[uname] = nodePrivacy[uname] || false;
+      html+=`<div class="privacy-item" id="ni-${uname}">
+        <span class="pi-icon">◉</span>
+        <div style="flex:1;min-width:0;">
+          <div><span class="pi-label">${label}</span> <span class="pi-sub">@${uname}</span></div>
+          <div id="pli-${uname}"></div>
+          <div class="pi-search-wrap" id="psw-${uname}" style="display:none;">
+            <input class="pi-search-input" placeholder="🔍 نام یا فامیلی طرف رو بنویس..."
+              oninput="searchPublicNode(event,'${uname}')" autocomplete="off">
+            <div class="pi-search-results" id="psr-${uname}"></div>
+          </div>
+        </div>
+        ${exists?'<span class="pi-exists">موجود</span>':''}
+        <button class="pi-link-btn" id="plb-${uname}"
+          title="وصل به شبکه عمومی" onclick="togglePublicSearch('${uname}')">🔍</button>
+        <button class="pi-toggle" data-key="${uname}" data-type="node" data-pub="0"
+          title="خصوصی — کلیک برای عمومی کردن" onclick="togglePrivacy(this)">🔒</button>
+      </div>`;
+    }
+    html+='</div></div>';
+  }
+
+  // ── Relationships با privacy toggle ─────────────────
+  if(r.relationships?.length){
+    html+=`<div class="r-section"><div class="r-section-title">روابط (${r.relationships.length}) <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— 🔒 پرایوت &nbsp;|&nbsp; 🌐 پابلیک</span></div><div class="privacy-list">`;
+    for(const rel of r.relationships){
+      const key = `${rel.from}||${rel.to}||${rel.type||''}`;
+      relPrivacy[key] = relPrivacy[key] || false;
+      html+=`<div class="privacy-item">
+        <span class="pi-icon">⟶</span>
+        <span class="pi-label">${rel.from} → ${rel.to} <span class="pi-sub">${rel.type||''}${rel.strength?' · '+rel.strength+'/5':''}</span></span>
+        <button class="pi-toggle" data-key="${key}" data-type="rel" data-pub="0"
+          title="خصوصی — کلیک برای عمومی کردن" onclick="togglePrivacy(this)">🔒</button>
+      </div>`;
+    }
+    html+='</div></div>';
+  }
+
+  // ── Events (بدون toggle — همیشه پرایوت) ────────────
+  if(r.events?.length){
+    html+=`<div class="r-section"><div class="r-section-title">رویدادها (${r.events.length})</div><div class="chip-group">`;
+    html+=r.events.map(ev=>`<span class="ec ec-event">◷ ${ev.title}${ev.date?' ('+ev.date+')':''}</span>`).join('');
+    html+='</div></div>';
+  }
+
+  const LABELS={personality:'شخصیت',mood:'خلق‌وخو',interests:'علایق',preferences:'سلایق',strengths:'نقاط قوت',weaknesses:'نقاط ضعف',goals:'اهداف',values:'ارزش‌ها',communication_style:'شیوه ارتباط',relationship_quality:'کیفیت رابطه',notable_facts:'نکات مهم'};
+  if(r.attributes?.length){
+    html+='<div class="r-section"><div class="r-section-title">اطلاعات عمیق افراد</div>';
+    for(const attr of r.attributes){
+      let rows='';
+      for(const[key,label]of Object.entries(LABELS)){
+        const val=attr[key];
+        if(!val||(Array.isArray(val)&&!val.length)) continue;
+        if(Array.isArray(val)) rows+=`<div class="attr-row"><div class="attr-key">${label}</div><div class="attr-vals">${val.map(v=>`<span class="attr-val">${v}</span>`).join('')}</div></div>`;
+        else rows+=`<div class="attr-row"><div class="attr-key">${label}</div><span class="attr-val-str">${val}</span></div>`;
+      }
+      if(rows) html+=`<div class="attr-person"><div class="attr-person-head">🧑 ${attr.username}</div><div class="attr-person-body">${rows}</div></div>`;
+    }
+    html+='</div>';
+  }
+
+  if(!r.nodes?.length&&!r.relationships?.length&&!r.events?.length&&!r.attributes?.length)
+    html='<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:8px 0;">موجودیت مهمی یافت نشد</div>';
+
+  document.getElementById('resultBody').innerHTML=html;
+  document.getElementById('applyRow').style.display='flex';
+  document.getElementById('resultCard').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function applyResult(){
+  if(!lastResult)return;
+  const btn=document.querySelector('#applyRow .btn-primary');
+  btn.disabled=true; btn.textContent='در حال ذخیره...';
+  try{
+    const payload = Object.assign({}, lastResult, {
+      node_privacy: nodePrivacy,
+      rel_privacy:  relPrivacy,
+      node_links:   nodeLinks,
+    });
+    const r=await fetch('/api/journal/apply/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:JSON.stringify(payload)
+    });
+    const d=await r.json();
+    const c=d.created||{};
+
+    // نودهای واقعاً جدید
+    const newNodes = (c.nodes||[]).filter(n=>n.is_new);
+    const parts=[
+      newNodes.length?`${newNodes.length} نود جدید`:'',
+      c.relationships?.length?`${c.relationships.length} رابطه`:'',
+      c.events?.length?`${c.events.length} رویداد`:'',
+      c.attributes?.length?`${c.attributes.length} پروفایل`:'',
+    ].filter(Boolean);
+
+    // اگه نود جدید داریم → پنل تکمیل پروفایل نشون بده
+    if(newNodes.length){
+      showProfileCompletion(newNodes, parts.join('، '));
+    } else {
+      document.getElementById('applyRow').style.display='none';
+      document.getElementById('resultBody').innerHTML=
+        `<div class="apply-success"><span class="apply-check">✓</span> ذخیره شد${parts.length?' — '+parts.join('، '):''}
+         <button class="btn btn-sm" style="margin-right:12px" onclick="closeResult();location.reload()">بستن</button></div>`;
+    }
+  }catch(e){alert('خطا در ذخیره');}
+  finally{btn.disabled=false; btn.textContent='✓ ذخیره در شبکه';}
+}
+
+// ── پنل تکمیل پروفایل نودهای جدید ──────────────────────────
+function showProfileCompletion(newNodes, savedSummary){
+  document.getElementById('applyRow').style.display='none';
+  let html=`<div class="apply-success"><span class="apply-check">✓</span> ذخیره شد — ${savedSummary}</div>`;
+  html+=`<div class="pc-section-title">تکمیل پروفایل افراد جدید <span style="font-size:11px;color:var(--text-muted);font-weight:400">(اختیاری)</span></div>`;
+  for(const n of newNodes){
+    html+=`
+    <div class="pc-card" id="pc-${n.id}">
+      <div class="pc-head" onclick="togglePcForm(${n.id})">
+        <span class="pc-name">◉ ${_esc(n.display_name||n.username)}</span>
+        <span class="pc-new-badge">جدید</span>
+        <span class="pc-chevron" id="pcc-${n.id}">⌄</span>
+      </div>
+      <div class="pc-form" id="pcf-${n.id}" style="display:none">
+        <div class="pc-fields">
+          <div class="pc-field"><label>نام</label><input id="pcfn-${n.id}" type="text" placeholder="نام اول"></div>
+          <div class="pc-field"><label>نام خانوادگی</label><input id="pcfl-${n.id}" type="text" placeholder="فامیلی"></div>
+          <div class="pc-field"><label>شغل</label><input id="pcfc-${n.id}" type="text" placeholder="مثلاً مهندس نرم‌افزار"></div>
+          <div class="pc-field"><label>تاریخ تولد</label><input id="pcfb-${n.id}" type="date"></div>
+          <div class="pc-field"><label>تلفن</label><input id="pcfp-${n.id}" type="text" placeholder="09..."></div>
+        </div>
+        <div class="pc-foot">
+          <button class="btn btn-sm btn-primary" onclick="saveNodeProfile(${n.id})">ذخیره</button>
+          <span class="pc-saved" id="pcs-${n.id}" style="display:none">✓ ذخیره شد</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  html+=`<div style="margin-top:14px;text-align:center">
+    <button class="btn btn-sm" onclick="closeResult();location.reload()">پایان ← بازگشت</button>
+  </div>`;
+  document.getElementById('resultBody').innerHTML=html;
+}
+
+function togglePcForm(id){
+  const f=document.getElementById(`pcf-${id}`);
+  const c=document.getElementById(`pcc-${id}`);
+  const open=f.style.display==='block';
+  f.style.display=open?'none':'block';
+  c.textContent=open?'⌄':'⌃';
+}
+
+async function saveNodeProfile(id){
+  const get=s=>document.getElementById(`${s}-${id}`)?.value.trim()||'';
+  const payload={
+    first_name: get('pcfn'), last_name: get('pcfl'),
+    career: get('pcfc'), birth_day: get('pcfb'), phone_number: get('pcfp'),
+  };
+  try{
+    const r=await fetch(`/api/nodes/${id}/quick-update/`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:JSON.stringify(payload)
+    });
+    const d=await r.json();
+    if(d.ok){
+      const s=document.getElementById(`pcs-${id}`);
+      s.style.display='inline'; s.textContent='✓ ذخیره شد';
+      setTimeout(()=>s.style.display='none',2500);
+    }
+  }catch(e){ alert('خطا در ذخیره پروفایل'); }
+}
+
+// helper escape برای XSS (اگه هنوز تعریف نشده)
+if(typeof _esc==='undefined') function _esc(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════════════════════
+// CALENDAR TAB
+// ════════════════════════════════════════════════════════
+const MONTH_NAMES = ['','ژانویه','فوریه','مارس','آوریل','می','ژوئن','ژوئیه','آگوست','سپتامبر','اکتبر','نوامبر','دسامبر'];
+const DAY_NAMES   = ['یک','دو','سه','چهار','پنج','جمعه','شنبه'];
+
+let calData = {}, selectedDay = null;
+
+async function renderCalendar(year, month){
+  document.getElementById('calTitle').textContent = `${MONTH_NAMES[month]} ${year}`;
+  try{
+    const r = await fetch(`/api/journal/calendar/?year=${year}&month=${month}`);
+    const d = await r.json();
+    calData = d.entries || {};
+  }catch(e){ calData={}; }
+  drawGrid(year, month);
+}
+
+function drawGrid(year, month){
+  const grid = document.getElementById('calGrid');
+  // Day headers (Sun..Sat)
+  grid.innerHTML = ['ش','ی','د','س','چ','پ','ج'].map(d=>`<div class="cal-header">${d}</div>`).join('');
+
+  const firstDay = new Date(year, month-1, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const daysInPrev  = new Date(year, month-1, 0).getDate();
+  const today = new Date();
+
+  // Blank cells before first day
+  for(let i=0;i<firstDay;i++){
+    const d = daysInPrev - firstDay + i + 1;
+    grid.innerHTML += `<div class="cal-day other-month"><div class="day-num">${d}</div></div>`;
+  }
+
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const entries = calData[dateStr] || [];
+    const isToday = today.getFullYear()===year && today.getMonth()+1===month && today.getDate()===d;
+    const isSelected = selectedDay === dateStr;
+    const hasEntry = entries.length > 0;
+
+    const dots = entries.slice(0,5).map(e => {
+      const col = e.analyzed ? '#a5b4fc' : '#6ee7b7';
+      return `<div class="day-dot" style="background:${col}"></div>`;
+    }).join('');
+
+    grid.innerHTML += `<div class="cal-day${hasEntry?' has-entry':''}${isToday?' today':''}${isSelected?' selected':''}"
+      onclick="${hasEntry?`selectDay('${dateStr}')`:''}"
+      data-date="${dateStr}">
+      <div class="day-num">${d}</div>
+      <div class="day-dots">${dots}</div>
+    </div>`;
+  }
+}
+
+function selectDay(dateStr){
+  selectedDay = dateStr;
+  const entries = calData[dateStr] || [];
+  const panel = document.getElementById('dayEntriesPanel');
+  const list  = document.getElementById('dayEntriesList');
+
+  list.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;">${dateStr}</div>` +
+    entries.map(e => `
+      <div class="day-entry-item" onclick="loadEntry('${e.preview.replace(/'/g,"\\'")}','${dateStr}',${JSON.stringify(e.tags)})">
+        ${e.image ? `<img class="day-entry-thumb" src="${e.image}">` : ''}
+        <div class="day-entry-meta">
+          <div class="day-entry-preview">${e.preview}</div>
+          ${e.tags.length ? `<div class="day-entry-tags">${e.tags.map(t=>`<span class="day-entry-tag">#${t}</span>`).join('')}</div>` : ''}
+          ${e.mood ? `<div class="day-entry-mood">خلق‌وخو: ${e.mood}</div>` : ''}
+        </div>
+        ${e.analyzed ? '<span style="font-size:10px;color:#c4b5fd;">✦ AI</span>' : ''}
+      </div>
+    `).join('');
+
+  panel.classList.add('show');
+  // Highlight selected day
+  document.querySelectorAll('.cal-day').forEach(el => {
+    el.classList.toggle('selected', el.dataset.date === dateStr);
+  });
+}
+
+function changeMonth(delta){
+  calMonth += delta;
+  if(calMonth > 12){ calMonth=1; calYear++; }
+  if(calMonth < 1) { calMonth=12; calYear--; }
+  selectedDay = null;
+  document.getElementById('dayEntriesPanel').classList.remove('show');
+  renderCalendar(calYear, calMonth);
+}
+
+// ════════════════════════════════════════════════════════
+// LIST TAB
+// ════════════════════════════════════════════════════════
+async function loadEntries(){
+  const q      = document.getElementById('fq').value.trim();
+  const tag    = document.getElementById('fTag').value;
+  const person = document.getElementById('fPerson').value;
+  const mood   = document.getElementById('fMood').value;
+  const dFrom  = document.getElementById('fFrom').value;
+  const dTo    = document.getElementById('fTo').value;
+
+  const params = new URLSearchParams();
+  if(q)      params.set('q', q);
+  if(tag)    params.set('tag', tag);
+  if(person) params.set('person', person);
+  if(mood)   params.set('mood', mood);
+  if(dFrom)  params.set('from', dFrom);
+  if(dTo)    params.set('to', dTo);
+
+  const list = document.getElementById('entriesList');
+  list.innerHTML = '<div class="empty-state"><span class="spinner"></span> بارگذاری...</div>';
+
+  try{
+    const r = await fetch('/api/journal/entries/?'+params);
+    const d = await r.json();
+    if(!d.entries.length){
+      list.innerHTML = '<div class="empty-state">یادداشتی یافت نشد</div>';
+      return;
+    }
+    list.innerHTML = d.entries.map(e => `
+      <div class="entry-card">
+        <div class="entry-card-top">
+          ${e.image ? `<img class="entry-card-thumb" src="${e.image}">` : `<div class="entry-card-ph">📝</div>`}
+          <div class="entry-card-body">
+            <div class="entry-card-date">${e.entry_date || e.created_at}</div>
+            <div class="entry-card-text" id="et${e.id}">${e.preview}</div>
+            <div class="entry-card-meta">
+              ${e.tags.map(t=>`<span class="entry-tag">#${t}</span>`).join('')}
+              ${e.mood ? `<span class="entry-mood-badge">${e.mood}</span>` : ''}
+              ${e.mentioned.map(u=>`<span class="entry-person">@${u}</span>`).join('')}
+              ${e.analyzed ? '<span class="entry-ai-badge">✦ AI</span>' : ''}
+            </div>
+          </div>
+        </div>
+        <div class="entry-card-actions">
+          <button class="entry-btn" onclick="toggleText(${e.id})">نمایش کامل</button>
+          <button class="entry-btn primary" onclick="loadEntry('${e.text.replace(/'/g,"\\'").replace(/\n/g,' ')}','${e.entry_date||''}',${JSON.stringify(e.tags)})">✎ ویرایش</button>
+          ${!e.analyzed ? `<button class="entry-btn primary" onclick="analyzeExisting(${e.id},'${e.text.replace(/'/g,"\\'").replace(/\n/g,' ')}','${e.entry_date||''}')">✦ آنالیز AI</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }catch(err){
+    list.innerHTML = '<div class="empty-state">خطا در بارگذاری</div>';
+  }
+}
+
+function toggleText(id){
+  const el = document.getElementById('et'+id);
+  el.classList.toggle('expanded');
+}
+
+function analyzeExisting(entryId, text, date){
+  // Load into write tab and mark entry_id for update
+  document.getElementById('journalText').value = text;
+  if(date) document.getElementById('entryDate').value = date;
+  updateCount();
+  showTab('write');
+  // Store entry ID so analyze_api can update it
+  window._analyzeEntryId = entryId;
+}
+
+function clearFilters(){
+  document.getElementById('fq').value='';
+  document.getElementById('fTag').value='';
+  document.getElementById('fPerson').value='';
+  document.getElementById('fMood').value='';
+  document.getElementById('fFrom').value='';
+  document.getElementById('fTo').value='';
+  loadEntries();
+}
+
+// Override analyzeJournal to pass entry_id if set
+const _origAnalyze = analyzeJournal;
+</script>
+{% endblock %}

@@ -1,128 +1,99 @@
 {% extends "base.html" %}
+{% block title %}روابط · FamilyGraph{% endblock %}
+{% block page_title %}💞 روابط{% endblock %}
+{% block nav_rels %}active{% endblock %}
 
-{% block title %}
-روابط
+{% block topbar_actions %}
+<a href="{% url 'relationship_create' %}" class="btn btn-primary btn-sm">＋ رابطه جدید</a>
 {% endblock %}
 
 {% block extra_css %}
-
-.table{
-	width:100%;
-	border-collapse:collapse;
+<style>
+.rl-wrap{ max-width:860px; margin:0 auto; }
+.rl-row{
+  display:flex; align-items:center; gap:14px; padding:14px 18px; margin-bottom:10px;
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  transition:transform .2s ease, box-shadow .22s ease, border-color .2s ease;
 }
-
-.table th{
-	text-align:right;
-	font-size:13px;
-	padding:12px;
-	border-bottom:1px solid var(--border);
-	color:#94a3b8;
+.rl-row:hover{
+  transform:translateY(-2px); border-color:var(--primary-border);
+  box-shadow:0 10px 30px rgba(0,0,0,.35), 0 0 18px rgba(99,102,241,.1);
 }
-
-.table td{
-	padding:14px 12px;
-	border-bottom:1px solid var(--border);
-	font-size:14px;
+.rl-avs{ display:flex; align-items:center; flex-shrink:0; }
+.rl-av{
+  width:34px; height:34px; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; font-size:13px; font-weight:800; color:#fff;
 }
-
-.table tr:hover{
-	background:rgba(99,102,241,.08);
+.rl-av.a{ background:linear-gradient(135deg,#6366f1,#8b5cf6); z-index:1; }
+.rl-av.b{ background:linear-gradient(135deg,#ec4899,#f59e0b); margin-right:-9px; }
+.rl-main{ flex:1; min-width:0; }
+.rl-names{ font-size:13.5px; font-weight:700; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.rl-names a{ color:var(--text); text-decoration:none; }
+.rl-names a:hover{ color:#a5b4fc; }
+.rl-arrow{ color:#a855f7; font-size:13px; }
+.rl-type{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+.rl-pips{ display:flex; gap:3px; align-items:center; flex-shrink:0; }
+.rl-pip{ width:9px; height:4px; border-radius:2px; background:var(--border-strong); }
+.rl-pip.on{ background:linear-gradient(90deg,#6366f1,#a855f7); box-shadow:0 0 5px rgba(139,92,246,.5); }
+.rl-status{ font-size:10.5px; padding:2px 10px; border-radius:999px; flex-shrink:0; }
+.rl-status.active{ background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.3); }
+.rl-status.distant{ background:rgba(245,158,11,.1); color:#fbbf24; border:1px solid rgba(245,158,11,.28); }
+.rl-status.inactive{ background:rgba(255,255,255,.05); color:var(--text-muted); border:1px solid var(--border); }
+.rl-acts{ display:flex; gap:5px; flex-shrink:0; }
+.rl-act{
+  width:29px; height:29px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+  font-size:13px; text-decoration:none; border:1px solid var(--border);
+  color:var(--text-soft); transition:.15s;
 }
-
-.actions{
-	display:flex;
-	gap:8px;
-}
-
-.header-row{
-	display:flex;
-	justify-content:space-between;
-	align-items:center;
-	margin-bottom:20px;
-}
-
+.rl-act:hover{ border-color:#6366f1; color:#a5b4fc; transform:translateY(-1px); }
+.rl-act.del:hover{ border-color:#f43f5e; color:#fb7185; }
+.rl-empty{ text-align:center; padding:60px 20px; }
+.rl-empty .e{ font-size:44px; }
+.rl-empty p{ color:var(--text-muted); font-size:13.5px; margin:12px 0 18px; }
+</style>
 {% endblock %}
 
 {% block content %}
+<div class="rl-wrap">
 
-<div class="card">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+    <span style="font-size:15px;font-weight:800;">همه‌ی روابط</span>
+    <span class="chip chip-indigo">{{ relationships|length }}</span>
+  </div>
 
-	<div class="header-row">
-
-		<div class="card-title">
-			روابط ({{ relationships|length }})
-		</div>
-
-		<a href="{% url 'relationship_create' %}" class="btn">
-			رابطه جدید
-		</a>
-
-	</div>
-
-	<table class="table">
-
-		<thead>
-			<tr>
-				<th>ID</th>
-				<th>نوع رابطه</th>
-				<th>پدر</th>
-				<th>فرزند</th>
-				<th>عملیات</th>
-			</tr>
-		</thead>
-
-		<tbody>
-
-		{% for rel in relationships %}
-
-			<tr>
-
-				<td>#{{ rel.id }}</td>
-
-				<td>
-					{{ rel.rel }}
-				</td>
-
-				<td>
-					{{ rel.father.username }}
-				</td>
-
-				<td>
-					{{ rel.child.username }}
-				</td>
-
-				<td class="actions">
-
-					<a href="{% url 'relationship_detail' rel.id %}" class="btn">
-						مشاهده
-					</a>
-
-					<a href="{% url 'relationship_update' rel.id %}" class="btn">
-						ویرایش
-					</a>
-
-					<a href="{% url 'relationship_delete' rel.id %}" class="btn btn-danger">
-						حذف
-					</a>
-
-				</td>
-
-			</tr>
-
-		{% empty %}
-
-			<tr>
-				<td colspan="5">
-					هیچ رابطه‌ای ثبت نشده است
-				</td>
-			</tr>
-
-		{% endfor %}
-
-		</tbody>
-
-	</table>
+  {% for rel in relationships %}
+  <div class="rl-row">
+    <div class="rl-avs">
+      <div class="rl-av a">{{ rel.source.display_name|first|upper }}</div>
+      <div class="rl-av b">{{ rel.target.display_name|first|upper }}</div>
+    </div>
+    <div class="rl-main">
+      <div class="rl-names">
+        <a href="{% url 'node_detail' rel.source.id %}">{{ rel.source.display_name }}</a>
+        <span class="rl-arrow">⟵⟶</span>
+        <a href="{% url 'node_detail' rel.target.id %}">{{ rel.target.display_name }}</a>
+      </div>
+      <div class="rl-type">{% if rel.rel %}💞 {{ rel.rel }}{% else %}بدون برچسب{% endif %}{% if rel.met_at %} · آشنایی: {{ rel.met_at|date:"Y/m/d" }}{% endif %}</div>
+    </div>
+    <div class="rl-pips" title="قدرت: {{ rel.strength }}/5">
+      {% for i in "12345" %}<div class="rl-pip {% if forloop.counter <= rel.strength %}on{% endif %}"></div>{% endfor %}
+    </div>
+    <span class="rl-status {{ rel.status }}">
+      {% if rel.status == 'active' %}🟢 فعال{% elif rel.status == 'distant' %}🟡 دور{% else %}⚪ غیرفعال{% endif %}
+    </span>
+    <div class="rl-acts">
+      <a class="rl-act" href="{% url 'relationship_detail' rel.id %}" title="مشاهده">👁</a>
+      <a class="rl-act" href="{% url 'relationship_update' rel.id %}" title="ویرایش">✏️</a>
+      <a class="rl-act del" href="{% url 'relationship_delete' rel.id %}" title="حذف">🗑</a>
+    </div>
+  </div>
+  {% empty %}
+  <div class="rl-empty">
+    <div class="e">💞</div>
+    <p>هنوز رابطه‌ای ثبت نشده — اولین یال گرافت رو بساز</p>
+    <a href="{% url 'relationship_create' %}" class="btn btn-primary">＋ رابطه جدید</a>
+  </div>
+  {% endfor %}
 
 </div>
-
 {% endblock %}

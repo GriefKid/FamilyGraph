@@ -1,99 +1,171 @@
 {% extends "base.html" %}
-
-{% block title %}
-ایجاد رابطه
+{% block title %}رابطه — FamilyGraph{% endblock %}
+{% block page_title %}{% if form.instance.pk %}ویرایش رابطه{% else %}رابطه جدید{% endif %}{% endblock %}
+{% block nav_rels %}active{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'relationship_list' %}" class="btn btn-sm">← روابط</a>
 {% endblock %}
 
 {% block extra_css %}
+<style>
+.form-wrap{
+max-width:480px;
+}
 
-.form-box{
-	max-width:420px;
-	margin:auto;
+.form-card{
+background:var(--card);
+border:1px solid var(--border);
+border-radius:12px;
+padding:28px 28px 24px;
+}
+
+.form-title{
+font-size:15px;
+font-weight:700;
+margin-bottom:22px;
+color:var(--text);
 }
 
 .form-group{
-	display:flex;
-	flex-direction:column;
-	margin-bottom:16px;
+display:flex;
+flex-direction:column;
+gap:6px;
+margin-bottom:18px;
 }
 
-.form-group label{
-	font-size:13px;
-	margin-bottom:6px;
-	color:#94a3b8;
+.form-label{
+font-size:12px;
+font-weight:600;
+color:var(--text-muted);
+text-transform:uppercase;
+letter-spacing:.5px;
 }
 
-.form-group input,
-.form-group select{
-	padding:8px 10px;
-	border-radius:8px;
-	border:1px solid var(--border);
-	background:var(--card);
-	color:var(--text);
-	font-size:14px;
+.form-input,
+.form-select{
+padding:9px 13px;
+border-radius:var(--radius);
+border:1px solid var(--border);
+background:var(--surface);
+color:var(--text);
+font-size:13px;
+font-family:'Vazirmatn',sans-serif;
+transition:var(--transition);
+width:100%;
 }
 
-.form-group input:focus,
-.form-group select:focus{
-	outline:none;
-	border-color:var(--primary);
+.form-input:focus,
+.form-select:focus{
+outline:none;
+border-color:var(--primary-border);
+box-shadow:0 0 0 3px var(--primary-glow);
+}
+
+.form-select option{
+background:var(--card);
+}
+
+.form-arrow{
+display:flex;
+align-items:center;
+justify-content:center;
+padding:10px 0 4px;
+color:var(--text-muted);
+font-size:18px;
+}
+
+.form-errors{
+background:rgba(244,63,94,.1);
+border:1px solid rgba(244,63,94,.3);
+border-radius:8px;
+padding:10px 14px;
+font-size:12px;
+color:#f43f5e;
+margin-bottom:16px;
 }
 
 .form-actions{
-	display:flex;
-	gap:10px;
-	margin-top:10px;
+display:flex;
+gap:10px;
+margin-top:8px;
 }
-
+</style>
 {% endblock %}
 
 {% block content %}
+<div class="form-wrap">
+  <div class="form-card">
+    <div class="form-title">{% if form.instance.pk %}ویرایش رابطه{% else %}تعریف رابطه جدید{% endif %}</div>
 
-<div class="card form-box">
+    <form method="post">
+      {% csrf_token %}
 
-	<div class="card-title">
-		رابطه جدید
-	</div>
+      {% if form.errors %}
+        <div class="form-errors">{{ form.errors }}</div>
+      {% endif %}
 
-	<form method="post">
+      <div class="form-group">
+        <label class="form-label">مبدا (از)</label>
+        <select name="source" class="form-select">
+          <option value="">— انتخاب نود —</option>
+          {% for node in form.fields.source.queryset %}
+            <option value="{{ node.pk }}"
+              {% if form.instance.source_id == node.pk %}selected{% endif %}>
+              {{ node.username }}{% if node.name %} — {{ node.name }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
 
-		{% csrf_token %}
+      <div class="form-group">
+        <label class="form-label">نوع رابطه</label>
+        <input name="rel" type="text" class="form-input"
+               value="{{ form.instance.rel|default:'' }}"
+               placeholder="مثلاً: دوست، همکار، خانواده...">
+      </div>
 
-		{% if form.errors %}
-			<div style="color:#ef4444;margin-bottom:12px;">
-				{{ form.errors }}
-			</div>
-		{% endif %}
+      <div class="form-group">
+        <label class="form-label">مقصد (به)</label>
+        <select name="target" class="form-select">
+          <option value="">— انتخاب نود —</option>
+          {% for node in form.fields.target.queryset %}
+            <option value="{{ node.pk }}"
+              {% if form.instance.target_id == node.pk %}selected{% endif %}>
+              {{ node.username }}{% if node.name %} — {{ node.name }}{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
 
-		<div class="form-group">
-			<label>نوع رابطه</label>
-			{{ form.rel }}
-		</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+        <div class="form-group">
+          <label class="form-label">قدرت رابطه (۱-۵)</label>
+          <select name="strength" class="form-select">
+            {% for v in "12345" %}
+            <option value="{{ v }}" {% if form.instance.strength|stringformat:"s" == v %}selected{% endif %}>{{ v }} ستاره</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">وضعیت</label>
+          <select name="status" class="form-select">
+            <option value="active"   {% if form.instance.status == "active"   %}selected{% endif %}>فعال</option>
+            <option value="distant"  {% if form.instance.status == "distant"  %}selected{% endif %}>دور شده</option>
+            <option value="inactive" {% if form.instance.status == "inactive" %}selected{% endif %}>غیرفعال</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">تاریخ آشنایی</label>
+          <input name="met_at" type="date" class="form-input"
+                 value="{{ form.instance.met_at|date:'Y-m-d'|default:'' }}">
+        </div>
+      </div>
 
-		<div class="form-group">
-			<label>پدر</label>
-			{{ form.father }}
-		</div>
-
-		<div class="form-group">
-			<label>فرزند</label>
-			{{ form.child }}
-		</div>
-
-		<div class="form-actions">
-
-			<button type="submit" class="btn">
-				ذخیره تغییرات
-			</button>
-
-			<a href="{% url 'relationship_list' %}" class="btn">
-				انصراف
-			</a>
-
-		</div>
-
-	</form>
-
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">ذخیره</button>
+        <a href="{% url 'relationship_list' %}" class="btn">انصراف</a>
+      </div>
+    </form>
+  </div>
 </div>
-
 {% endblock %}

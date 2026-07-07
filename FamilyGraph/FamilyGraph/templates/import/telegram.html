@@ -1,0 +1,535 @@
+{% extends "base.html" %}
+{% block title %}ایمپورت تلگرام · FamilyGraph{% endblock %}
+{% block page_title %}📥 ایمپورت تلگرام{% endblock %}
+{% block nav_import %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.tg-wrap{ max-width:840px; margin:0 auto; }
+.tg-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.tg-title{ font-size:14.5px; font-weight:800; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+.tg-step-badge{ width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:800;background:linear-gradient(135deg,#0088cc,#06b6d4);color:#fff;flex-shrink:0; }
+.tg-sub{ font-size:12px; color:var(--text-soft); line-height:1.9; }
+.tg-privacy{ padding:10px 14px; border-radius:12px; font-size:11.5px; color:#6ee7b7;
+  background:rgba(16,185,129,.07); border:1px dashed rgba(16,185,129,.35); margin-top:10px; }
+.tg-drop{ border:2px dashed rgba(0,136,204,.4); border-radius:16px; padding:26px 18px;
+  text-align:center; cursor:pointer; transition:.2s; margin:12px 0; }
+.tg-drop:hover, .tg-drop.over{ border-color:#06b6d4; background:rgba(6,182,212,.05); }
+.tg-file-name{ font-size:12px; color:#67e8f9; font-weight:700; margin-top:6px; }
+.tg-opts{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin:10px 0; font-size:12.5px; }
+.tg-opts label{ display:flex; align-items:center; gap:6px; color:var(--text-soft); cursor:pointer; }
+.tg-opts input[type=number]{ width:75px; background:transparent; border:1px solid var(--border-strong);
+  border-radius:8px; padding:5px 8px; color:var(--text); font-family:'Vazirmatn',sans-serif; }
+.tg-opts input[type=checkbox]{ accent-color:#06b6d4; width:15px; height:15px; }
+.tg-btn{ padding:11px 22px; border:none; border-radius:12px; cursor:pointer;
+  background:linear-gradient(135deg,#0088cc,#06b6d4); color:#fff;
+  font-family:'Vazirmatn',sans-serif; font-size:13.5px; font-weight:800; transition:.2s; }
+.tg-btn:hover{ transform:translateY(-2px); box-shadow:0 8px 24px rgba(6,182,212,.35); }
+.tg-btn:disabled{ opacity:.55; cursor:wait; transform:none; }
+.tg-btn.danger{ background:linear-gradient(135deg,#ef4444,#ec4899); }
+.tg-btn.ghost{ background:rgba(99,102,241,.12); color:#a5b4fc; border:1px solid var(--primary-border); font-weight:700; }
+.tg-bulk{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.tg-bulk button{ font-size:11px; padding:5px 12px; border-radius:8px; cursor:pointer;
+  background:rgba(255,255,255,.05); border:1px solid var(--border-strong); color:var(--text-soft);
+  font-family:'Vazirmatn',sans-serif; }
+.tg-bulk button:hover{ border-color:#06b6d4; color:#67e8f9; }
+.tg-map{ max-height:480px; overflow-y:auto; border:1px solid var(--border); border-radius:12px; padding:4px 10px; }
+.tg-row{ display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--border); font-size:12.5px; flex-wrap:wrap; }
+.tg-row:last-child{ border-bottom:none; }
+.tg-name{ font-weight:700; min-width:120px; }
+.tg-meta{ color:var(--text-muted); font-size:11px; }
+.tg-pick{ background:var(--card); color:var(--text); border:1px solid var(--border-strong);
+  border-radius:8px; padding:6px 10px; font-family:'Vazirmatn',sans-serif; font-size:11.5px; width:210px; }
+.tg-pick.matched{ border-color:rgba(16,185,129,.5); }
+.tg-pick.invalid{ border-color:#ef4444 !important; }
+.tg-newbtn{ font-size:11px; padding:5px 11px; border-radius:8px; cursor:pointer;
+  background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.35); color:#34d399;
+  font-family:'Vazirmatn',sans-serif; }
+.tg-newbtn:hover{ background:rgba(16,185,129,.2); }
+.tg-stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:14px; }
+.tg-stat{ background:rgba(6,182,212,.06); border:1px solid rgba(6,182,212,.25); border-radius:13px; padding:12px; text-align:center; }
+.tg-stat .n{ font-size:20px; font-weight:800; color:#67e8f9; }
+.tg-stat .l{ font-size:10px; color:var(--text-muted); margin-top:3px; }
+.tg-tag{ font-size:10px; padding:1px 8px; border-radius:999px; }
+.tg-tag.new{ background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.3); }
+.tg-tag.edge{ background:rgba(99,102,241,.12); color:#a5b4fc; border:1px solid rgba(99,102,241,.3); }
+.tg-mini{ background:none; border:1px solid var(--border-strong); color:var(--text-soft);
+  border-radius:8px; padding:4px 11px; font-size:11px; cursor:pointer; font-family:'Vazirmatn',sans-serif; }
+.tg-mini:hover{ border-color:#a855f7; color:#c4b5fd; }
+.tg-panel{ width:100%; margin-top:8px; padding:12px 14px; border-radius:12px;
+  background:rgba(168,85,247,.05); border:1px dashed rgba(168,85,247,.35); }
+.tg-m-row{ display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12px; flex-wrap:wrap; }
+.tg-m-row:last-child{ border-bottom:none; }
+.tg-evidence{ color:var(--text-muted); font-size:10.5px; flex-basis:100%; }
+.tg-msg{ font-size:11.5px; min-height:16px; margin-top:8px; }
+/* score card */
+.tg-score-wrap{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.tg-score{ width:76px; height:76px; border-radius:50%; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; flex-shrink:0; color:#fff; font-weight:800; }
+.tg-score .s{ font-size:23px; line-height:1; } .tg-score .t{ font-size:9px; opacity:.85; }
+.tg-chips{ display:flex; gap:5px; flex-wrap:wrap; margin:5px 0; }
+.tg-chip{ font-size:10.5px; padding:2px 10px; border-radius:999px;
+  background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.3); color:#a5b4fc; }
+.tg-chip.red{ background:rgba(239,68,68,.1); border-color:rgba(239,68,68,.35); color:#fda4af; }
+.tg-chip.green{ background:rgba(16,185,129,.1); border-color:rgba(16,185,129,.35); color:#6ee7b7; }
+
+/* ── همون مودال wizard گراف (بدون بخش عکس) ── */
+#photo-wizard{ position:fixed; inset:0; z-index:9500; background:rgba(2,2,10,.75);
+  backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; }
+#photo-wizard.hidden{ display:none; }
+#wizard-card{ width:min(430px, 92vw); max-height:88vh; overflow-y:auto;
+  background:#0d0d20; border:1px solid rgba(99,102,241,.35); border-radius:18px; padding:22px;
+  box-shadow:0 24px 80px rgba(0,0,0,.6); }
+.light #wizard-card{ background:#fff; }
+.wz-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+.wz-title{ font-size:14px; color:#94a3b8; }
+.wz-section{ margin-bottom:12px; }
+.wz-label{ font-size:12px; color:#64748b; margin-bottom:5px; display:block; }
+.wz-input{ width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:8px;
+  color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:13px; padding:9px 12px; outline:none;
+  transition:border-color .2s; box-sizing:border-box; }
+.wz-input:focus{ border-color:rgba(99,102,241,.6); }
+.wz-row{ display:flex; gap:10px; } .wz-row .wz-section{ flex:1; }
+.wz-strength-row{ display:flex; gap:6px; }
+.wz-str-btn{ flex:1; padding:6px 0; border-radius:6px; border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.04); color:#64748b; cursor:pointer; font-family:'Vazirmatn',sans-serif;
+  font-size:12px; transition:all .18s; }
+.wz-str-btn.active{ background:rgba(99,102,241,.25); border-color:rgba(99,102,241,.5); color:#a5b4fc; }
+.wz-actions{ display:flex; gap:10px; margin-top:18px; }
+.wz-btn{ flex:1; padding:11px; border-radius:10px; border:none; font-family:'Vazirmatn',sans-serif;
+  font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; }
+.wz-btn-primary{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }
+.wz-btn-primary:disabled{ opacity:.5; cursor:wait; }
+.wz-btn-ghost{ background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:#64748b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tg-wrap">
+
+  <!-- پاک‌سازی -->
+  <div class="tg-card" style="border-color:rgba(239,68,68,.3);">
+    <div class="tg-title">🧹 پاک‌سازی ایمپورت قبلی</div>
+    <div class="tg-sub">تعامل‌های «ایمپورت تلگرام»، یال‌های «تلگرام» و نودهای خالیِ ساخته‌ی ایمپورت پاک می‌شن.</div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+      <button class="tg-btn danger" onclick="tgUndo()">🧹 پاک کن</button>
+      <span class="tg-msg" id="tgUndoMsg"></span>
+    </div>
+  </div>
+
+  <!-- مرحله ۱ -->
+  <div class="tg-card">
+    <div class="tg-title"><span class="tg-step-badge">۱</span> فایل رو بده — فقط اسکن، بدون نوشتن</div>
+    <div class="tg-sub">Telegram Desktop ← <b>Settings ← Advanced ← Export Telegram Data</b> ← فقط Personal chats، بدون مدیا، فرمت <b>JSON</b></div>
+    <div class="tg-drop" id="tgDrop" onclick="document.getElementById('tgFile').click()">
+      <div style="font-size:34px;">📂</div>
+      <p style="font-size:12.5px;color:var(--text-soft);margin-top:6px;">result.json رو بکش اینجا یا کلیک کن</p>
+      <div class="tg-file-name" id="tgFileName"></div>
+    </div>
+    <input type="file" id="tgFile" accept=".json,application/json" style="display:none" onchange="tgPick(this)">
+    <div class="tg-opts">
+      <label>⏱ بازه: <input type="number" id="tgDays" value="365" min="7" max="3650"> روز اخیر</label>
+    </div>
+    <button class="tg-btn" id="tgScanBtn" onclick="tgScan()" disabled>🔍 اسکن کن</button>
+    <span class="tg-msg" id="tgScanMsg"></span>
+    <div class="tg-privacy">🔒 متن پیام‌ها فقط اگه خودت «تحلیل» بزنی، همون یک مخاطب به AI فرستاده می‌شه.</div>
+  </div>
+
+  <!-- مرحله ۲ -->
+  <div class="tg-card" id="tgMapCard" style="display:none;">
+    <div class="tg-title"><span class="tg-step-badge">۲</span> این‌ها کی‌ان؟ <span class="tg-sub" id="tgMapCount"></span></div>
+    <div class="tg-sub" style="margin-bottom:10px;">
+      توی کادر هر ردیف اسم رو بنویس تا از لیست نودهات پیدا بشه (خالی = رد می‌شه).
+      اگه آدم جدیدیه، «➕ جدید» رو بزن — همون فرم آشنای گراف باز می‌شه.
+    </div>
+    <div class="tg-bulk">
+      <button onclick="tgBulk('skip')">⏭ همه → رد</button>
+      <button onclick="tgBulk('suggested')">✓ فقط پیشنهاددارها</button>
+    </div>
+    <div class="tg-map" id="tgMap"></div>
+    <datalist id="tgDL"></datalist>
+    <div class="tg-opts" style="margin-top:12px;">
+      <label><input type="checkbox" id="tgEdges" checked> برای مخاطب‌های بدون یال، یال «تلگرام» به «من» ساخته بشه</label>
+    </div>
+    <button class="tg-btn" id="tgApplyBtn" onclick="tgApply()">🚀 اعمال ایمپورت</button>
+    <span class="tg-msg" id="tgApplyMsg"></span>
+  </div>
+
+  <!-- مرحله ۳ -->
+  <div class="tg-card" id="tgResult" style="display:none;">
+    <div class="tg-title"><span class="tg-step-badge">۳</span> نتیجه 🎉</div>
+    <div class="tg-stats" id="tgStats"></div>
+    <div class="tg-sub" style="margin-bottom:8px;">
+      🧠 <b>تحلیل چت</b>: آدم‌های ذکرشده وسط گفتگو رو درمیاره و ازت می‌پرسه کی‌ان ·
+      💠 <b>تحلیل رابطه</b>: شخصیت و اخلاقیات طرف + نمره‌ی دوستی از روی گفتگو
+    </div>
+    <div id="tgReport"></div>
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+      <a href="/" class="btn btn-primary btn-sm">🕸 گراف</a>
+      <a href="/alerts/" class="btn btn-ghost btn-sm">🔔 هشدارها</a>
+    </div>
+  </div>
+
+</div>
+
+<!-- همون مودال گراف — نود جدید -->
+<div id="photo-wizard" class="hidden">
+  <div id="wizard-card">
+    <div class="wz-head">
+      <div class="wz-title">نود جدید — <span id="wz-target-name" style="color:#a5b4fc"></span></div>
+      <button class="wz-btn-ghost wz-btn" style="flex:0;padding:4px 12px;" onclick="wzClose()">✕</button>
+    </div>
+    <form id="wz-form" onsubmit="return false">
+      <div class="wz-row">
+        <div class="wz-section">
+          <label class="wz-label">نام</label>
+          <input class="wz-input" name="first_name" type="text" placeholder="علی">
+        </div>
+        <div class="wz-section">
+          <label class="wz-label">نام خانوادگی</label>
+          <input class="wz-input" name="last_name" type="text" placeholder="محمدی">
+        </div>
+      </div>
+      <div class="wz-section">
+        <label class="wz-label">شغل</label>
+        <input class="wz-input" name="career" type="text" placeholder="مثال: مهندس نرم‌افزار">
+      </div>
+      <div class="wz-row">
+        <div class="wz-section">
+          <label class="wz-label">موبایل</label>
+          <input class="wz-input" name="phone_number" type="tel" placeholder="09...">
+        </div>
+        <div class="wz-section">
+          <label class="wz-label">تولد</label>
+          <input class="wz-input" name="birth_day" type="date">
+        </div>
+      </div>
+      <div class="wz-section">
+        <label class="wz-label">نوع رابطه با <span style="color:#a5b4fc">{{ root_name|default:"من" }}</span></label>
+        <input class="wz-input" name="rel_type" type="text" placeholder="دوست، خانواده، همکار، ..." value="تلگرام">
+      </div>
+      <div class="wz-section">
+        <label class="wz-label">قدرت رابطه</label>
+        <div class="wz-strength-row">
+          <button type="button" class="wz-str-btn" data-v="1" onclick="wzSetStr(1)">۱</button>
+          <button type="button" class="wz-str-btn" data-v="2" onclick="wzSetStr(2)">۲</button>
+          <button type="button" class="wz-str-btn active" data-v="3" onclick="wzSetStr(3)">۳</button>
+          <button type="button" class="wz-str-btn" data-v="4" onclick="wzSetStr(4)">۴</button>
+          <button type="button" class="wz-str-btn" data-v="5" onclick="wzSetStr(5)">۵</button>
+        </div>
+      </div>
+    </form>
+    <div class="wz-actions">
+      <button class="wz-btn wz-btn-ghost" onclick="wzClose()">انصراف</button>
+      <button class="wz-btn wz-btn-primary" id="wz-save-btn" onclick="wzSave()">✓ ذخیره</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let NODE_OPTS = {{ node_opts_json|safe }};
+const ROOT_ID = "{{ root_id }}";
+let tgFileObj = null, tgContacts = [], wzIndex = null, wzStrength = 3;
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function msg(id, t, err){ const el=document.getElementById(id); el.textContent=t||''; el.style.color = err?'#f87171':'#34d399'; }
+function optLabel(o){ return o.label + ' — #' + o.id; }
+function rebuildDL(){
+  document.getElementById('tgDL').innerHTML =
+    NODE_OPTS.map(o => `<option value="${esc(optLabel(o))}">`).join('');
+}
+
+const drop = document.getElementById('tgDrop');
+function tgPick(inp){ tgFileObj = inp.files[0] || null; tgReady(); }
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if(e.dataTransfer.files.length){ tgFileObj = e.dataTransfer.files[0]; tgReady(); }
+});
+function tgReady(){
+  document.getElementById('tgFileName').textContent =
+    tgFileObj ? '✓ ' + tgFileObj.name + ' (' + (tgFileObj.size/1048576).toFixed(1) + ' MB)' : '';
+  document.getElementById('tgScanBtn').disabled = !tgFileObj;
+}
+
+// ── مرحله ۱ ──
+async function tgScan(){
+  const btn = document.getElementById('tgScanBtn');
+  btn.disabled = true; btn.textContent = '⏳ در حال اسکن…'; msg('tgScanMsg','');
+  const fd = new FormData();
+  fd.append('file', tgFileObj);
+  fd.append('days', document.getElementById('tgDays').value);
+  try{
+    const r = await fetch('/api/import/telegram/scan/', {
+      method:'POST', headers:{'X-CSRFToken': getCookie('csrftoken')}, body: fd });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = '🔍 اسکن کن';
+    if(!d.ok){ msg('tgScanMsg', d.error||'خطا', true); return; }
+    tgContacts = d.contacts;
+    rebuildDL(); tgRenderMap();
+    document.getElementById('tgMapCard').style.display = 'block';
+    document.getElementById('tgMapCount').textContent = `(${d.total} مخاطب)`;
+    document.getElementById('tgMapCard').scrollIntoView({behavior:'smooth'});
+  }catch(e){
+    btn.disabled = false; btn.textContent = '🔍 اسکن کن';
+    msg('tgScanMsg','خطا در ارتباط — فایل خیلی بزرگه؟', true);
+  }
+}
+
+// ── مرحله ۲ ──
+function tgRenderMap(){
+  document.getElementById('tgMap').innerHTML = tgContacts.map((c,i) => `
+    <div class="tg-row">
+      <span class="tg-name">${esc(c.name)}</span>
+      <span class="tg-meta">💬 ${c.msgs.toLocaleString('en-US')} · 📅 ${c.active_days} روز</span>
+      <input class="tg-pick ${c.suggested?'matched':''}" id="tgPick${i}" list="tgDL"
+             placeholder="⏭ خالی = رد — یا جستجو کن…"
+             value="${c.suggested ? esc(optLabel(c.suggested)) : ''}"
+             oninput="this.classList.remove('invalid')">
+      <button class="tg-newbtn" onclick="wzOpen(${i})">➕ جدید</button>
+    </div>`).join('');
+}
+function tgBulk(mode){
+  tgContacts.forEach((c,i) => {
+    const inp = document.getElementById('tgPick'+i);
+    inp.classList.remove('invalid');
+    if(mode==='skip') inp.value = '';
+    else inp.value = c.suggested ? optLabel(c.suggested) : '';
+  });
+}
+function resolvePick(v){
+  v = (v||'').trim();
+  if(!v) return 'skip';
+  const m = v.match(/#(\d+)\s*$/);
+  if(m && NODE_OPTS.some(o => o.id === parseInt(m[1]))) return 'node:' + m[1];
+  const hit = NODE_OPTS.find(o => o.label === v);
+  return hit ? 'node:' + hit.id : null;
+}
+async function tgApply(){
+  // اعتبارسنجی
+  let bad = 0;
+  const mapping = tgContacts.map((c,i) => {
+    const inp = document.getElementById('tgPick'+i);
+    const act = resolvePick(inp.value);
+    if(act === null){ inp.classList.add('invalid'); bad++; }
+    return { name: c.name, action: act || 'skip' };
+  });
+  if(bad){ msg('tgApplyMsg', `${bad} ردیف قرمز — یا از لیست انتخاب کن یا خالی بذار`, true); return; }
+
+  const btn = document.getElementById('tgApplyBtn');
+  btn.disabled = true; btn.textContent = '⏳ در حال اعمال…';
+  try{
+    const r = await fetch('/api/import/telegram/apply/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({ mapping, make_edges: document.getElementById('tgEdges').checked })
+    });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = '🚀 اعمال ایمپورت';
+    if(!d.ok){ msg('tgApplyMsg', d.error||'خطا', true); return; }
+    (d.report||[]).forEach(row => {
+      if(!NODE_OPTS.some(o => o.id === row.node_id))
+        NODE_OPTS.push({id: row.node_id, label: row.name});
+    });
+    rebuildDL();
+    const s = d.stats;
+    document.getElementById('tgStats').innerHTML = `
+      <div class="tg-stat"><div class="n">${s.contacts}</div><div class="l">👤 ایمپورت شد</div></div>
+      <div class="tg-stat"><div class="n">${s.nodes_created}</div><div class="l">✨ نود جدید</div></div>
+      <div class="tg-stat"><div class="n">${s.interactions}</div><div class="l">⚡ تعامل</div></div>
+      <div class="tg-stat"><div class="n">${s.edges}</div><div class="l">💞 یال</div></div>
+      <div class="tg-stat"><div class="n">${s.skipped}</div><div class="l">⏭ رد</div></div>`;
+    document.getElementById('tgReport').innerHTML = (d.report||[]).map((row,ri) => `
+      <div class="tg-row" id="tgRep${ri}">
+        <a href="/nodes/${row.node_id}/" style="font-weight:700;color:var(--text);text-decoration:none;">${esc(row.name)}</a>
+        ${row.is_new ? '<span class="tg-tag new">نود جدید</span>' : ''}
+        ${row.edge_created ? '<span class="tg-tag edge">یال جدید</span>' : ''}
+        <span class="tg-meta">💬 ${row.messages.toLocaleString('en-US')} · ⚡ ${row.interactions_added}</span>
+        ${row.has_sample ? `
+          <button class="tg-mini" onclick="tgAnalyze(${ri}, this.dataset.n, ${row.node_id})" data-n="${esc(row.name)}">🧠 تحلیل چت</button>
+          <button class="tg-mini" onclick="tgRelation(${ri}, this.dataset.n, ${row.node_id})" data-n="${esc(row.name)}">💠 تحلیل رابطه</button>
+        ` : ''}
+        <div class="tg-panel" id="tgMen${ri}" style="display:none;"></div>
+        <div class="tg-panel" id="tgRel${ri}" style="display:none;"></div>
+      </div>`).join('');
+    document.getElementById('tgResult').style.display = 'block';
+    document.getElementById('tgResult').scrollIntoView({behavior:'smooth'});
+  }catch(e){
+    btn.disabled = false; btn.textContent = '🚀 اعمال ایمپورت';
+    msg('tgApplyMsg','خطا در ارتباط با سرور', true);
+  }
+}
+
+// ── مودال نود جدید (همون wizard گراف) ──
+function wzOpen(i){
+  if(!ROOT_ID){ alert('اول نود «من» رو توی پروفایل تنظیم کن'); return; }
+  wzIndex = i;
+  const c = tgContacts[i];
+  document.getElementById('wz-target-name').textContent = c.name;
+  const form = document.getElementById('wz-form');
+  form.reset();
+  form.first_name.value = c.name;
+  form.rel_type.value = 'تلگرام';
+  wzSetStr(c.msgs >= 1000 ? 4 : (c.msgs >= 200 ? 3 : 2));
+  document.getElementById('photo-wizard').classList.remove('hidden');
+}
+function wzClose(){ document.getElementById('photo-wizard').classList.add('hidden'); }
+function wzSetStr(v){
+  wzStrength = v;
+  document.querySelectorAll('.wz-str-btn').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.v) === v));
+}
+async function wzSave(){
+  const btn = document.getElementById('wz-save-btn');
+  btn.disabled = true;
+  const form = document.getElementById('wz-form');
+  const fd = new FormData();
+  fd.append('target_id', ROOT_ID);
+  ['first_name','last_name','career','phone_number','birth_day','rel_type'].forEach(k =>
+    fd.append(k, form[k].value));
+  fd.append('rel_strength', wzStrength);
+  fd.append('is_public', 'false');
+  try{
+    const r = await fetch('/api/nodes/create-from-image/', {
+      method:'POST', headers:{'X-CSRFToken': getCookie('csrftoken')}, body: fd });
+    const d = await r.json();
+    btn.disabled = false;
+    if(!d.ok){ alert(d.error || 'خطا در ساخت نود'); return; }
+    NODE_OPTS.push({id: d.node.id, label: d.node.display_name});
+    rebuildDL();
+    if(wzIndex !== null){
+      const inp = document.getElementById('tgPick' + wzIndex);
+      inp.value = d.node.display_name + ' — #' + d.node.id;
+      inp.classList.remove('invalid'); inp.classList.add('matched');
+    }
+    wzClose();
+  }catch(e){ btn.disabled = false; alert('خطا در ارتباط با سرور'); }
+}
+
+// ── تحلیل چت (آدم‌های ذکرشده) ──
+function pickerOptions(){
+  return '<option value="skip">⏭ رد شو</option><option value="new">➕ نود جدید بساز</option>' +
+    NODE_OPTS.map(o => `<option value="node:${o.id}">${esc(o.label)}</option>`).join('');
+}
+async function tgAnalyze(ri, name, nodeId){
+  const box = document.getElementById('tgMen'+ri);
+  box.style.display = 'block';
+  box.innerHTML = '<span class="tg-meta">✦ AI داره گفتگو رو می‌خونه…</span>';
+  try{
+    const r = await fetch('/api/import/telegram/analyze/', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({name}) });
+    const d = await r.json();
+    if(!d.ok){ box.innerHTML = `<span class="tg-meta" style="color:#f87171">${esc(d.error||'خطا')}</span>`; return; }
+    if(!d.people || !d.people.length){ box.innerHTML = '<span class="tg-meta">کسی توی گفتگو ذکر نشده بود</span>'; return; }
+    box.innerHTML = '<div style="font-size:11.5px;font-weight:700;margin-bottom:4px;">🧠 این‌ها ذکر شدن — کی‌ان؟</div>' +
+      d.people.map((p,pi) => `
+        <div class="tg-m-row">
+          <b>${esc(p.name)}</b>
+          <span class="tg-meta">${esc(p.relation||'')}</span>
+          <select class="tg-pick" style="width:190px" id="tgMenSel${ri}_${pi}">${pickerOptions()}</select>
+          <span class="tg-evidence">💬 «${esc(p.evidence||'')}»</span>
+        </div>`).join('') +
+      `<button class="tg-btn ghost" style="margin-top:8px;padding:7px 16px;font-size:12px;"
+        onclick="tgApplyMentions(${ri}, ${nodeId})">✓ اعمال</button>
+       <span class="tg-msg" id="tgMenMsg${ri}"></span>`;
+    box.dataset.people = JSON.stringify(d.people);
+  }catch(e){ box.innerHTML = '<span class="tg-meta" style="color:#f87171">خطا در ارتباط</span>'; }
+}
+async function tgApplyMentions(ri, nodeId){
+  const box = document.getElementById('tgMen'+ri);
+  const people = JSON.parse(box.dataset.people || '[]');
+  const items = people.map((p,pi) => ({
+    name: p.name, relation: p.relation || '',
+    action: document.getElementById(`tgMenSel${ri}_${pi}`).value }));
+  try{
+    const r = await fetch('/api/import/telegram/apply-mentions/', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({contact_node_id: nodeId, items}) });
+    const d = await r.json();
+    if(d.ok) msg('tgMenMsg'+ri, `✓ ${d.nodes_created} نود و ${d.edges_created} یال ساخته شد`);
+    else msg('tgMenMsg'+ri, d.error||'خطا', true);
+  }catch(e){ msg('tgMenMsg'+ri, 'خطای سرور', true); }
+}
+
+// ── تحلیل رابطه (شخصیت + نمره) ──
+function scoreColor(s){ return s >= 70 ? 'linear-gradient(135deg,#10b981,#06b6d4)'
+  : (s >= 40 ? 'linear-gradient(135deg,#f59e0b,#ec4899)' : 'linear-gradient(135deg,#ef4444,#ec4899)'); }
+async function tgRelation(ri, name, nodeId){
+  const box = document.getElementById('tgRel'+ri);
+  box.style.display = 'block';
+  box.innerHTML = '<span class="tg-meta">💠 AI داره رابطه رو تحلیل می‌کنه…</span>';
+  try{
+    const r = await fetch('/api/import/telegram/relation/', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({name}) });
+    const d = await r.json();
+    if(!d.ok){ box.innerHTML = `<span class="tg-meta" style="color:#f87171">${esc(d.error||'خطا')}</span>`; return; }
+    const R = d.result || {};
+    const score = parseInt(R.friendship_score) || 0;
+    const chips = (arr, cls) => (arr||[]).map(x => `<span class="tg-chip ${cls||''}">${esc(x)}</span>`).join('');
+    box.innerHTML = `
+      <div class="tg-score-wrap">
+        <div class="tg-score" style="background:${scoreColor(score)}">
+          <span class="s">${score}</span><span class="t">نمره دوستی</span>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <div style="font-size:12.5px;line-height:1.9;">${esc(R.personality||'')}</div>
+          <div class="tg-meta" style="margin-top:3px;">🗣 ${esc(R.communication_style||'')}</div>
+        </div>
+      </div>
+      ${R.score_reasons ? `<div class="tg-meta">چرا این نمره:</div><div class="tg-chips">${chips(R.score_reasons)}</div>` : ''}
+      ${(R.values||[]).length ? `<div class="tg-meta">ارزش‌ها:</div><div class="tg-chips">${chips(R.values,'green')}</div>` : ''}
+      ${(R.interests||[]).length ? `<div class="tg-meta">علایق:</div><div class="tg-chips">${chips(R.interests)}</div>` : ''}
+      ${(R.strengths||[]).length ? `<div class="tg-meta">قوت رابطه:</div><div class="tg-chips">${chips(R.strengths,'green')}</div>` : ''}
+      ${(R.red_flags||[]).length ? `<div class="tg-meta">⚠️ هشدارها:</div><div class="tg-chips">${chips(R.red_flags,'red')}</div>` : ''}
+      <div style="font-size:12px;color:var(--text-soft);margin-top:6px;">💡 ${esc(R.tip||'')}</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+        <button class="tg-btn ghost" style="padding:7px 16px;font-size:12px;"
+          onclick="tgSaveRelation(${ri}, ${nodeId})">✓ ذخیره در پروفایل</button>
+        <label style="font-size:11.5px;color:var(--text-soft);display:flex;gap:5px;align-items:center;">
+          <input type="checkbox" id="tgStrChk${ri}" checked style="accent-color:#a855f7">
+          قدرت یال هم بشه ${R.suggested_strength||3} (پیشنهاد: ${esc(R.suggested_rel_type||'')})
+        </label>
+        <span class="tg-msg" id="tgRelMsg${ri}"></span>
+      </div>`;
+    box.dataset.result = JSON.stringify(R);
+  }catch(e){ box.innerHTML = '<span class="tg-meta" style="color:#f87171">خطا در ارتباط</span>'; }
+}
+async function tgSaveRelation(ri, nodeId){
+  const box = document.getElementById('tgRel'+ri);
+  const R = JSON.parse(box.dataset.result || '{}');
+  try{
+    const r = await fetch('/api/import/telegram/save-relation/', {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({
+        node_id: nodeId, data: R,
+        set_strength: document.getElementById('tgStrChk'+ri).checked,
+        strength: R.suggested_strength || 3 })
+    });
+    const d = await r.json();
+    if(d.ok) msg('tgRelMsg'+ri, '✓ ذخیره شد' + (d.strength_updated ? ' + قدرت یال آپدیت شد' : ''));
+    else msg('tgRelMsg'+ri, d.error||'خطا', true);
+  }catch(e){ msg('tgRelMsg'+ri, 'خطای سرور', true); }
+}
+
+// ── پاک‌سازی ──
+async function tgUndo(){
+  if(!confirm('داده‌های ساخته‌شده توسط ایمپورت تلگرام پاک بشن؟')) return;
+  msg('tgUndoMsg','⏳ در حال پاک‌سازی…');
+  try{
+    const r = await fetch('/api/import/telegram/undo/', {
+      method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')} });
+    const d = await r.json();
+    if(d.ok) msg('tgUndoMsg', `✓ ${d.deleted.interactions} تعامل، ${d.deleted.relationships} یال، ${d.deleted.nodes} نود پاک شد`);
+    else msg('tgUndoMsg', d.error||'خطا', true);
+  }catch(e){ msg('tgUndoMsg','خطای سرور', true); }
+}
+
+rebuildDL();
+</script>
+{% endblock %}

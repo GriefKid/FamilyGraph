@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}گزارش هفتگی · FamilyGraph{% endblock %}
+{% block page_title %}📊 گزارش هفتگی روابط{% endblock %}
+{% block nav_daily %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.wk-wrap{ max-width:720px; margin:0 auto; }
+.wk-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.wk-title{ font-size:14.5px; font-weight:800; margin-bottom:12px; }
+.wk-hero{
+  background:linear-gradient(135deg, rgba(6,182,212,.12), rgba(99,102,241,.1));
+  border:1px solid rgba(6,182,212,.3); border-radius:20px; padding:22px 24px; margin-bottom:16px;
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+}
+.wk-big{ font-size:34px; font-weight:800; }
+.wk-sub{ font-size:11.5px; color:var(--text-muted); }
+.wk-stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; margin-bottom:16px; }
+.wk-s{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px; text-align:center; }
+.wk-s .n{ font-size:19px; font-weight:800; color:#a5b4fc; }
+.wk-s .l{ font-size:9.5px; color:var(--text-muted); margin-top:2px; }
+.wk-row{ display:flex; align-items:center; gap:10px; padding:8px 2px; border-bottom:1px dashed var(--border); font-size:13px; }
+.wk-row:last-child{ border-bottom:none; }
+.wk-row a{ color:var(--text); text-decoration:none; font-weight:700; }
+.wk-row a:hover{ color:#a5b4fc; }
+.wk-delta{ font-weight:800; direction:ltr; }
+.wk-best{ padding:13px 15px; border-radius:13px; font-size:13px; line-height:1.9;
+  background:rgba(245,158,11,.07); border:1px dashed rgba(245,158,11,.35); }
+.wk-plan-n{ width:26px; height:26px; border-radius:50%; flex-shrink:0; display:flex;
+  align-items:center; justify-content:center; font-size:12px; font-weight:800;
+  background:linear-gradient(135deg,#06b6d4,#6366f1); color:#fff; }
+.wk-goal-bar{ height:7px; border-radius:4px; background:var(--border); overflow:hidden; flex:1; }
+.wk-goal-fill{ height:100%; border-radius:4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wk-wrap">
+
+  <div class="wk-hero">
+    <div>
+      <div style="font-size:17px;font-weight:800;">هفته‌ی روابطت در یک نگاه</div>
+      <div class="wk-sub" style="margin-top:4px;">{{ week_start_fa }} تا {{ jalali_today }}</div>
+    </div>
+    <div style="text-align:center;">
+      <div class="wk-big">{{ this_week }} <span style="font-size:15px;">{% if trend_up %}📈{% else %}📉{% endif %}</span></div>
+      <div class="wk-sub">تعامل این هفته (هفته قبل: {{ last_week }})</div>
+    </div>
+  </div>
+
+  <div class="wk-stats">
+    <div class="wk-s"><div class="n">🔥 {{ streak }}</div><div class="l">استریک روزها</div></div>
+    <div class="wk-s"><div class="n">{{ checkins }}</div><div class="l">📓 ثبت روزانه</div></div>
+    <div class="wk-s"><div class="n">{{ done_actions }}</div><div class="l">✅ ماموریت انجام‌شده</div></div>
+    <div class="wk-s"><div class="n">{{ fu_done }}</div><div class="l">📌 قول عمل‌شده</div></div>
+    <div class="wk-s"><div class="n">{{ debts_settled }}</div><div class="l">💰 حساب تسویه‌شده</div></div>
+  </div>
+
+  {% if warmer or colder %}
+  <div class="wk-card">
+    <div class="wk-title">🌡 دماسنج روابط</div>
+    {% for p in warmer %}
+    <div class="wk-row">
+      <span>🔥</span>
+      <a href="/nodes/{{ p.node_id }}/">{{ p.name }}</a>
+      <span style="font-size:11px;color:var(--text-muted);">{{ p.this }} تعامل این هفته</span>
+      <span class="wk-delta" style="color:#34d399;margin-right:auto;">+{{ p.delta }}</span>
+    </div>
+    {% endfor %}
+    {% for p in colder %}
+    <div class="wk-row">
+      <span>🧊</span>
+      <a href="/nodes/{{ p.node_id }}/">{{ p.name }}</a>
+      <span style="font-size:11px;color:var(--text-muted);">کمتر از هفته قبل</span>
+      <span class="wk-delta" style="color:#f87171;margin-right:auto;">{{ p.delta }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if goals %}
+  <div class="wk-card">
+    <div class="wk-title">🎯 اهداف در جریان</div>
+    {% for g in goals %}
+    <div class="wk-row" style="flex-wrap:wrap;">
+      <a href="/nodes/{{ g.node_id }}/">{{ g.name }}</a>
+      <span style="font-size:12px;color:var(--text-soft);flex:1;">«{{ g.text }}»</span>
+      {% if g.progress is not None %}
+      <span class="wk-delta" style="color:{% if g.progress >= 0 %}#34d399{% else %}#f87171{% endif %};">
+        {% if g.progress >= 0 %}+{% endif %}{{ g.progress }}
+      </span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if best_moment %}
+  <div class="wk-card">
+    <div class="wk-title">🌟 بهترین لحظه‌ی هفته</div>
+    <div class="wk-best">
+      «{{ best_moment.text }}»
+      <div style="font-size:10.5px;color:var(--text-muted);margin-top:6px;">{{ best_moment.date_fa }} · حس: {{ best_moment.mood }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="wk-card">
+    <div class="wk-title">🗓 برنامه هفته بعد — این ۳ نفر منتظرتن</div>
+    {% for p in plan %}
+    <div class="wk-row">
+      <div class="wk-plan-n">{{ forloop.counter }}</div>
+      <a href="/nodes/{{ p.node_id }}/">{{ p.name }}</a>
+      <span style="font-size:11.5px;color:{% if p.status == 'red' %}#f87171{% else %}#fbbf24{% endif %};margin-right:auto;">
+        {{ p.days }} روز بی‌خبری {% if p.status == 'red' %}🔴{% else %}🟡{% endif %}
+      </span>
+    </div>
+    {% empty %}
+    <div style="text-align:center;color:var(--text-muted);font-size:13px;padding:14px;">
+      🏖 هیچ رابطه‌ای منتظر نیست — کارت درسته!
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <a href="/daily/" class="btn btn-primary btn-sm">✨ بریفینگ امروز</a>
+    <a href="/alerts/" class="btn btn-ghost btn-sm">🔔 هشدارها</a>
+  </div>
+
+</div>
+{% endblock %}
