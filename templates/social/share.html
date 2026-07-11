@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}اشتراک‌گذاری · FamilyGraph{% endblock %}
+{% block page_title %}📤 اشتراک‌گذاری{% endblock %}
+{% block nav_social %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.sh-wrap{ max-width:720px; margin:0 auto; }
+.sh-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.sh-title{ font-size:14px; font-weight:800; margin-bottom:6px; }
+.sh-sub{ font-size:11.5px; color:var(--text-muted); margin-bottom:14px; line-height:1.9; }
+.sh-tabs{ display:flex; gap:8px; margin-bottom:12px; }
+.sh-tab{ padding:8px 18px; border-radius:11px; font-size:12.5px; font-weight:800; cursor:pointer;
+  font-family:'Vazirmatn',sans-serif; background:rgba(255,255,255,.04);
+  border:1px solid var(--border-strong); color:var(--text-soft); transition:.15s; }
+.sh-tab.on{ background:linear-gradient(135deg, rgba(99,102,241,.28), rgba(168,85,247,.2));
+  border-color:#818cf8; color:#fff; }
+.sh-sel{ width:100%; background:var(--card); color:var(--text); border:1px solid var(--border-strong);
+  border-radius:11px; padding:10px 13px; font-family:'Vazirmatn',sans-serif; font-size:13px; margin-bottom:12px; }
+.sh-flw{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.sh-f{ display:flex; align-items:center; gap:7px; padding:7px 13px; border-radius:999px;
+  cursor:pointer; user-select:none; font-size:12.5px; font-weight:700;
+  background:rgba(255,255,255,.04); border:1.5px solid var(--border-strong); transition:.15s; }
+.sh-f.sel{ background:linear-gradient(135deg, rgba(16,185,129,.25), rgba(6,182,212,.2));
+  border-color:#34d399; }
+.sh-f-av{ width:24px; height:24px; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; font-size:11px; font-weight:800; color:#fff;
+  background:linear-gradient(135deg,#10b981,#06b6d4); }
+.sh-go{ width:100%; padding:13px; border:none; border-radius:14px; cursor:pointer;
+  background:linear-gradient(135deg,#10b981,#06b6d4); color:#fff;
+  font-family:'Vazirmatn',sans-serif; font-size:14px; font-weight:800; transition:.2s; }
+.sh-go:hover{ transform:translateY(-2px); box-shadow:0 8px 24px rgba(6,182,212,.35); }
+.sh-go:disabled{ opacity:.55; }
+.sh-msg{ font-size:12px; margin-top:8px; min-height:16px; text-align:center; }
+.sh-in{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px dashed var(--border); font-size:12.5px; }
+.sh-in:last-child{ border-bottom:none; }
+.sh-empty{ text-align:center; color:var(--text-muted); font-size:12.5px; padding:16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sh-wrap">
+
+  <div class="sh-card">
+    <div class="sh-title">📤 شیر کن به فالوئرهات</div>
+    <div class="sh-sub">
+      راس، یال یا اطلاعات از گرافت رو انتخاب کن و برای هر تعداد از فالوئرهات بفرست.
+      اگه گیرنده اون رو داشته باشه هیچی، نداشته باشه <b>خودکار به گرافش اضافه می‌شه</b>.
+    </div>
+
+    <div class="sh-tabs">
+      <button class="sh-tab on" data-t="node" onclick="shTab(this)">👤 راس</button>
+      <button class="sh-tab" data-t="edge" onclick="shTab(this)">💞 یال</button>
+      <button class="sh-tab" data-t="info" onclick="shTab(this)">💡 اطلاعات</button>
+    </div>
+
+    <select class="sh-sel" id="shNode">
+      <option value="">کدوم راس؟</option>
+      {% for n in nodes %}<option value="{{ n.id }}">{{ n.display_name }}</option>{% endfor %}
+    </select>
+    <select class="sh-sel" id="shEdge" style="display:none;">
+      <option value="">کدوم یال؟</option>
+      {% for r in rels %}<option value="{{ r.id }}">{{ r.source.display_name }} ⟷ {{ r.target.display_name }}{% if r.rel %} ({{ r.rel }}){% endif %}</option>{% endfor %}
+    </select>
+    <select class="sh-sel" id="shInfo" style="display:none;">
+      <option value="">کدوم اطلاعات؟</option>
+      {% for i in infos %}<option value="{{ i.id }}">اطلاعات {{ i.node.display_name }} #{{ i.id }}</option>{% endfor %}
+    </select>
+
+    <div class="sh-title" style="font-size:12.5px;">به کی؟ <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(لیست شیر = فالوئرهات)</span></div>
+    <div class="sh-flw" id="shFlw">
+      {% for f in followers %}
+      <div class="sh-f" data-id="{{ f.id }}" onclick="this.classList.toggle('sel')">
+        <span class="sh-f-av">{{ f.username|first|upper }}</span>
+        {{ f.get_full_name|default:f.username }}
+      </div>
+      {% empty %}
+      <div class="sh-empty">هنوز فالوئری نداری — وقتی کسی فالوت کنه، اینجا میاد و می‌تونی بهش شیر کنی</div>
+      {% endfor %}
+    </div>
+
+    <button class="sh-go" onclick="shSend()">🚀 شیر کن</button>
+    <div class="sh-msg" id="shMsg"></div>
+  </div>
+
+  <div class="sh-card">
+    <div class="sh-title">📥 اشتراک‌های دریافتی</div>
+    {% for s in incoming %}
+    <div class="sh-in">
+      <span>{% if s.item_type == 'node' %}👤{% elif s.item_type == 'edge' %}💞{% else %}💡{% endif %}</span>
+      <b>{{ s.sender.username }}</b>
+      <span style="color:var(--text-soft);">{{ s.title }}</span>
+      <span style="margin-right:auto;font-size:10.5px;color:{% if s.applied %}#34d399{% else %}var(--text-muted){% endif %};">
+        {% if s.applied %}✓ به گرافت اضافه شد{% else %}قبلاً داشتیش{% endif %} · {{ s.created_at|date:"Y/m/d" }}
+      </span>
+    </div>
+    {% empty %}
+    <div class="sh-empty">هنوز کسی چیزی باهات شیر نکرده</div>
+    {% endfor %}
+  </div>
+
+  <div style="display:flex;gap:10px;justify-content:center;">
+    <a href="/social/" class="btn btn-ghost btn-sm">← هاب اجتماعی</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let shType = 'node';
+function shTab(btn){
+  shType = btn.dataset.t;
+  document.querySelectorAll('.sh-tab').forEach(b => b.classList.toggle('on', b === btn));
+  document.getElementById('shNode').style.display = shType === 'node' ? '' : 'none';
+  document.getElementById('shEdge').style.display = shType === 'edge' ? '' : 'none';
+  document.getElementById('shInfo').style.display = shType === 'info' ? '' : 'none';
+}
+async function shSend(){
+  const msg = document.getElementById('shMsg');
+  const sel = document.getElementById(shType === 'node' ? 'shNode' : (shType === 'edge' ? 'shEdge' : 'shInfo'));
+  const itemId = sel.value;
+  const recips = [...document.querySelectorAll('.sh-f.sel')].map(x => parseInt(x.dataset.id));
+  if(!itemId){ msg.style.color='#f87171'; msg.textContent = 'آیتم رو انتخاب کن'; return; }
+  if(!recips.length){ msg.style.color='#f87171'; msg.textContent = 'حداقل یه فالوئر انتخاب کن'; return; }
+  msg.style.color='var(--text-muted)'; msg.textContent = '⏳ در حال شیر…';
+  try{
+    const r = await fetch('/api/social/share/send/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({item_type: shType, item_id: parseInt(itemId), recipient_ids: recips})
+    });
+    const d = await r.json();
+    if(d.ok){
+      msg.style.color='#34d399';
+      msg.textContent = `✓ برای ${d.recipients} نفر شیر شد — ${d.applied} تا اضافه شد، ${d.skipped} تا از قبل داشتن`;
+      document.querySelectorAll('.sh-f.sel').forEach(x => x.classList.remove('sel'));
+    } else { msg.style.color='#f87171'; msg.textContent = d.error || 'خطا'; }
+  }catch(e){ msg.style.color='#f87171'; msg.textContent = 'خطا در ارتباط'; }
+}
+</script>
+{% endblock %}

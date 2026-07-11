@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}کشف آدم‌ها · FamilyGraph{% endblock %}
+{% block page_title %}🔭 کشف آدم‌ها{% endblock %}
+{% block nav_social %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.dv-wrap{ max-width:880px; margin:0 auto; }
+.dv-hero{
+  background:linear-gradient(135deg, rgba(6,182,212,.12), rgba(99,102,241,.12), rgba(168,85,247,.08));
+  border:1px solid rgba(6,182,212,.3); border-radius:20px;
+  padding:22px 24px; margin-bottom:16px; text-align:center;
+}
+.dv-hero h2{ margin:0 0 6px; font-size:19px; font-weight:800; }
+.dv-hero p{ margin:0 0 14px; font-size:12px; color:var(--text-soft); }
+.dv-search{
+  width:min(480px, 100%); background:rgba(255,255,255,.06);
+  border:1px solid var(--border-strong); border-radius:14px;
+  padding:12px 18px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:14px;
+}
+.dv-search:focus{ border-color:#06b6d4; }
+.dv-title{ font-size:13.5px; font-weight:800; margin:18px 0 12px; display:flex; align-items:center; gap:8px; }
+.dv-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+.dv-card{
+  background:var(--card); border:1px solid var(--border); border-radius:18px; padding:18px;
+  text-align:center; transition:transform .2s ease, box-shadow .22s, border-color .2s;
+}
+.dv-card:hover{ transform:translateY(-3px); border-color:rgba(6,182,212,.4);
+  box-shadow:0 12px 32px rgba(0,0,0,.4); }
+.dv-av{
+  width:62px; height:62px; border-radius:50%; margin:0 auto 10px;
+  background:linear-gradient(135deg,#06b6d4,#6366f1); display:flex; align-items:center;
+  justify-content:center; font-size:23px; font-weight:800; color:#fff;
+}
+.dv-name{ font-size:14px; font-weight:800; }
+.dv-name a{ color:var(--text); text-decoration:none; }
+.dv-name a:hover{ color:#67e8f9; }
+.dv-meta{ font-size:11px; color:var(--text-muted); margin-top:3px; min-height:16px; }
+.dv-reasons{ display:flex; gap:4px; flex-wrap:wrap; justify-content:center; margin:8px 0; min-height:20px; }
+.dv-reason{ font-size:9.5px; padding:2px 9px; border-radius:999px;
+  background:rgba(6,182,212,.1); border:1px solid rgba(6,182,212,.3); color:#67e8f9; }
+.dv-stats{ font-size:10px; color:var(--text-muted); margin-bottom:10px; }
+.dv-acts{ display:flex; gap:7px; justify-content:center; }
+.dv-btn{ flex:1; max-width:110px; padding:8px 0; border-radius:10px; font-size:11.5px; font-weight:800;
+  cursor:pointer; font-family:'Vazirmatn',sans-serif; transition:.15s; border:none; }
+.dv-btn.follow{ background:rgba(6,182,212,.14); border:1px solid rgba(6,182,212,.4); color:#67e8f9; }
+.dv-btn.follow:hover{ background:rgba(6,182,212,.28); }
+.dv-btn.connect{ background:linear-gradient(135deg,#6366f1,#a855f7); color:#fff; }
+.dv-btn.connect:hover{ box-shadow:0 4px 16px rgba(139,92,246,.4); }
+.dv-btn:disabled{ opacity:.55; cursor:default; }
+.dv-empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:30px; grid-column:1/-1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dv-wrap">
+
+  <div class="dv-hero">
+    <h2>🔭 آدم‌های جدید رو کشف کن</h2>
+    <p>فقط کسایی اینجان که پابلیک‌ان و اجازه‌ی کشف‌شدن دادن</p>
+    <input class="dv-search" id="dvSearch" placeholder="🔍 جستجو با اسم، شهر یا شغل…"
+           oninput="dvSearchDebounced(this.value)">
+  </div>
+
+  <div class="dv-title" id="dvListTitle">✨ پیشنهاد برای تو — شبیه تو و به دردبخور</div>
+  <div class="dv-grid" id="dvGrid">
+    <div class="dv-empty">⏳ در حال پیدا کردن آدم‌های مناسب…</div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+async function api(url, opts={}){
+  opts.headers = Object.assign({'X-CSRFToken': getCookie('csrftoken'), 'Content-Type':'application/json'}, opts.headers||{});
+  const r = await fetch(url, opts);
+  const d = await r.json();
+  if(!r.ok) throw new Error(d.error || 'خطا');
+  return d;
+}
+
+function userCard(u){
+  const reasons = (u.reasons||[]).map(x => `<span class="dv-reason">${esc(x)}</span>`).join('');
+  let followBtn, connectBtn;
+  if(u.is_following) followBtn = `<button class="dv-btn follow" disabled>✓ فالو شده</button>`;
+  else if(u.follow_request_sent) followBtn = `<button class="dv-btn follow" disabled>⏳ منتظر تایید</button>`;
+  else followBtn = `<button class="dv-btn follow" onclick="dvFollow(this, ${u.id})">+ فالو</button>`;
+  if(u.is_connection) connectBtn = `<button class="dv-btn connect" disabled>✓ کانکشن</button>`;
+  else if(u.request_sent) connectBtn = `<button class="dv-btn connect" disabled>⏳ منتظر</button>`;
+  else connectBtn = `<button class="dv-btn connect" onclick="dvConnect(this, ${u.id})">🔗 کانکشن</button>`;
+  return `<div class="dv-card">
+    <div class="dv-av">${esc((u.name||'?')[0]).toUpperCase()}</div>
+    <div class="dv-name"><a href="/u/${esc(u.username)}/">${esc(u.name)}</a></div>
+    <div class="dv-meta">@${esc(u.username)}${u.career?' · '+esc(u.career):''}${u.city?' · '+esc(u.city):''}</div>
+    <div class="dv-reasons">${reasons}</div>
+    <div class="dv-stats">${u.followers_count||0} فالوئر · ${u.connections_count||0} کانکشن</div>
+    <div class="dv-acts">${followBtn}${connectBtn}</div>
+  </div>`;
+}
+
+async function dvLoadSuggestions(){
+  const grid = document.getElementById('dvGrid');
+  try{
+    const d = await api('/api/social/suggest/');
+    grid.innerHTML = (d.users||[]).map(userCard).join('')
+      || '<div class="dv-empty">فعلاً کسی برای پیشنهاد نیست — با سرچ بگرد 🔍</div>';
+  }catch(e){ grid.innerHTML = `<div class="dv-empty">${esc(e.message)}</div>`; }
+}
+
+let dvT = null;
+function dvSearchDebounced(q){
+  clearTimeout(dvT);
+  dvT = setTimeout(() => dvSearch(q), 350);
+}
+async function dvSearch(q){
+  const grid = document.getElementById('dvGrid');
+  const title = document.getElementById('dvListTitle');
+  if(!q.trim()){ title.textContent = '✨ پیشنهاد برای تو — شبیه تو و به دردبخور'; dvLoadSuggestions(); return; }
+  title.textContent = `🔍 نتایج جستجو برای «${q.trim()}»`;
+  grid.innerHTML = '<div class="dv-empty">⏳ …</div>';
+  try{
+    const d = await api('/api/social/discover/?q=' + encodeURIComponent(q.trim()));
+    grid.innerHTML = (d.users||[]).map(userCard).join('')
+      || '<div class="dv-empty">کسی با این مشخصات پیدا نشد</div>';
+  }catch(e){ grid.innerHTML = `<div class="dv-empty">${esc(e.message)}</div>`; }
+}
+
+async function dvFollow(btn, id){
+  btn.disabled = true; btn.textContent = '…';
+  try{
+    const d = await api(`/api/social/follow/${id}/`, {method:'POST', body:'{}'});
+    btn.textContent = d.following ? '✓ فالو شده' : '⏳ منتظر تایید';
+  }catch(e){ btn.disabled = false; btn.textContent = '+ فالو'; alert(e.message); }
+}
+async function dvConnect(btn, id){
+  btn.disabled = true; btn.textContent = '…';
+  try{
+    const d = await api(`/api/social/request/${id}/`, {method:'POST', body:'{}'});
+    btn.textContent = d.accepted ? '✓ کانکشن' : '⏳ منتظر';
+  }catch(e){ btn.disabled = false; btn.textContent = '🔗 کانکشن'; alert(e.message); }
+}
+
+dvLoadSuggestions();
+</script>
+{% endblock %}

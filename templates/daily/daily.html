@@ -1,314 +1,272 @@
 {% extends "base.html" %}
-{% block title %}نکات روزانه · FamilyGraph{% endblock %}
+{% block title %}بریفینگ روزانه · FamilyGraph{% endblock %}
+{% block page_title %}✨ بریفینگ روزانه{% endblock %}
 {% block nav_daily %}active{% endblock %}
-{% block page_title %}✦ نکات روزانه شبکه{% endblock %}
 
 {% block extra_css %}
 <style>
-.day-header{
-  background:var(--card); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-  border:1px solid var(--border); border-radius:20px; padding:28px 32px;
-  margin-bottom:24px; position:relative; overflow:hidden;
-  display:flex; align-items:center; justify-content:space-between; gap:24px;
-}
-.day-header::before{
-  content:''; position:absolute; inset:0;
-  background:{% if is_holiday %}linear-gradient(135deg,rgba(16,185,129,.08),rgba(6,182,212,.06)){% else %}linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.06)){% endif %};
-  pointer-events:none;
-}
-.day-header::after{
-  content:''; position:absolute; top:-40px; right:-40px;
-  width:200px; height:200px; border-radius:50%;
-  background:{% if is_holiday %}rgba(16,185,129,.08){% else %}rgba(99,102,241,.08){% endif %};
-  filter:blur(40px);
-}
-.day-meta{ position:relative; z-index:1; }
-.day-name{ font-size:36px; font-weight:900; letter-spacing:-1px; }
-.day-date{ font-size:14px; color:var(--text-muted); margin-top:4px; }
-.day-type-badge{
-  display:inline-flex; align-items:center; gap:6px;
-  padding:5px 14px; border-radius:20px; font-size:12px; font-weight:700;
-  margin-top:10px;
-  {% if is_holiday %}background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.25);
-  {% else %}background:rgba(99,102,241,.15);color:var(--primary-light);border:1px solid var(--primary-border);{% endif %}
-}
-.day-big-emoji{
-  font-size:72px; position:relative; z-index:1; filter:drop-shadow(0 0 20px rgba(99,102,241,.3));
-}
+.db-wrap{ max-width:780px; margin:0 auto; }
 
-.generate-btn{
-  display:flex; align-items:center; justify-content:center; gap:8px;
-  width:100%; padding:14px 20px; border-radius:14px;
-  background:linear-gradient(135deg,#6366f1,#8b5cf6);
-  border:none; color:#fff;
-  font-size:15px; font-weight:700;
-  font-family:'Vazirmatn',sans-serif;
-  cursor:pointer; transition:all .2s;
-  box-shadow:0 0 28px rgba(99,102,241,.38), 0 4px 14px rgba(0,0,0,.3);
-  margin-bottom:24px;
+/* ── هدر سلام ── */
+.db-hero{
+  background:linear-gradient(135deg, rgba(99,102,241,.14), rgba(168,85,247,.1), rgba(236,72,153,.07));
+  border:1px solid rgba(99,102,241,.25); border-radius:20px;
+  padding:22px 24px; margin-bottom:18px;
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
 }
-.generate-btn:hover{ opacity:.9; transform:translateY(-2px); box-shadow:0 0 40px rgba(99,102,241,.52), 0 6px 20px rgba(0,0,0,.35); }
-.generate-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
+.db-hi{ font-size:21px; font-weight:800; }
+.db-date{ font-size:12px; color:var(--text-soft); margin-top:4px; }
+.db-hol{ display:inline-block; font-size:11px; font-weight:700; padding:2px 10px; border-radius:10px;
+  background:rgba(245,158,11,.15); color:#fbbf24; border:1px solid rgba(245,158,11,.3); margin-right:6px; }
+.db-streak{
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:10px 18px; border-radius:16px;
+  background:linear-gradient(135deg, rgba(245,158,11,.16), rgba(236,72,153,.12));
+  border:1px solid rgba(245,158,11,.35); transition:transform .2s;
+}
+.db-streak:hover{ transform:scale(1.05); }
+.db-streak .n{ font-size:22px; font-weight:800; color:#fbbf24; line-height:1; }
+.db-streak .l{ font-size:10px; color:var(--text-muted); }
 
-.day-message-card{
-  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08));
-  border:1px solid var(--primary-border); border-radius:16px; padding:20px 24px;
-  margin-bottom:20px; font-size:15px; font-weight:600; line-height:1.7;
-  text-align:center; color:var(--text);
-  display:none;
-}
-{% if is_holiday %}
-.day-message-card{
-  background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(6,182,212,.08));
-  border-color:rgba(16,185,129,.25);
-}
-{% endif %}
+/* ── نبض ── */
+.db-pulse{ display:grid; grid-template-columns:repeat(auto-fit,minmax(105px,1fr)); gap:10px; margin-bottom:18px; }
+.db-p{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:11px; text-align:center; }
+.db-p .n{ font-size:18px; font-weight:800; }
+.db-p .l{ font-size:9.5px; color:var(--text-muted); margin-top:2px; }
 
-.tips-grid{ display:grid; gap:14px; display:none; }
+/* ── ماموریت‌ها ── */
+.db-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.db-title{ font-size:14.5px; font-weight:800; margin-bottom:4px; }
+.db-sub{ font-size:11.5px; color:var(--text-muted); margin-bottom:14px; }
+.mission{
+  display:flex; gap:13px; align-items:flex-start; padding:14px; border-radius:14px;
+  border:1px solid var(--border); margin-bottom:10px; background:rgba(255,255,255,.02);
+  transition:opacity .4s ease, transform .4s ease, border-color .2s;
+}
+.mission:hover{ border-color:var(--primary-border); }
+.mission.done{ opacity:0; transform:translateX(-30px); }
+.mission-icon{
+  width:40px; height:40px; border-radius:12px; flex-shrink:0; font-size:19px;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, rgba(99,102,241,.2), rgba(168,85,247,.15));
+  border:1px solid rgba(99,102,241,.3);
+}
+.mission.p-high .mission-icon{ background:linear-gradient(135deg, rgba(239,68,68,.2), rgba(236,72,153,.15)); border-color:rgba(239,68,68,.35); }
+.mission-body{ flex:1; min-width:0; }
+.mission-title{ font-size:13.5px; font-weight:800; }
+.mission-why{ font-size:11.5px; color:var(--text-soft); margin-top:3px; line-height:1.8; }
+.mission-acts{ display:flex; gap:6px; flex-shrink:0; flex-direction:column; }
+.m-btn{ padding:6px 14px; border-radius:9px; font-size:11px; font-weight:700; cursor:pointer;
+  font-family:'Vazirmatn',sans-serif; transition:.15s; white-space:nowrap; }
+.m-done{ background:rgba(16,185,129,.12); border:1px solid rgba(16,185,129,.35); color:#34d399; }
+.m-done:hover{ background:rgba(16,185,129,.25); }
+.m-skip{ background:none; border:1px solid var(--border); color:var(--text-muted); }
+.m-skip:hover{ border-color:var(--border-strong); }
+.db-clear{ text-align:center; padding:26px 10px; }
+.db-clear .e{ font-size:44px; }
+.db-clear p{ color:var(--text-muted); font-size:13px; margin-top:8px; }
 
-.tip-card{
-  background:var(--card); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-  border:1px solid var(--border); border-radius:16px; padding:20px 22px;
-  display:flex; gap:16px; align-items:flex-start;
-  transition:all .2s; animation:tipFade .3s ease both;
+/* ── فلش‌بک ── */
+.fb-item{ display:flex; gap:12px; padding:12px 0; border-bottom:1px dashed var(--border); }
+.fb-item:last-child{ border-bottom:none; }
+.fb-badge{
+  flex-shrink:0; width:44px; height:44px; border-radius:50%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, rgba(6,182,212,.15), rgba(99,102,241,.12));
+  border:1px solid rgba(6,182,212,.3);
 }
-.tip-card:nth-child(1){ animation-delay:.05s; }
-.tip-card:nth-child(2){ animation-delay:.10s; }
-.tip-card:nth-child(3){ animation-delay:.15s; }
-.tip-card:nth-child(4){ animation-delay:.20s; }
-.tip-card:nth-child(5){ animation-delay:.25s; }
-@keyframes tipFade{ from{opacity:0;transform:translateX(12px)} to{opacity:1;transform:translateX(0)} }
-.tip-card:hover{ border-color:var(--primary-border); box-shadow:0 6px 28px rgba(0,0,0,.35); }
+.fb-badge .y{ font-size:14px; font-weight:800; color:#67e8f9; line-height:1; }
+.fb-badge .t{ font-size:8px; color:var(--text-muted); }
+.fb-title{ font-size:12.5px; font-weight:700; }
+.fb-text{ font-size:12px; color:var(--text-soft); margin-top:3px; line-height:1.8; }
 
-.tip-emoji{ font-size:32px; flex-shrink:0; margin-top:2px; }
-.tip-body{ flex:1; }
-.tip-title{ font-size:15px; font-weight:700; margin-bottom:6px; }
-.tip-action{ font-size:13px; color:var(--text-soft); line-height:1.6; margin-bottom:8px; }
-.tip-reason{ font-size:11px; color:var(--text-muted); line-height:1.5; }
-.tip-time{
-  display:inline-flex; align-items:center; gap:4px;
-  font-size:10px; padding:3px 8px; border-radius:10px;
-  background:rgba(99,102,241,.1); color:var(--primary-light);
-  border:1px solid var(--primary-border); margin-top:6px;
+/* ── AI ── */
+.db-ai-btn{
+  padding:10px 22px; border:none; border-radius:12px; cursor:pointer;
+  background:linear-gradient(135deg,#6366f1,#a855f7); color:#fff;
+  font-family:'Vazirmatn',sans-serif; font-size:13px; font-weight:800; transition:.2s;
 }
-{% if is_holiday %}
-.tip-time{ background:rgba(16,185,129,.1); color:#34d399; border-color:rgba(16,185,129,.25); }
-{% endif %}
-
-.tip-done-btn{
-  display:inline-flex; align-items:center; gap:4px;
-  font-size:10px; padding:4px 10px; border-radius:10px; margin-top:6px; margin-right:6px;
-  background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2);
-  color:#34d399; cursor:pointer; font-family:'Vazirmatn',sans-serif; font-weight:600;
-  transition:all .18s;
-}
-.tip-done-btn:hover{ background:rgba(16,185,129,.18); }
-.tip-note-form{
-  margin-top:10px; padding:10px; border-radius:10px;
-  background:rgba(16,185,129,.06); border:1px solid rgba(16,185,129,.15);
-  display:none; animation:tipFade .2s ease;
-}
-.tip-note-form textarea{
-  width:100%; min-height:56px; resize:none;
-  background:rgba(0,0,0,.2); border:1px solid var(--border);
-  border-radius:7px; padding:8px; color:var(--text);
-  font-family:'Vazirmatn',sans-serif; font-size:12px;
-  outline:none; margin-bottom:8px; box-sizing:border-box;
-}
-.tip-note-save{
-  padding:5px 14px; border-radius:7px; font-size:11px; font-weight:700;
-  background:linear-gradient(135deg,#10b981,#06b6d4);
-  border:none; color:#fff; cursor:pointer; font-family:'Vazirmatn',sans-serif;
-}
-.tip-card.done-card{ opacity:.45; }
-.tip-card.done-card .tip-title::before{ content:'✓ '; color:#34d399; }
-
-.focus-card{
-  background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(239,68,68,.06));
-  border:1px solid rgba(245,158,11,.2); border-radius:16px; padding:20px 24px;
-  margin-top:8px; display:none;
-}
-.focus-head{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; margin-bottom:10px; color:#fbbf24; }
-.focus-person{ font-size:15px; font-weight:800; margin-bottom:6px; }
-.focus-suggestion{ font-size:13px; color:var(--text-soft); line-height:1.6; }
-
-.alerts-link-card{
-  background:rgba(244,63,94,.06); border:1px solid rgba(244,63,94,.15);
-  border-radius:12px; padding:14px 18px;
-  display:flex; align-items:center; justify-content:space-between;
-  margin-bottom:20px; text-decoration:none; transition:all .2s;
-}
-.alerts-link-card:hover{ border-color:rgba(244,63,94,.3); background:rgba(244,63,94,.1); }
-.alerts-link-card span{ font-size:13px; color:var(--text-soft); }
-.alerts-link-card strong{ color:#f87171; }
-.alerts-link-card .arrow{ color:#f87171; font-size:16px; }
-
-.spinner{ display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; }
-@keyframes spin{ to{transform:rotate(360deg);} }
+.db-ai-btn:hover{ transform:translateY(-2px); box-shadow:0 6px 22px rgba(139,92,246,.4); }
+.db-ai-btn:disabled{ opacity:.6; cursor:wait; transform:none; }
+.tip-item{ display:flex; gap:11px; padding:11px 0; border-bottom:1px dashed var(--border); }
+.tip-item:last-child{ border-bottom:none; }
+.tip-emoji{ font-size:20px; flex-shrink:0; }
+.tip-title{ font-size:13px; font-weight:800; }
+.tip-action{ font-size:12.5px; color:var(--text-soft); margin-top:2px; line-height:1.8; }
+.tip-meta{ font-size:10.5px; color:var(--text-muted); margin-top:3px; }
+.day-msg{ padding:11px 14px; border-radius:12px; font-size:13px; margin-bottom:10px;
+  background:rgba(99,102,241,.07); border:1px dashed rgba(99,102,241,.3); }
+.focus-box{ margin-top:10px; padding:11px 14px; border-radius:12px; font-size:12.5px;
+  background:rgba(236,72,153,.06); border:1px dashed rgba(236,72,153,.3); }
+.db-hols{ display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+.db-hol-chip{ font-size:10.5px; padding:3px 11px; border-radius:999px;
+  background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25); color:#fcd34d; }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="db-wrap">
 
-<!-- Day header -->
-<div class="day-header">
-  <div class="day-meta">
-    <div class="day-name">{{ day_name }}</div>
-    <div class="day-date">{{ jalali_date }} — {{ season }}</div>
-    <div class="day-type-badge">
-      {% if is_holiday and holiday_name != 'جمعه' %}
-        🎉 {{ holiday_name }}
-      {% elif is_holiday %}
-        🌿 جمعه — استراحت و شارژ انرژی
-      {% else %}
-        ⚡ روز کاری — زمان ارتباط هدفمند
+  <!-- سلام -->
+  <div class="db-hero">
+    <div>
+      <div class="db-hi">{{ greeting }} {{ first_name }} 👋</div>
+      <div class="db-date">
+        {{ day_name }}، {{ jalali_full }} · {{ season }}
+        {% if is_holiday and holiday_name %}<span class="db-hol">🎉 {{ holiday_name }}</span>{% endif %}
+      </div>
+      {% if upcoming_holidays %}
+      <div class="db-hols">
+        {% for h in upcoming_holidays %}<span class="db-hol-chip">{{ h.jalali }} · {{ h.holiday }}</span>{% endfor %}
+      </div>
       {% endif %}
     </div>
-    {% if upcoming_holidays %}
-    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">
-      {% for h in upcoming_holidays %}
-      <div style="font-size:10px;padding:3px 9px;border-radius:10px;
-                  background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);
-                  color:#fbbf24;">
-        🗓 {{ h.jalali }} — {{ h.holiday }} ({{ h.days_away }} روز دیگر)
-      </div>
-      {% endfor %}
+    <div style="display:flex;gap:10px;align-items:center;">
+      <a href="/weekly/" style="text-decoration:none;font-size:11.5px;font-weight:700;color:#67e8f9;
+         padding:8px 14px;border-radius:12px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);">📊 گزارش هفته</a>
+      <a href="/checkin/" style="text-decoration:none;" title="{% if checked_today %}امروز چک-این کردی ✓{% else %}چک-این امروز یادت نره!{% endif %}">
+        <div class="db-streak">
+          <span class="n">🔥 {{ streak }}</span>
+          <span class="l">{% if checked_today %}روز پیاپی ✓{% else %}روز — امروز مونده!{% endif %}</span>
+        </div>
+      </a>
     </div>
-    {% endif %}
   </div>
-  <div class="day-big-emoji">
-    {% if is_holiday and holiday_name != 'جمعه' %}🎉
-    {% elif is_holiday %}🌿
-    {% else %}⚡{% endif %}
+
+  <!-- نبض شبکه -->
+  <div class="db-pulse">
+    <div class="db-p"><div class="n" style="color:#34d399">{{ health_counts.green|default:0 }}</div><div class="l">🟢 رابطه سالم</div></div>
+    <div class="db-p"><div class="n" style="color:#fbbf24">{{ health_counts.yellow|default:0 }}</div><div class="l">🟡 نیاز به توجه</div></div>
+    <div class="db-p"><div class="n" style="color:#f87171">{{ health_counts.red|default:0 }}</div><div class="l">🔴 سرد شده</div></div>
+    <div class="db-p"><div class="n" style="color:#a5b4fc">{{ open_fu }}</div><div class="l">📌 موضوع باز</div></div>
+    <div class="db-p">
+      <div class="n" style="color:{% if net_balance >= 0 %}#34d399{% else %}#f87171{% endif %};direction:ltr;font-size:14px;">{{ net_balance_fmt }}</div>
+      <div class="l">⚖️ {% if net_balance >= 0 %}طلبکاری{% else %}بدهکاری{% endif %}</div>
+    </div>
   </div>
+
+  <!-- ماموریت‌های امروز -->
+  <div class="db-card">
+    <div class="db-title">🎯 ماموریت‌های امروز</div>
+    <div class="db-sub">مهم‌ترین کارهای رابطه‌ای امروزت — «انجام دادم» بزنی، خودش تعامل/تسویه/تیک مربوطه رو هم ثبت می‌کنه</div>
+    {% for m in missions %}
+    <div class="mission p-{{ m.priority }}" id="mission{{ forloop.counter }}">
+      <div class="mission-icon">{{ m.icon }}</div>
+      <div class="mission-body">
+        <div class="mission-title">{{ m.title }}</div>
+        <div class="mission-why">{{ m.body|truncatechars:160 }}</div>
+      </div>
+      <div class="mission-acts">
+        <button class="m-btn m-done" onclick="missionAct(this, 'completed')"
+          data-id="{{ m.id }}" data-type="{{ m.type }}" data-node="{{ m.node_id|default:'' }}"
+          data-title="{{ m.title }}" data-el="mission{{ forloop.counter }}">✓ انجام دادم</button>
+        <button class="m-btn m-skip" onclick="missionAct(this, 'dismissed')"
+          data-id="{{ m.id }}" data-type="{{ m.type }}" data-node="{{ m.node_id|default:'' }}"
+          data-title="{{ m.title }}" data-el="mission{{ forloop.counter }}">رد شو</button>
+      </div>
+    </div>
+    {% empty %}
+    <div class="db-clear">
+      <div class="e">🏖</div>
+      <p>هیچ ماموریت فوری‌ای نداری — شبکه‌ات مرتبه! یه چک-این بزن یا به یکی از دوستات سر بزن.</p>
+    </div>
+    {% endfor %}
+    <div style="text-align:left;margin-top:6px;">
+      <a href="/alerts/" style="font-size:11px;color:#a5b4fc;text-decoration:none;">همه‌ی هشدارها ←</a>
+    </div>
+  </div>
+
+  <!-- فلش‌بک -->
+  {% if flashback %}
+  <div class="db-card">
+    <div class="db-title">🕰 امروز در گذشته</div>
+    <div class="db-sub">همین روز، در سال‌های قبل چه خبر بود</div>
+    {% for f in flashback %}
+    <div class="fb-item">
+      <div class="fb-badge"><span class="y">{{ f.years }}</span><span class="t">سال پیش</span></div>
+      <div>
+        <div class="fb-title">{{ f.icon }} {{ f.title }}</div>
+        <div class="fb-text">{{ f.text }}{% if f.mood %} · <b>{{ f.mood }}</b>{% endif %}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- نکته عمیق AI -->
+  <div class="db-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div class="db-title">✦ نکته‌های عمیق امروز</div>
+        <div class="db-sub" style="margin-bottom:0;">AI با توجه به روز، مناسبت‌ها و وضعیت شبکه‌ات پیشنهاد می‌ده — روزی یک بار تازه می‌شه</div>
+      </div>
+      <button class="db-ai-btn" id="tipsBtn" onclick="loadTips()">✦ بگو ببینم</button>
+    </div>
+    <div id="tipsBox" style="margin-top:12px;"></div>
+  </div>
+
 </div>
-
-<!-- Urgent alerts link (if any) -->
-{% if alerts_count > 0 %}
-<a class="alerts-link-card" href="/alerts/">
-  <span>🔴 <strong>{{ alerts_count }} هشدار فوری</strong> در انتظار توجه</span>
-  <span class="arrow">←</span>
-</a>
-{% endif %}
-
-<!-- Generate button -->
-<button class="generate-btn" onclick="generateTips()" id="genBtn">
-  ✦ دریافت نکات روزانه
-</button>
-
-<!-- Day message -->
-<div class="day-message-card" id="dayMessage"></div>
-
-<!-- Tips grid -->
-<div class="tips-grid" id="tipsGrid"></div>
-
-<!-- Focus person -->
-<div class="focus-card" id="focusCard">
-  <div class="focus-head">🎯 تمرکز ویژه امروز</div>
-  <div class="focus-person" id="focusPerson"></div>
-  <div class="focus-suggestion" id="focusSugg"></div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const TODAY_KEY = 'daily_tips_{{ today|date:"Ymd" }}';
-const TODAY_STR = '{{ today|date:"Ymd" }}';
-
-// Auto-load از localStorage
-const _cached = localStorage.getItem(TODAY_KEY);
-if(_cached){
-  try{
-    renderTips(JSON.parse(_cached));
-    document.getElementById('genBtn').textContent = '🔄 بازسازی نکات امروز';
-  } catch(e){ localStorage.removeItem(TODAY_KEY); }
-}
-
-async function generateTips(){
-  const btn = document.getElementById('genBtn');
-  btn.innerHTML = '<span class="spinner"></span> در حال تحلیل شبکه...';
+// ── ماموریت‌ها: انجام/رد → هشدار مرتبط بسته می‌شه + هوک‌ها (ثبت تعامل/تیک فالوآپ/تسویه قرض) اجرا می‌شن
+async function missionAct(btn, action){
+  const el = document.getElementById(btn.dataset.el);
   btn.disabled = true;
-  document.getElementById('dayMessage').style.display = 'none';
-  document.getElementById('tipsGrid').style.display = 'none';
-  document.getElementById('focusCard').style.display = 'none';
   try{
-    const r = await fetch('/api/daily/tips/', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'
-    });
-    const d = await r.json();
-    if(d.ok && d.result){
-      localStorage.setItem(TODAY_KEY, JSON.stringify(d.result));
-      renderTips(d.result);
-    } else {
-      alert(d.error || 'خطا در دریافت نکات');
-    }
-  } catch(e){ alert('خطا در ارتباط با سرور: ' + e.message); }
-  btn.innerHTML = '🔄 بازسازی نکات امروز';
-  btn.disabled = false;
-}
-
-function renderTips(result){
-  // Day message
-  const msgEl = document.getElementById('dayMessage');
-  msgEl.textContent = result.day_message || '';
-  msgEl.style.display = result.day_message ? 'block' : 'none';
-
-  // Tips
-  const grid = document.getElementById('tipsGrid');
-  const tips = result.tips || [];
-  if(tips.length > 0){
-    grid.innerHTML = tips.map((t,i) => {
-      const safeTitle = (t.title||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      return `<div class="tip-card" id="tip-card-${i}">
-        <div class="tip-emoji">${t.emoji||'💡'}</div>
-        <div class="tip-body">
-          <div class="tip-title">${t.title||''}</div>
-          <div class="tip-action">${t.action||''}</div>
-          <div class="tip-reason">${t.reason||''}</div>
-          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
-            <div class="tip-time">⏱ ${t.time_needed||'...'}</div>
-            <button class="tip-done-btn" onclick="tipDone(${i},'${safeTitle}')">✓ انجام دادم</button>
-          </div>
-          <div class="tip-note-form" id="tip-note-${i}">
-            <textarea placeholder="نتیجه چی شد؟ (اختیاری — به AI کمک می‌کنه الگوهایت رو بهتر بفهمه)"></textarea>
-            <button class="tip-note-save" onclick="saveTipDone(${i},'${safeTitle}')">ذخیره</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-    grid.style.display = 'grid';
-  }
-
-  // Focus person
-  if(result.focus_person && result.focus_person.name){
-    document.getElementById('focusPerson').textContent = '👤 ' + result.focus_person.name;
-    document.getElementById('focusSugg').textContent = result.focus_person.suggestion || '';
-    document.getElementById('focusCard').style.display = 'block';
-  }
-}
-
-function tipDone(i, title){
-  document.getElementById('tip-note-' + i).style.display = 'block';
-}
-
-async function saveTipDone(i, title){
-  const outcome = document.querySelector('#tip-note-' + i + ' textarea').value.trim();
-  try{
-    await fetch('/api/alerts/action/', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+    const r = await fetch('/api/alerts/action/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
       body: JSON.stringify({
-        alert_id: 'daily_tip_' + TODAY_STR + '_' + i,
-        alert_type: 'daily_tip',
-        node_id: null,
-        title: title,
-        action: 'completed',
-        outcome: outcome,
+        alert_id: btn.dataset.id,
+        alert_type: btn.dataset.type,
+        node_id: btn.dataset.node ? parseInt(btn.dataset.node) : null,
+        title: btn.dataset.title,
+        action: action,
+        outcome: action === 'completed' ? 'از بریفینگ روزانه' : '',
       })
     });
-  } catch(e){}
-  document.getElementById('tip-card-' + i).classList.add('done-card');
-  document.getElementById('tip-note-' + i).style.display = 'none';
+    const d = await r.json();
+    if(d.ok){
+      el.classList.add('done');
+      setTimeout(() => el.remove(), 450);
+    } else { btn.disabled = false; alert(d.error || 'خطا'); }
+  }catch(e){ btn.disabled = false; alert('خطا در ارتباط با سرور'); }
+}
+
+// ── نکته‌های AI ──
+function escT(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+async function loadTips(){
+  const btn = document.getElementById('tipsBtn');
+  const box = document.getElementById('tipsBox');
+  btn.disabled = true; btn.textContent = '⏳ در حال فکر کردن…';
+  try{
+    const r = await fetch('/api/daily/tips/', {
+      method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')} });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = '↺ دوباره';
+    if(!d.ok){ box.innerHTML = `<div style="color:#f87171;font-size:12.5px;">${escT(d.error||'خطا')}</div>`; return; }
+    const R = d.result || {};
+    let html = '';
+    if(R.day_message) html += `<div class="day-msg">💬 ${escT(R.day_message)}</div>`;
+    (R.tips||[]).forEach(t => {
+      html += `<div class="tip-item">
+        <div class="tip-emoji">${escT(t.emoji||'✨')}</div>
+        <div>
+          <div class="tip-title">${escT(t.title||'')}</div>
+          <div class="tip-action">${escT(t.action||'')}</div>
+          <div class="tip-meta">${t.reason?('چرا: '+escT(t.reason)):''}${t.time_needed?(' · ⏱ '+escT(t.time_needed)):''}</div>
+        </div>
+      </div>`;
+    });
+    if(R.focus_person && R.focus_person.name)
+      html += `<div class="focus-box">🎯 <b>آدمِ امروز: ${escT(R.focus_person.name)}</b> — ${escT(R.focus_person.suggestion||'')}</div>`;
+    box.innerHTML = html || '<div style="color:var(--text-muted);font-size:12px;">چیزی برنگشت</div>';
+  }catch(e){
+    btn.disabled = false; btn.textContent = '✦ بگو ببینم';
+    box.innerHTML = '<div style="color:#f87171;font-size:12.5px;">خطا در ارتباط با سرور</div>';
+  }
 }
 </script>
 {% endblock %}

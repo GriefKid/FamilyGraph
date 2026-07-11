@@ -18,7 +18,11 @@ class User(AbstractUser):
     )
     trust_score = models.IntegerField(default=80, verbose_name='امتیاز اعتماد')
     avatar      = models.ImageField(upload_to='avatars/', blank=True, null=True,
-                                     verbose_name='آواتار')
+                                    verbose_name='آواتار')
+    cover_image = models.ImageField(upload_to='profile_covers/', blank=True, null=True,
+                                    verbose_name='بک‌گراند پروفایل')
+    cover_preset = models.CharField(max_length=40, blank=True, default='aurora',
+                                    verbose_name='بک‌گراند آماده')
     bio         = models.TextField(blank=True, verbose_name='درباره من')
     birth_date  = models.DateField(blank=True, null=True, verbose_name='تاریخ تولد')
     career      = models.CharField(max_length=200, blank=True, verbose_name='شغل')
@@ -29,6 +33,20 @@ class User(AbstractUser):
         'Node', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='as_root_for', verbose_name='نود اصلی (من)',
     )
+    # V12: تنظیمات شبکه اجتماعی
+    discoverable           = models.BooleanField(
+        default=True, verbose_name='قابل کشف',
+        help_text='توی صفحه «کشف آدم‌ها» پیدا بشم (فقط اگه پابلیک باشی معنی داره)')
+    auto_accept_follow     = models.BooleanField(
+        default=False, verbose_name='تایید خودکار فالو',
+        help_text='هر کی فالو کرد بدون تایید من قبول بشه')
+    auto_accept_connection = models.BooleanField(
+        default=False, verbose_name='تایید خودکار کانکشن',
+        help_text='درخواست کانکشن بدون تایید من قبول بشه')
+    CHAT_POLICY_CHOICES = [('connections', 'فقط کانکشن‌ها'), ('nobody', 'هیچ‌کس')]
+    chat_policy            = models.CharField(
+        max_length=12, choices=CHAT_POLICY_CHOICES, default='connections',
+        verbose_name='کی می‌تونه بهم پیام بده')
 
     class Meta:
         verbose_name = 'کاربر'
@@ -74,8 +92,26 @@ class Group(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────
-# 3. Node
+# 3. Node  (+ دایره نزدیکی V4)
 # ─────────────────────────────────────────────────────────────────
+
+# هر tier یه «انتظار تماس» داره — پایه‌ی امتیاز سلامت رابطه
+CLOSENESS_CHOICES = [
+    ('inner',        'حلقه نزدیک (هفتگی)'),
+    ('close',        'نزدیک (هر ۲ هفته)'),
+    ('friend',       'دوست (ماهانه)'),
+    ('acquaintance', 'آشنا (هر ۳ ماه)'),
+    ('distant',      'دور (بدون انتظار)'),
+]
+
+# نگاشت tier → حداکثر فاصله‌ی مورد انتظار بین دو تعامل (روز)
+CLOSENESS_EXPECTED_DAYS = {
+    'inner':        7,
+    'close':        14,
+    'friend':       30,
+    'acquaintance': 90,
+    'distant':      None,   # بدون انتظار — همیشه خاکستری
+}
 
 class Node(models.Model):
     username        = models.CharField(max_length=100)
@@ -158,6 +194,26 @@ class Relationship(models.Model):
     def __str__(self):
         return self.rel or f"{self.source} → {self.target}"
 
+    def emoji(self):
+        """ایموجی متناسب با نوع رابطه — نه همه‌چیز قلب! (V11)"""
+        t = (self.rel or '').lower()
+        if any(w in t for w in ('همسر', 'عشق', 'نامزد', 'زن', 'شوهر', 'love')):
+            return '❤️'
+        if any(w in t for w in ('پدر', 'مادر', 'مامان', 'بابا', 'برادر', 'خواهر', 'داداش',
+                                'آبجی', 'عمو', 'دایی', 'خاله', 'عمه', 'پسر', 'دختر',
+                                'فامیل', 'خانواده', 'پدربزرگ', 'مادربزرگ')):
+            return '🏠'
+        if any(w in t for w in ('همکار', 'کار', 'رئیس', 'مدیر', 'کارفرما', 'شریک',
+                                'استاد', 'شاگرد', 'مشاور', 'business')):
+            return '💼'
+        if any(w in t for w in ('دوست', 'رفیق', 'صمیمی')):
+            return '💛'
+        if any(w in t for w in ('همسایه',)):
+            return '🏘'
+        if any(w in t for w in ('تلگرام', 'familygraph', 'آنلاین')):
+            return '🔗'
+        return '💞'
+
     def clean(self):
         if self.source == self.target:
             raise ValidationError("A node cannot have a relationship with itself.")
@@ -194,6 +250,7 @@ class Relationship(models.Model):
 class Event(models.Model):
     title        = models.CharField(max_length=200)
     date         = models.DateField()
+    event_time   = models.TimeField(null=True, blank=True, verbose_name='ساعت')
     description  = models.TextField(blank=True)
     participants = models.ManyToManyField(Node, blank=True, related_name='events')
     owner        = models.ForeignKey(
@@ -201,12 +258,18 @@ class Event(models.Model):
         null=True, blank=True, related_name='events',
         verbose_name='صاحب'
     )
+    # reminder tracking
+    reminder_sent_7d  = models.BooleanField(default=False)
+    reminder_sent_1d  = models.BooleanField(default=False)
+    reminder_sent_3h  = models.BooleanField(default=False)
+    # post-event journal prompt
+    post_event_prompted = models.BooleanField(default=False)
 
     def __str__(self):
         return self.title
 
     class Meta:
-        ordering = ['-date']
+        ordering = ['date']  # event_time جداگانه در view مدیریت می‌شه
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -216,6 +279,8 @@ class Event(models.Model):
 class Information(models.Model):
     VISIBILITY_CHOICES = [
         ('public',  'Everyone can see'),
+        ('friends', 'Friends can see'),
+        ('selected', 'Selected friends can see'),
         ('shared',  'Someone can see'),
         ('private', 'Nobody'),
     ]
@@ -227,9 +292,181 @@ class Information(models.Model):
         max_length=10, choices=VISIBILITY_CHOICES, default='private'
     )
     data = models.JSONField(blank=True, null=True)
+    shared_with = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name='shared_informations',
+        verbose_name='Shared with selected friends'
+    )
 
     def __str__(self):
         return f'Information #{self.id} - {self.node}'
+
+
+class Friendship(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='friendships')
+    friend = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='friend_of')
+    relationship = models.ForeignKey(Relationship, on_delete=models.SET_NULL, null=True, blank=True, related_name='friendships')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'friend')
+        ordering = ['friend__username']
+
+    def __str__(self):
+        return f'{self.user} ↔ {self.friend}'
+
+
+class Follow(models.Model):
+    follower = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='following')
+    target = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'target')
+        ordering = ['target__username']
+
+    def __str__(self):
+        return f'{self.follower} follows {self.target}'
+
+
+class FriendRequest(models.Model):
+    REQUEST_TYPES = [
+        ('follow', 'Follow'),
+        ('connection', 'Connection'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_friend_requests')
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_friend_requests')
+    request_type = models.CharField(max_length=12, choices=REQUEST_TYPES, default='connection')
+    message = models.CharField(max_length=240, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ('sender', 'receiver', 'request_type', 'status')
+
+    def __str__(self):
+        return f'{self.sender} → {self.receiver} ({self.status})'
+
+
+class DirectMessage(models.Model):
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_direct_messages')
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_direct_messages')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
+    reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='replies')
+    analyzed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.sender} → {self.receiver}: {self.content[:60]}'
+
+
+class ChatAnalysis(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chat_analyses')
+    friend = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chat_analysed_by')
+    summary = models.TextField(blank=True)
+    mood = models.CharField(max_length=120, blank=True)
+    topics = models.JSONField(default=list, blank=True)
+    signals = models.JSONField(default=list, blank=True)
+    suggestions = models.JSONField(default=list, blank=True)
+    raw = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'friend')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f'Chat analysis: {self.user} / {self.friend}'
+
+
+class ArtisticWork(models.Model):
+    KIND_CHOICES = [
+        ('book', 'Book'),
+        ('movie', 'Movie'),
+        ('series', 'Series'),
+        ('music', 'Music'),
+    ]
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    title = models.CharField(max_length=240)
+    creator = models.CharField(max_length=180, blank=True)
+    year = models.PositiveIntegerField(null=True, blank=True)
+    description = models.TextField(blank=True)
+    genres = models.JSONField(default=list, blank=True)
+    analysis = models.JSONField(default=dict, blank=True)
+    cover_url = models.URLField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['title']
+        unique_together = ('kind', 'title')
+
+    def save(self, *args, **kwargs):
+        if not self.analysis:
+            self.analysis = {
+                'personality_signals': [],
+                'relationship_signals': [],
+                'summary': 'این اثر برای شناخت سلیقه، ارزش‌ها و جهان ذهنی فرد استفاده می‌شود.',
+            }
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.get_kind_display()}: {self.title}'
+
+
+class ProfileMediaItem(models.Model):
+    KIND_CHOICES = ArtisticWork.KIND_CHOICES
+    SOURCE_CHOICES = [
+        ('manual', 'Manual'),
+        ('journal', 'Journal'),
+        ('imported', 'Imported'),
+    ]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile_media_items')
+    work = models.ForeignKey(ArtisticWork, null=True, blank=True, on_delete=models.SET_NULL, related_name='user_items')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    title = models.CharField(max_length=240)
+    creator = models.CharField(max_length=180, blank=True)
+    rating = models.FloatField(default=0)
+    completed_on = models.DateField(null=True, blank=True)
+    source = models.CharField(max_length=12, choices=SOURCE_CHOICES, default='manual')
+    source_journal = models.ForeignKey('JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='detected_media_items')
+    notes = models.TextField(blank=True)
+    analysis = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-completed_on', '-created_at']
+        unique_together = ('user', 'kind', 'title')
+
+    def save(self, *args, **kwargs):
+        try:
+            self.rating = max(0, min(5, float(self.rating or 0)))
+        except Exception:
+            self.rating = 0
+        if not self.analysis:
+            direction = 'همسو' if self.rating >= 3.5 else ('برخلاف سلیقه' if self.rating <= 2 else 'خنثی/در حال کشف')
+            work_summary = self.work.analysis.get('summary', '') if self.work_id and isinstance(self.work.analysis, dict) else ''
+            self.analysis = {
+                'stance': direction,
+                'signal': f'امتیاز {self.rating:g}/5 نشان می‌دهد این اثر برای شناخت سلیقه فرد {direction} است.',
+                'work_summary': work_summary,
+            }
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.user} {self.kind}: {self.title}'
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -306,6 +543,346 @@ class JournalEntry(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8a. NodeCloseness  (V4 — دایره نزدیکی)
+# ─────────────────────────────────────────────────────────────────
+# عمداً جدول جداست (نه ستون روی Node) تا اگه migrate نشده بود،
+# هیچ صفحه‌ی موجودی نشکنه — فقط فیچرهای V4 با fallback کار می‌کنن.
+
+class NodeCloseness(models.Model):
+    node  = models.OneToOneField(Node, on_delete=models.CASCADE,
+                                  related_name='closeness_setting', verbose_name='شخص')
+    tier  = models.CharField(max_length=15, choices=CLOSENESS_CHOICES,
+                              verbose_name='دایره نزدیکی')
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='closeness_settings',
+        verbose_name='صاحب'
+    )
+
+    class Meta:
+        verbose_name = 'دایره نزدیکی'
+        verbose_name_plural = 'دایره‌های نزدیکی'
+
+    def __str__(self):
+        return f"{self.node} — {self.get_tier_display()}"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8b. Interaction  (V4 — ثبت سریع تعامل)
+# ─────────────────────────────────────────────────────────────────
+
+class Interaction(models.Model):
+    """یه تماس/دیدار/پیام با یک نفر — خوراک اصلی امتیاز سلامت رابطه."""
+    KIND_CHOICES = [
+        ('call',    '📞 تلفنی'),
+        ('meet',    '🤝 حضوری'),
+        ('message', '💬 پیام'),
+        ('online',  '🌐 آنلاین'),
+        ('journal', '📓 از ژورنال'),
+        ('checkin', '⚡ چک-این'),
+        ('other',   '✦ سایر'),
+    ]
+    FEELING_CHOICES = [
+        (1,  '😊 خوب'),
+        (0,  '😐 معمولی'),
+        (-1, '😕 ناخوشایند'),
+    ]
+
+    node       = models.ForeignKey(Node, on_delete=models.CASCADE,
+                                    related_name='interactions', verbose_name='شخص')
+    kind       = models.CharField(max_length=15, choices=KIND_CHOICES,
+                                   default='call', verbose_name='نوع')
+    date       = models.DateField(verbose_name='تاریخ')
+    feeling    = models.SmallIntegerField(choices=FEELING_CHOICES, default=0,
+                                           verbose_name='حس بعدش')
+    note       = models.CharField(max_length=300, blank=True, default='',
+                                   verbose_name='یادداشت کوتاه')
+    created_at = models.DateTimeField(auto_now_add=True)
+    owner      = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='interactions',
+        verbose_name='صاحب'
+    )
+
+    class Meta:
+        ordering = ['-date', '-id']
+        verbose_name = 'تعامل'
+        verbose_name_plural = 'تعامل‌ها'
+        indexes = [
+            models.Index(fields=['owner', 'node', '-date'], name='ix_inter_owner_node_date'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} با {self.node} — {self.date}"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8c. FollowUp  (V4 — موضوعات باز / قول‌ها)
+# ─────────────────────────────────────────────────────────────────
+
+class FollowUp(models.Model):
+    """یه موضوع باز با یک نفر — قول، سوال، کاری که باید انجام بشه."""
+    node       = models.ForeignKey(Node, on_delete=models.CASCADE,
+                                    related_name='followups', verbose_name='شخص')
+    text       = models.CharField(max_length=300, verbose_name='موضوع')
+    due_date   = models.DateField(null=True, blank=True, verbose_name='سررسید')
+    done       = models.BooleanField(default=False, verbose_name='انجام شد')
+    done_at    = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    owner      = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='followups',
+        verbose_name='صاحب'
+    )
+
+    class Meta:
+        ordering = ['done', 'due_date', '-created_at']
+        verbose_name = 'موضوع باز'
+        verbose_name_plural = 'موضوعات باز'
+
+    def __str__(self):
+        return f"{self.text[:50]} — {self.node}"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8d. Debt  (V6 — دفتر قرض و طلب)
+# ─────────────────────────────────────────────────────────────────
+
+class Debt(models.Model):
+    """قرض/طلب با یک نفر — واحد مبادله‌ی مالی رابطه."""
+    DIRECTION_CHOICES = [
+        ('i_owe',    'من بدهکارم'),
+        ('they_owe', 'من طلبکارم'),
+    ]
+    CURRENCY_CHOICES = [
+        ('تومان', 'تومان'),
+        ('دلار',  'دلار'),
+        ('یورو',  'یورو'),
+    ]
+
+    node       = models.ForeignKey(Node, on_delete=models.CASCADE,
+                                    related_name='debts', verbose_name='طرف حساب')
+    direction  = models.CharField(max_length=10, choices=DIRECTION_CHOICES,
+                                   verbose_name='جهت')
+    amount     = models.BigIntegerField(verbose_name='مبلغ')
+    paid       = models.BigIntegerField(default=0, verbose_name='پرداخت‌شده')
+    currency   = models.CharField(max_length=20, choices=CURRENCY_CHOICES,
+                                   default='تومان', verbose_name='واحد')
+    date       = models.DateField(verbose_name='تاریخ قرض')
+    due_date   = models.DateField(null=True, blank=True, verbose_name='سررسید')
+    note       = models.CharField(max_length=300, blank=True, default='',
+                                   verbose_name='بابت')
+    settled    = models.BooleanField(default=False, verbose_name='تسویه شد')
+    settled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    owner      = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='debts',
+        verbose_name='صاحب'
+    )
+
+    class Meta:
+        ordering = ['settled', 'due_date', '-created_at']
+        verbose_name = 'قرض/طلب'
+        verbose_name_plural = 'قرض و طلب‌ها'
+
+    @property
+    def remaining(self):
+        return max(0, (self.amount or 0) - (self.paid or 0))
+
+    def __str__(self):
+        return f"{self.get_direction_display()} {self.amount:,} {self.currency} — {self.node}"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8e. ChatMessage  (V8 — حافظه‌ی همدم)
+# ─────────────────────────────────────────────────────────────────
+
+class ChatMessage(models.Model):
+    """پیام‌های چت با همدم — تا گفتگو بین جلسه‌ها یادش بمونه."""
+    ROLE_CHOICES = [('user', 'کاربر'), ('assistant', 'همدم')]
+
+    role       = models.CharField(max_length=10, choices=ROLE_CHOICES)
+    content    = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    owner      = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='chat_messages',
+        verbose_name='صاحب'
+    )
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'پیام چت'
+        verbose_name_plural = 'پیام‌های چت'
+
+    def __str__(self):
+        return f"{self.role}: {self.content[:60]}"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8f. LifeEvent  (V10 — رویدادهای زندگی + آیین پیگیری)
+# ─────────────────────────────────────────────────────────────────
+
+# هر نوع رویداد یه «آیین پیگیری» داره: (فاصله از روز رویداد، چی‌کار کن)
+LIFE_EVENT_RITUALS = {
+    'mourning': [(0, 'تسلیت بگو — همین امروز'), (3, 'روز سوم — سر بزن یا زنگ بزن'),
+                 (7, 'روز هفتم — حضورت مهمه'), (40, 'چهلم — حتماً سر بزن'),
+                 (365, 'سالگرد — یادش کن، یادشون نره که یادته')],
+    'illness':  [(0, 'عیادت / پیگیری حالش'), (3, 'حالشو بپرس'), (14, 'پیگیری روند بهبودی')],
+    'wedding':  [(0, 'تبریک بگو! 🎉'), (7, 'بپرس مراسم/ماه عسل چطور بود')],
+    'baby':     [(0, 'تبریک! 🍼'), (14, 'بپرس شب‌ها چطور می‌گذره 😄'), (40, 'سر بزن')],
+    'exam':     [(-1, 'شب قبل — آرزوی موفقیت کن'), (0, 'روز امتحان — بهش فکر می‌کنی، بگو'),
+                 (21, 'نتیجه رو بپرس')],
+    'job':      [(0, 'تبریک شغل/موقعیت جدید 💼'), (30, 'بپرس محیط جدید چطوره')],
+    'move':     [(0, 'خسته نباشید بگو 📦'), (7, 'سر بزن — کمکی لازم داره؟')],
+    'other':    [(0, 'پیگیری کن')],
+}
+
+
+class LifeEvent(models.Model):
+    """رویداد مهم زندگی یک شخص — سوگ، جراحی، کنکور، عروسی…"""
+    KIND_CHOICES = [
+        ('mourning', '🖤 سوگ / فوت عزیز'),
+        ('illness',  '🏥 بیماری / جراحی'),
+        ('wedding',  '💍 ازدواج'),
+        ('baby',     '🍼 تولد فرزند'),
+        ('exam',     '📝 امتحان / کنکور'),
+        ('job',      '💼 شغل / موقعیت جدید'),
+        ('move',     '📦 اسباب‌کشی / مهاجرت'),
+        ('other',    '✦ سایر'),
+    ]
+
+    node       = models.ForeignKey(Node, on_delete=models.CASCADE,
+                                    related_name='life_events', verbose_name='شخص')
+    kind       = models.CharField(max_length=15, choices=KIND_CHOICES, verbose_name='نوع')
+    title      = models.CharField(max_length=200, blank=True, default='',
+                                   verbose_name='توضیح کوتاه')
+    date       = models.DateField(verbose_name='تاریخ رویداد')
+    archived   = models.BooleanField(default=False, verbose_name='بایگانی')
+    created_at = models.DateTimeField(auto_now_add=True)
+    owner      = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='life_events', verbose_name='صاحب')
+
+    class Meta:
+        ordering = ['-date']
+        verbose_name = 'رویداد زندگی'
+        verbose_name_plural = 'رویدادهای زندگی'
+
+    def __str__(self):
+        return f"{self.get_kind_display()} — {self.node} ({self.date})"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8g. RelationshipGoal  (V10 — هدف روی رابطه)
+# ─────────────────────────────────────────────────────────────────
+
+class RelationshipGoal(models.Model):
+    """«می‌خوام با X صمیمی‌تر شم» — هدف + سنجش پیشرفت."""
+    STATUS_CHOICES = [
+        ('active',    'در جریان'),
+        ('achieved',  'رسیدم! 🎉'),
+        ('abandoned', 'بی‌خیالش'),
+    ]
+
+    node            = models.ForeignKey(Node, on_delete=models.CASCADE,
+                                         related_name='goals', verbose_name='شخص')
+    text            = models.CharField(max_length=300, verbose_name='هدف')
+    status          = models.CharField(max_length=10, choices=STATUS_CHOICES,
+                                        default='active')
+    baseline_score  = models.IntegerField(null=True, blank=True,
+                                           verbose_name='امتیاز سلامت شروع')
+    created_at      = models.DateTimeField(auto_now_add=True)
+    closed_at       = models.DateTimeField(null=True, blank=True)
+    owner           = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='relationship_goals', verbose_name='صاحب')
+
+    class Meta:
+        ordering = ['status', '-created_at']
+        verbose_name = 'هدف رابطه'
+        verbose_name_plural = 'اهداف رابطه'
+
+    def __str__(self):
+        return f"{self.text[:50]} — {self.node}"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8h. شناخت (V11) — جمع‌بندی کلی اپ از یک شخص یا یک رابطه
+# ─────────────────────────────────────────────────────────────────
+
+class PersonaProfile(models.Model):
+    """هر چیزی که اپ تا حالا از یک شخص فهمیده — جملات کلی، بدون ذکر منبع."""
+    node       = models.OneToOneField(Node, on_delete=models.CASCADE,
+                                       related_name='persona', verbose_name='شخص')
+    summary    = models.TextField(blank=True, default='', verbose_name='جمع‌بندی')
+    statements = models.JSONField(default=list, blank=True,
+                                   verbose_name='جملات شناخت')
+    updated_at = models.DateTimeField(auto_now=True)
+    owner      = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='personas', verbose_name='صاحب')
+
+    class Meta:
+        verbose_name = 'شناخت شخص'
+        verbose_name_plural = 'شناخت اشخاص'
+
+    def __str__(self):
+        return f'شناخت {self.node}'
+
+
+class RelationshipProfile(models.Model):
+    """جمع‌بندی کلی اپ از یک رابطه (یال)."""
+    relationship = models.OneToOneField(Relationship, on_delete=models.CASCADE,
+                                         related_name='profile', verbose_name='رابطه')
+    summary      = models.TextField(blank=True, default='')
+    statements   = models.JSONField(default=list, blank=True)
+    updated_at   = models.DateTimeField(auto_now=True)
+    owner        = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='relationship_profiles', verbose_name='صاحب')
+
+    class Meta:
+        verbose_name = 'شناخت رابطه'
+        verbose_name_plural = 'شناخت روابط'
+
+    def __str__(self):
+        return f'شناخت {self.relationship}'
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8i. SharedItem  (V12 — اشتراک‌گذاری راس/یال/دیتا با فالوئرها)
+# ─────────────────────────────────────────────────────────────────
+
+class SharedItem(models.Model):
+    """رکورد هر چیزی که برای یک فالوئر شیر شده — راس، یال یا اطلاعات."""
+    ITEM_TYPES = [
+        ('node', '👤 راس'),
+        ('edge', '💞 یال'),
+        ('info', '💡 اطلاعات'),
+    ]
+    sender     = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                    related_name='shares_sent')
+    recipient  = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                    related_name='shares_received')
+    item_type  = models.CharField(max_length=8, choices=ITEM_TYPES)
+    title      = models.CharField(max_length=240, blank=True, default='')
+    payload    = models.JSONField(default=dict, blank=True)
+    applied    = models.BooleanField(default=False,
+                                      verbose_name='به گراف گیرنده اضافه شد')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'آیتم اشتراکی'
+        verbose_name_plural = 'آیتم‌های اشتراکی'
+
+    def __str__(self):
+        return f'{self.sender} → {self.recipient}: {self.get_item_type_display()} {self.title}'
 
 
 # ─────────────────────────────────────────────────────────────────

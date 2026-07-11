@@ -41,10 +41,11 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         # owner is set programmatically in the view — never expose it
-        fields = ['title', 'date', 'description', 'participants']
+        fields = ['title', 'date', 'event_time', 'description', 'participants']
         widgets = {
             'title':        forms.TextInput(attrs={'class': 'form-control'}),
             'date':         forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'event_time':   forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
             'description':  forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'participants': forms.SelectMultiple(attrs={'class': 'form-select'}),
         }

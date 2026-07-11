@@ -5,7 +5,42 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
-from .models import JournalEntry, JournalImage
+from .models import ArtisticWork, JournalEntry, JournalImage, ProfileMediaItem
+
+
+def _extract_profile_media_from_journal(entry):
+    import re
+    text = entry.text or ''
+    patterns = [
+        ('book', r'(?:کتاب|رمان)\s+[«"“]?([^»"”\n،,.]{2,80})[»"”]?\s*(?:رو|را)?\s*(?:تموم|تمام|خواندم|خوندم)'),
+        ('movie', r'(?:فیلم)\s+[«"“]?([^»"”\n،,.]{2,80})[»"”]?\s*(?:رو|را)?\s*(?:دیدم|تماشا کردم)'),
+        ('series', r'(?:سریال)\s+[«"“]?([^»"”\n،,.]{2,80})[»"”]?\s*(?:رو|را)?\s*(?:دیدم|تموم|تمام|تماشا کردم)'),
+    ]
+    for kind, pattern in patterns:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            title = match.group(1).strip(' .،:؛"«»')
+            if title:
+                work, _ = ArtisticWork.objects.get_or_create(
+                    kind=kind,
+                    title=title[:240],
+                    defaults={
+                        'analysis': {'summary': 'این اثر از خاطره کاربر کشف شده و برای شناخت شخصیت او استفاده می‌شود.'},
+                    },
+                )
+                ProfileMediaItem.objects.get_or_create(
+                    user=entry.owner,
+                    kind=kind,
+                    title=title[:240],
+                    defaults={
+                        'work': work,
+                        'rating': 0,
+                        'completed_on': entry.entry_date,
+                        'source': 'journal',
+                        'source_journal': entry,
+                        'notes': text[:400],
+                        'analysis': {'signal': 'این اثر از متن خاطره تشخیص داده شده و هنوز امتیاز دستی ندارد.'},
+                    },
+                )
 
 
 @csrf_exempt
@@ -44,6 +79,8 @@ def journal_save_api(request):
     image_ids = body.get('image_ids', [])
     if image_ids:
         JournalImage.objects.filter(id__in=image_ids, entry__isnull=True).update(entry=entry)
+
+    _extract_profile_media_from_journal(entry)
 
     return JsonResponse({'id': entry.id, 'message': 'ذخیره شد'})
 

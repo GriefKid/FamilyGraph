@@ -196,7 +196,14 @@ def login_view(request):
                     request.session.set_expiry(0)   # تا بستن مرورگر
                 # جلوگیری از open redirect — فقط URLهای داخلی مجاز
                 next_url = request.GET.get('next', '/')
-                if not next_url.startswith('/'):
+                if not next_url.startswith('/') or next_url.startswith('//'):
+                    next_url = '/'
+                # BUGFIX: اگه next به مسیری اشاره کنه که وجود نداره (مثلاً
+                # صفحه‌ی نودی که پاک شده)، به جای 404 برو خونه
+                try:
+                    from django.urls import resolve
+                    resolve(next_url.split('?')[0])
+                except Exception:
                     next_url = '/'
                 return redirect(next_url)
 
@@ -371,6 +378,9 @@ def profile_view(request):
     error = None
     saved = False
 
+    if request.method == 'GET':
+        return redirect('profile_edit')
+
     if request.method == 'POST':
         action = request.POST.get('action', 'profile')
 
@@ -439,6 +449,12 @@ def profile_view(request):
                     user.save()
                     login(request, user)
                     saved = True
+
+    if error:
+        messages.error(request, error)
+    elif saved:
+        messages.success(request, 'تغییرات پروفایل ذخیره شد.')
+    return redirect(f'/u/{user.username}/')
 
     all_nodes = Node.objects.filter(owner=user).order_by('username')
     try:

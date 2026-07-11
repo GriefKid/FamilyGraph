@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}درخواست‌ها · FamilyGraph{% endblock %}
+{% block page_title %}📨 درخواست‌ها{% endblock %}
+{% block nav_social %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.rq-wrap{ max-width:680px; margin:0 auto; }
+.rq-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.rq-title{ font-size:14px; font-weight:800; margin-bottom:12px; }
+.rq-row{ display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px dashed var(--border); }
+.rq-row:last-child{ border-bottom:none; }
+.rq-av{ width:44px; height:44px; border-radius:50%; flex-shrink:0; display:flex; align-items:center;
+  justify-content:center; font-size:17px; font-weight:800; color:#fff;
+  background:linear-gradient(135deg,#6366f1,#ec4899); }
+.rq-info{ flex:1; min-width:0; }
+.rq-name{ font-size:13.5px; font-weight:800; }
+.rq-name a{ color:var(--text); text-decoration:none; }
+.rq-type{ font-size:10.5px; padding:1px 9px; border-radius:999px; margin-right:6px; }
+.rq-type.follow{ background:rgba(6,182,212,.12); color:#67e8f9; border:1px solid rgba(6,182,212,.3); }
+.rq-type.connection{ background:rgba(168,85,247,.12); color:#c4b5fd; border:1px solid rgba(168,85,247,.35); }
+.rq-msg{ font-size:11px; color:var(--text-muted); margin-top:2px; }
+.rq-btn{ padding:7px 16px; border-radius:10px; font-size:11.5px; font-weight:800; cursor:pointer;
+  font-family:'Vazirmatn',sans-serif; border:none; transition:.15s; }
+.rq-accept{ background:linear-gradient(135deg,#10b981,#06b6d4); color:#fff; }
+.rq-reject{ background:none; border:1px solid var(--border-strong); color:var(--text-muted); }
+.rq-empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:22px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rq-wrap">
+
+  <div class="rq-card">
+    <div class="rq-title">📥 درخواست‌های رسیده <span class="chip chip-indigo">{{ incoming|length }}</span></div>
+    {% for r in incoming %}
+    <div class="rq-row" id="rq{{ r.id }}">
+      <div class="rq-av">{{ r.sender.username|first|upper }}</div>
+      <div class="rq-info">
+        <div class="rq-name">
+          <a href="/u/{{ r.sender.username }}/">{{ r.sender.get_full_name|default:r.sender.username }}</a>
+          <span class="rq-type {{ r.request_type }}">{% if r.request_type == 'follow' %}👁 فالو{% else %}🔗 کانکشن{% endif %}</span>
+        </div>
+        <div class="rq-msg">@{{ r.sender.username }}{% if r.message %} · {{ r.message }}{% endif %} · {{ r.created_at|date:"Y/m/d" }}</div>
+      </div>
+      <button class="rq-btn rq-accept" onclick="rqRespond(this, {{ r.id }}, 'accept')">✓ قبول</button>
+      <button class="rq-btn rq-reject" onclick="rqRespond(this, {{ r.id }}, 'reject')">رد</button>
+    </div>
+    {% empty %}
+    <div class="rq-empty">📭 درخواست جدیدی نداری</div>
+    {% endfor %}
+  </div>
+
+  <div class="rq-card">
+    <div class="rq-title">📤 درخواست‌های فرستاده <span class="chip chip-gray">{{ outgoing|length }}</span></div>
+    {% for r in outgoing %}
+    <div class="rq-row">
+      <div class="rq-av" style="background:linear-gradient(135deg,#64748b,#334155);">{{ r.receiver.username|first|upper }}</div>
+      <div class="rq-info">
+        <div class="rq-name">
+          <a href="/u/{{ r.receiver.username }}/">{{ r.receiver.get_full_name|default:r.receiver.username }}</a>
+          <span class="rq-type {{ r.request_type }}">{% if r.request_type == 'follow' %}👁 فالو{% else %}🔗 کانکشن{% endif %}</span>
+        </div>
+        <div class="rq-msg">⏳ در انتظار تایید · {{ r.created_at|date:"Y/m/d" }}</div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="rq-empty">درخواست در انتظاری نداری</div>
+    {% endfor %}
+  </div>
+
+  <div style="display:flex;gap:10px;justify-content:center;">
+    <a href="/social/" class="btn btn-ghost btn-sm">← هاب اجتماعی</a>
+    <a href="/social/discover/" class="btn btn-primary btn-sm">🔭 کشف آدم‌ها</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function rqRespond(btn, id, action){
+  btn.disabled = true;
+  try{
+    const r = await fetch(`/api/social/request/respond/${id}/`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({action: action})
+    });
+    const d = await r.json();
+    if(d.ok){
+      const row = document.getElementById('rq'+id);
+      row.style.opacity = '0'; row.style.transition = 'opacity .4s';
+      setTimeout(() => row.remove(), 420);
+    } else { btn.disabled = false; alert(d.error || 'خطا'); }
+  }catch(e){ btn.disabled = false; alert('خطا در ارتباط'); }
+}
+</script>
+{% endblock %}

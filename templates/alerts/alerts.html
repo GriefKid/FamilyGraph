@@ -112,10 +112,86 @@
   color:var(--text-muted); cursor:pointer; font-family:'Vazirmatn',sans-serif;
 }
 .alert-card.removing{ opacity:0; transform:translateX(20px); transition:all .3s ease; }
+
+/* ── Daily Card ───── */
+.daily-card{
+  background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.08));
+  border:1px solid var(--primary-border);border-radius:16px;padding:18px 22px;
+  margin-bottom:28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.daily-date{ font-size:22px;font-weight:800;color:var(--primary-light); }
+.daily-meta{ font-size:12px;color:var(--text-muted);margin-top:2px; }
+.daily-hol{ font-size:11px;font-weight:700;padding:3px 10px;border-radius:10px;background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.25);margin-right:8px; }
+.daily-tips-wrap{ flex:1; min-width:260px; }
+.daily-tips-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 16px;border-radius:8px;
+  background:rgba(99,102,241,.14);border:1px solid var(--primary-border);
+  color:var(--primary-light);font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .2s;font-family:'Vazirmatn',sans-serif;
+}
+.daily-tips-btn:hover{background:rgba(99,102,241,.24);}
+#daily-tips-result{margin-top:14px;font-size:13px;line-height:1.7;color:var(--text-soft);}
+.tip-item{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-soft);}
+.tip-item:last-child{border-bottom:none;}
+.tip-body{flex:1;}
+.tip-title{font-weight:600;margin-bottom:2px;}
+.tip-why{font-size:11px;color:var(--text-muted);}
 </style>
 {% endblock %}
 
 {% block content %}
+
+{# ── Daily Context Card ── #}
+<div class="daily-card">
+  <div>
+    <div class="daily-date">{{ day_name }}</div>
+    <div class="daily-meta">{{ jalali_full }} | {{ season }}
+      {% if is_holiday and holiday_name %}<span class="daily-hol">🎉 {{ holiday_name }}</span>{% endif %}
+    </div>
+    {% if upcoming_holidays %}
+    <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
+      تعطیلات پیش رو:
+      {% for h in upcoming_holidays %}
+        <span style="margin-left:8px;">{{ h.jalali }} — {{ h.holiday }}</span>{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  <div class="daily-tips-wrap">
+    <button class="daily-tips-btn" onclick="loadDailyTips(this)">✦ نکات روزانه AI</button>
+    <div id="daily-tips-result"></div>
+  </div>
+</div>
+
+{# ── V4: نوار خلاصه — یه نگاه، کل وضعیت ── #}
+{% if health_counts.green or health_counts.yellow or health_counts.red or open_followups_count or today_events_count %}
+<style>
+.pulse-strip{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:24px; }
+.pulse-chip{ display:flex; align-items:center; gap:7px; padding:8px 14px; border-radius:12px;
+  background:var(--card); border:1px solid var(--border-soft); font-size:12.5px; font-weight:600; }
+.pulse-num{ font-size:16px; font-weight:800; }
+.pulse-chip a{ color:inherit; text-decoration:none; display:flex; align-items:center; gap:7px; }
+</style>
+<div class="pulse-strip">
+  {% if health_counts.green %}
+  <div class="pulse-chip">🟢 <span class="pulse-num" style="color:#34d399">{{ health_counts.green }}</span> رابطه سالم</div>
+  {% endif %}
+  {% if health_counts.yellow %}
+  <div class="pulse-chip">🟡 <span class="pulse-num" style="color:#fbbf24">{{ health_counts.yellow }}</span> نیاز به توجه</div>
+  {% endif %}
+  {% if health_counts.red %}
+  <div class="pulse-chip">🔴 <span class="pulse-num" style="color:#f87171">{{ health_counts.red }}</span> سرد شده</div>
+  {% endif %}
+  {% if open_followups_count %}
+  <div class="pulse-chip">📌 <span class="pulse-num" style="color:#a5b4fc">{{ open_followups_count }}</span> موضوع باز</div>
+  {% endif %}
+  {% if today_events_count %}
+  <div class="pulse-chip">📅 <span class="pulse-num" style="color:#a5b4fc">{{ today_events_count }}</span> رویداد امروز</div>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if not alerts %}
   <div class="empty-state">
     <div class="big-emoji">🎉</div>
@@ -290,6 +366,40 @@ async function _postAction(card, action, outcome){
 function _removeCard(card){
   card.classList.add('removing');
   setTimeout(()=> card.remove(), 320);
+}
+
+// ── Daily Tips ───────────────────────────────────────────────────────────
+let _dailyLoaded = false;
+async function loadDailyTips(btn){
+  const res = document.getElementById('daily-tips-result');
+  if(_dailyLoaded){ res.style.display = res.style.display==='none'?'block':'none'; return; }
+  btn.textContent = '⏳ در حال بارگذاری...';
+  btn.style.opacity = '.7';
+  try{
+    const r = await fetch('/api/daily/tips/', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const d = await r.json();
+    if(d.ok && d.result){
+      const t = d.result;
+      let html = '';
+      if(t.day_message) html += `<div style="font-size:12px;color:var(--text-soft);margin-bottom:10px;font-style:italic;">💬 ${t.day_message}</div>`;
+      html += (t.tips||[]).map(tip=>`
+        <div class="tip-item">
+          <span style="font-size:18px;line-height:1">${tip.emoji||'✦'}</span>
+          <div class="tip-body">
+            <div class="tip-title">${tip.tip||''}</div>
+            <div class="tip-why">${tip.why||''}</div>
+          </div>
+        </div>`).join('');
+      res.innerHTML = html;
+    } else {
+      res.innerHTML = `<div style="color:#f87171;font-size:12px">${d.error||'خطا'}</div>`;
+    }
+    _dailyLoaded = true;
+  } catch(e){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">خطا در ارتباط با سرور</div>';
+  }
+  btn.textContent = '✦ نکات روزانه AI';
+  btn.style.opacity = '1';
 }
 </script>
 {% endblock %}

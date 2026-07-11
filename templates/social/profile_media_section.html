@@ -1,0 +1,16 @@
+<div class="panel wide">
+  <h3>{{ title }}</h3>
+  <div class="media-row">
+    {% for item in items %}
+    <div class="media">
+      <div class="media-title">{% if item.work %}{{ item.work.title }}{% else %}{{ item.title }}{% endif %}</div>
+      <div class="media-meta">{% if item.work %}{{ item.work.creator }}{% else %}{{ item.creator }}{% endif %}{% if item.completed_on %} · {{ item.completed_on }}{% endif %}</div>
+      <div class="score">{{ item.rating|floatformat:1 }}/5</div>
+      <div class="signal">{{ item.analysis.signal|default:"این اثر برای شناخت سلیقه و شخصیت فرد ثبت شده است." }}</div>
+      {% if item.work.analysis.summary %}<div class="signal">{{ item.work.analysis.summary }}</div>{% endif %}
+    </div>
+    {% empty %}
+    <div class="empty">{{ empty }}</div>
+    {% endfor %}
+  </div>
+</div>

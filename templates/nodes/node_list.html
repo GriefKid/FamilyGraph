@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}افراد — FamilyGraph{% endblock %}
-{% block page_title %}◉ افراد{% endblock %}
+{% block page_title %}👥 افراد{% endblock %}
 {% block nav_nodes %}active{% endblock %}
 {% block topbar_actions %}<a href="{% url 'node_create' %}" class="btn btn-primary btn-sm">＋ افزودن شخص</a>{% endblock %}
 
@@ -323,7 +323,7 @@
 
 <div class="stats-strip" style="margin-bottom:24px;">
   <div class="stat-pill">
-    <div class="stat-pill-num">{{ page_obj.paginator.count|default:nodes|length }}</div>
+    <div class="stat-pill-num">{% if page_obj %}{{ page_obj.paginator.count }}{% else %}{{ nodes|length }}{% endif %}</div>
     <span>نفر در شبکه</span>
   </div>
 </div>

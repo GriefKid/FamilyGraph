@@ -10,6 +10,36 @@
 {% block extra_css %}
 <style>
 /* ────────────────────────────────────────────────
+   V5: توضیح نظریه‌ها → فقط با هاور/کلیک روی ⓘ
+   (فضای صفحه رو نمی‌گیرن)
+   ──────────────────────────────────────────────── */
+.metric-card .info-note{ display:none; }
+.theory-info-btn{
+  margin-right:auto; flex-shrink:0;
+  width:24px; height:24px; border-radius:50%;
+  border:1px solid rgba(99,102,241,.4);
+  background:rgba(99,102,241,.1); color:#a5b4fc;
+  font-size:13px; line-height:1; cursor:help;
+  display:flex; align-items:center; justify-content:center;
+  transition:.18s; font-family:'Vazirmatn',sans-serif;
+}
+.theory-info-btn:hover{
+  background:rgba(99,102,241,.3); transform:scale(1.15);
+  box-shadow:0 0 12px rgba(99,102,241,.4); color:#fff;
+}
+.theory-tip-pop{
+  display:none; position:fixed; z-index:9999;
+  background:rgba(10,10,26,.97); backdrop-filter:blur(18px);
+  border:1px solid rgba(99,102,241,.45); border-radius:14px;
+  padding:14px 16px; font-size:12.5px; line-height:1.9;
+  color:#d4d4ea; box-shadow:0 12px 40px rgba(0,0,0,.55);
+  animation:tipIn .16s ease;
+}
+.light .theory-tip-pop{ background:rgba(255,255,255,.98); color:#3a3a5c; }
+@keyframes tipIn{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+.theory-tip-pop .tt-sep{ border:none; border-top:1px dashed rgba(99,102,241,.3); margin:9px 0; }
+
+/* ────────────────────────────────────────────────
    PSYCHOLOGY PAGE — DESIGN TOKENS & LAYOUT
    ──────────────────────────────────────────────── */
 .psych-section-title {
@@ -816,6 +846,284 @@
   </div>
   <div id="aiContent"></div>
 </div>
+<!-- ════════════════════════════════════════════════════════════
+     امتیاز سلامت شبکه — NETWORK HEALTH SCORE (FamilyGraph)
+     ════════════════════════════════════════════════════════════ -->
+<div class="psych-section-title">امتیاز سلامت شبکه</div>
+<div class="full-card" style="border-color:{{ health_color }}33">
+  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:18px;">
+    <div style="text-align:center;">
+      <div style="font-size:56px;font-weight:800;color:{{ health_color }};line-height:1">{{ health_score }}</div>
+      <div style="font-size:12px;font-weight:700;color:{{ health_color }}">{{ health_label }}</div>
+      <div style="font-size:10px;color:var(--text-muted)">از ۱۰۰</div>
+    </div>
+    <div style="flex:1;min-width:200px;">
+      {% for comp_name, comp_val in health_components.items %}
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+          <span style="font-size:11px;color:var(--text-soft)">{{ comp_name }}</span>
+          <span style="font-size:11px;font-weight:700;color:var(--text)">{{ comp_val }}%</span>
+        </div>
+        <div style="height:4px;background:var(--border);border-radius:2px;">
+          <div style="height:4px;width:{{ comp_val }}%;background:{{ health_color }};border-radius:2px;transition:width .5s;"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="info-note" style="border-color:{{ health_color }}55">
+    💡 این امتیاز ترکیبی از ۶ بُعد مستقل است: تنوع رابطه، سرمایه پل‌سازی، روابط صمیمی، تعادل پیوند، نرخ فعالیت، و تاب‌آوری شبکه.
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     بخش‌های روانشناسی جدید
+     ════════════════════════════════════════════════════════════ -->
+<div class="psych-section-title">روانشناسی پیشرفته شبکه</div>
+<div class="psych-grid">
+
+  <!-- ریسک تنهایی — Cacioppo & Patrick, 2008 -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🫂</span>
+      <div>
+        <div class="metric-name">ریسک تنهایی اجتماعی</div>
+        <div class="metric-theory">Social Isolation Theory — Cacioppo & Patrick (2008)</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:16px 0;">
+      <div style="font-size:42px;font-weight:800;color:{{ loneliness_color }}">{{ loneliness_risk }}</div>
+      <div style="font-size:12px;font-weight:700;color:{{ loneliness_color }}">{{ loneliness_label }}</div>
+      <div style="height:6px;background:var(--border);border-radius:3px;margin-top:10px;">
+        <div style="height:6px;width:{{ loneliness_risk }}%;background:{{ loneliness_color }};border-radius:3px;"></div>
+      </div>
+    </div>
+    {% if loneliness_factors %}
+    <ul style="font-size:11px;color:var(--text-muted);margin:8px 0;padding-right:16px;">
+      {% for f in loneliness_factors %}<li style="margin-bottom:3px;">{{ f }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <div class="info-note">📚 کاچیوپو و پاتریک: تنهایی اجتماعی یک عامل ریسک برای سلامت جسمی و ذهنی معادل کشیدن ۱۵ سیگار در روز است. شبکه‌ای با حداقل ۲ رابطه صمیمی و ۵ رابطه نزدیک محافظت‌کننده است.</div>
+  </div>
+
+  <!-- تنوع شانون — Shannon Diversity -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🎨</span>
+      <div>
+        <div class="metric-name">شاخص تنوع شبکه</div>
+        <div class="metric-theory">Shannon Entropy H (1948) — Burt Network Diversity (1992)</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0;">
+      <div style="text-align:center;">
+        <div style="font-size:32px;font-weight:800;color:{{ diversity_color }}">{{ diversity_normalized }}%</div>
+        <div style="font-size:10px;color:var(--text-muted)">تنوع نوع رابطه</div>
+        <div style="font-size:11px;font-weight:700;color:{{ diversity_color }}">{{ diversity_label }}</div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:32px;font-weight:800;color:var(--primary-light)">{{ career_diversity_norm }}%</div>
+        <div style="font-size:10px;color:var(--text-muted)">تنوع حرفه‌ای</div>
+        <div style="font-size:11px;color:var(--text-muted)">Shannon H شغلی</div>
+      </div>
+    </div>
+    <div class="info-note">📚 شانون: H=0 یعنی همه روابط یک نوع‌اند. H=1 یعنی حداکثر تنوع. بورت ثابت کرد شبکه‌های متنوع‌تر، اطلاعات و فرصت‌های بیشتری در اختیار صاحبشان می‌گذارند.</div>
+  </div>
+
+  <!-- نظریه تعادل هایدر -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">⚖️</span>
+      <div>
+        <div class="metric-name">تعادل ساختاری شبکه</div>
+        <div class="metric-theory">Heider Balance Theory (1946) — Transitivity</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:14px 0;">
+      <div style="font-size:38px;font-weight:800;color:var(--primary-light)">{{ transitivity_pct }}%</div>
+      <div style="font-size:11px;color:var(--text-muted)">انتقال‌پذیری (Transitivity)</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-soft);margin-top:4px;">{{ balance_label }}</div>
+    </div>
+    <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px;">مثلث‌های بسته: <b style="color:var(--text)">{{ n_triangles }}</b></div>
+    {% if balance_note %}
+    <div class="info-note">{{ balance_note }}</div>
+    {% endif %}
+    <div class="info-note" style="margin-top:6px">📚 هایدر: «دوست دوست من، دوست من است» — وقتی A-B-C یک مثلث کامل می‌سازند، شبکه متعادل و پایدار است. نظریه‌ای که پایه Facebook Friend Suggestions است.</div>
+  </div>
+
+  <!-- ریسک سرایت احساسی -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🌊</span>
+      <div>
+        <div class="metric-name">ریسک سرایت احساسی</div>
+        <div class="metric-theory">Emotional Contagion — Hatfield et al. (1993)</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:16px 0;">
+      <div style="font-size:42px;font-weight:800;color:{{ contagion_color }}">{{ contagion_risk_pct }}%</div>
+      <div style="font-size:12px;font-weight:700;color:{{ contagion_color }}">{{ contagion_label }}</div>
+      <div style="height:6px;background:var(--border);border-radius:3px;margin-top:10px;">
+        <div style="height:6px;width:{{ contagion_risk_pct }}%;background:{{ contagion_color }};border-radius:3px;"></div>
+      </div>
+    </div>
+    <div class="info-note">📚 هاتفیلد: احساسات مثل ویروس از طریق روابط نزدیک منتقل می‌شوند. اگه چند نفر از دوستان صمیمی‌ات اخیراً حال بدی داشتن، احتمال تأثیرپذیری‌ات بالاست. این خودآگاهی یعنی می‌تونی مراقب باشی.</div>
+  </div>
+
+</div><!-- .psych-grid -->
+
+<!-- ════════ جامعه‌شناسی پیشرفته ════════ -->
+<div class="psych-section-title">جامعه‌شناسی پیشرفته شبکه</div>
+<div class="psych-grid">
+
+  <!-- حمایت اجتماعی Cobb -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🛡️</span>
+      <div>
+        <div class="metric-name">نقشه حمایت اجتماعی</div>
+        <div class="metric-theory">Social Support Typology — Cobb (1976)</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;">
+      <div style="padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:10px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:#f87171">{{ support_emotional }}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">حمایت عاطفی</div>
+        <div style="font-size:9px;color:#f87171">خانواده + دوست صمیمی</div>
+      </div>
+      <div style="padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:#fbbf24">{{ support_instrumental }}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">حمایت ابزاری</div>
+        <div style="font-size:9px;color:#fbbf24">همکار + مشاور شغلی</div>
+      </div>
+      <div style="padding:10px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:10px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:#a5b4fc">{{ support_informational }}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">حمایت اطلاعاتی</div>
+        <div style="font-size:9px;color:#a5b4fc">تنوع دانش</div>
+      </div>
+      <div style="padding:10px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:10px;text-align:center;">
+        <div style="font-size:24px;font-weight:800;color:#34d399">{{ support_appraisal }}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">حمایت ارزیابانه</div>
+        <div style="font-size:9px;color:#34d399">بازخورد و راهنمایی</div>
+      </div>
+    </div>
+    {% if support_notes %}
+    <ul style="font-size:11px;color:var(--text-soft);padding-right:16px;margin:8px 0 0;">
+      {% for sn in support_notes %}<li style="margin-bottom:3px;">{{ sn }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <div class="info-note" style="margin-top:8px">📚 کاب (۱۹۷۶): هر ۴ نوع حمایت برای بهزیستی لازم است. نبود هر کدام = آسیب‌پذیری در یک بُعد خاص.</div>
+  </div>
+
+  <!-- Embeddedness Granovetter -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🔗</span>
+      <div>
+        <div class="metric-name">تعبیه‌شدگی روابط</div>
+        <div class="metric-theory">Embeddedness — Granovetter (1985)</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:14px 0;">
+      <div style="font-size:38px;font-weight:800;color:var(--primary-light)">{{ avg_embeddedness }}</div>
+      <div style="font-size:11px;color:var(--text-muted)">میانگین دوستان مشترک</div>
+    </div>
+    {% if embeddedness_list %}
+    <div style="font-size:11px;margin-top:8px;">
+      {% for e in embeddedness_list %}
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border-soft);">
+        <span style="flex:1;color:var(--text-soft)">{{ e.name }}</span>
+        <span style="font-size:10px;color:var(--text-muted)">{{ e.mutual }} مشترک</span>
+        <span style="font-size:10px;padding:2px 6px;background:rgba(99,102,241,.1);border-radius:6px;color:var(--primary-light)">str:{{ e.strength }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="info-note" style="margin-top:8px">📚 گرانووتر: هر چه رابطه‌ای دوستان مشترک بیشتری داشته باشد، «تعبیه» عمیق‌تری در بافت اجتماعی دارد — اعتماد بالاتر، نظارت اجتماعی بیشتر.</div>
+  </div>
+
+  <!-- Core-Periphery -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">🎯</span>
+      <div>
+        <div class="metric-name">ساختار هسته-حاشیه</div>
+        <div class="metric-theory">Core-Periphery — Borgatti & Everett (2000)</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;margin:14px 0;align-items:center;">
+      <div style="text-align:center;">
+        <div style="font-size:32px;font-weight:800;color:#f59e0b">{{ core_pct }}%</div>
+        <div style="font-size:10px;color:var(--text-muted)">هسته (Core)</div>
+        <div style="font-size:10px;color:#fbbf24">{{ core_nodes|length }} نفر</div>
+      </div>
+      <div style="flex:1;font-size:11px;">
+        {% for c in core_nodes|slice:":5" %}
+        <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border-soft);">
+          <span style="color:var(--text-soft)">{{ c.name }}</span>
+          <span style="color:var(--text-muted)">{{ c.degree }} یال</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);">حاشیه (Periphery): <b style="color:var(--text)">{{ periphery_count }}</b> نفر</div>
+    <div class="info-note" style="margin-top:8px">📚 بورگاتی و اورت: هسته شبکه کنترل‌کننده جریان منابع، اطلاعات و نفوذ است. نسبت سالم core/periphery بسته به هدف شبکه متفاوت است.</div>
+  </div>
+
+  <!-- توزیع قدرت رابطه -->
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">📊</span>
+      <div>
+        <div class="metric-name">توزیع قدرت روابط</div>
+        <div class="metric-theory">Relationship Intensity Distribution</div>
+      </div>
+    </div>
+    <div style="margin:14px 0;">
+      {% for lvl, cnt in str_dist.items %}
+      {% if cnt > 0 %}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="font-size:11px;color:var(--text-muted);width:60px;flex-shrink:0;">
+          {% if lvl == 1 %}ضعیف (۱){% elif lvl == 2 %}کم (۲){% elif lvl == 3 %}متوسط (۳){% elif lvl == 4 %}قوی (۴){% else %}صمیمی (۵){% endif %}
+        </span>
+        <div style="flex:1;height:14px;background:var(--border);border-radius:7px;overflow:hidden;">
+          <div style="height:14px;width:{% widthratio cnt n_edges 100 %}%;background:{% if lvl == 5 %}#6366f1{% elif lvl == 4 %}#10b981{% elif lvl == 3 %}#06b6d4{% elif lvl == 2 %}#f59e0b{% else %}#6b7280{% endif %};border-radius:7px;"></div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:var(--text);width:28px;text-align:left;">{{ cnt }}</span>
+      </div>
+      {% endif %}
+      {% endfor %}
+      <div style="margin-top:10px;font-size:11px;color:var(--text-muted)">میانگین قدرت: <b style="color:var(--text)">{{ avg_strength }}/۵</b></div>
+    </div>
+    <div class="info-note">📚 شبکه سالم: ترکیبی از روابط صمیمی (۴-۵) برای حمایت عاطفی + روابط ضعیف (۱-۲) برای دسترسی به اطلاعات جدید (Granovetter 1973).</div>
+  </div>
+
+</div><!-- .psych-grid -->
+
+<!-- ════════ V5: نظریه‌های رفتاری — از داده‌های تعامل تو ════════ -->
+{% if extra_theories %}
+<div class="psych-section-title">نظریه‌های رفتاری — از تعامل‌های واقعی تو</div>
+<div class="psych-grid">
+  {% for t in extra_theories %}
+  <div class="metric-card">
+    <div class="metric-head">
+      <span class="metric-icon">{{ t.icon }}</span>
+      <div>
+        <div class="metric-name">{{ t.name }}</div>
+        <div class="metric-theory">{{ t.theory }}</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:14px 0;">
+      <div style="font-size:17px;font-weight:800;color:{{ t.value_color }};line-height:1.7;">{{ t.value }}</div>
+      <div style="font-size:10.5px;color:var(--text-muted);margin-top:3px;">{{ t.label }}</div>
+    </div>
+    <div style="font-size:11.5px;color:var(--text-soft);">{{ t.note }}</div>
+    <div class="info-note">📚 {{ t.tip }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div style="height:32px"></div>
 
 {% endif %}
@@ -823,6 +1131,53 @@
 
 {% block extra_js %}
 <script>
+// ═══ V5: توضیح نظریه‌ها با هاور/کلیک روی ⓘ ═══
+(function(){
+  const pop = document.createElement('div');
+  pop.className = 'theory-tip-pop';
+  document.body.appendChild(pop);
+  let hideT = null;
+
+  function showFor(btn, html){
+    clearTimeout(hideT);
+    pop.innerHTML = html;
+    pop.style.display = 'block';
+    const w = Math.min(380, window.innerWidth - 24);
+    pop.style.width = w + 'px';
+    const r = btn.getBoundingClientRect();
+    pop.style.left = Math.min(window.innerWidth - w - 12, Math.max(12, r.left - w/2)) + 'px';
+    pop.style.top  = (r.bottom + 8) + 'px';
+    requestAnimationFrame(() => {
+      const ph = pop.offsetHeight;
+      if(r.bottom + 8 + ph > window.innerHeight - 10)
+        pop.style.top = Math.max(10, r.top - ph - 8) + 'px';
+    });
+  }
+  const hide = () => { hideT = setTimeout(() => pop.style.display = 'none', 200); };
+
+  document.querySelectorAll('.metric-card').forEach(card => {
+    const notes = card.querySelectorAll('.info-note');
+    if(!notes.length) return;
+    const html = Array.from(notes).map(n => n.innerHTML).join('<hr class="tt-sep">');
+    const head = card.querySelector('.metric-head') || card;
+    const btn = document.createElement('button');
+    btn.className = 'theory-info-btn';
+    btn.type = 'button';
+    btn.textContent = 'ⓘ';
+    btn.setAttribute('aria-label', 'توضیح نظریه');
+    btn.addEventListener('mouseenter', () => showFor(btn, html));
+    btn.addEventListener('mouseleave', hide);
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      pop.style.display === 'block' ? (pop.style.display = 'none') : showFor(btn, html);
+    });
+    head.appendChild(btn);
+  });
+  pop.addEventListener('mouseenter', () => clearTimeout(hideT));
+  pop.addEventListener('mouseleave', () => pop.style.display = 'none');
+  document.addEventListener('click', () => pop.style.display = 'none');
+})();
+
 // Mood cloud
 (function(){
   const moods = {{ recent_moods_json|safe }};

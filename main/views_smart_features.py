@@ -105,7 +105,8 @@ def _compute_alerts(user=None):
     for delta in range(1, 8):
         d = today + timedelta(days=delta)
         for node in Node.objects.filter(birth_day__month=d.month, birth_day__day=d.day, **user_filter):
-            age = today.year - node.birth_day.year
+            # BUGFIX: سن باید نسبت به سالِ روز تولد حساب بشه (مرز سال نو)
+            age = d.year - node.birth_day.year
             # اگه روز تولد با تعطیل رسمی ایرانی مصادف بود، اشاره کن
             hol_flag, hol_nm = is_holiday(d)
             hol_note = f' (مصادف با {hol_nm})' if hol_flag and hol_nm != 'جمعه' else (
@@ -122,22 +123,79 @@ def _compute_alerts(user=None):
                 'days_until': delta,
             })
 
-    # ── 3. Upcoming events (next 7 days) ───────────────────────
-    for ev in Event.objects.filter(date__gte=today, date__lte=today + timedelta(days=7), **user_filter).prefetch_related('participants'):
+    # ── 3. Upcoming events — reminders at 7d / 1d / today + post-event ──────
+    from django.db import ProgrammingError as _PErr
+    try:
+        _upcoming_evs = list(Event.objects.filter(
+            date__gte=today, date__lte=today + timedelta(days=7), **user_filter
+        ).prefetch_related('participants'))
+        _post_evs = list(Event.objects.filter(
+            date__gte=today - timedelta(days=3),
+            date__lt=today,
+            post_event_prompted=False,
+            **user_filter
+        ).prefetch_related('participants')[:3])
+    except _PErr:
+        # migration هنوز نخورده — فقط ستون‌های قدیمی، order_by صریح تا Meta.ordering override بشه
+        _upcoming_evs = list(Event.objects.filter(
+            date__gte=today, date__lte=today + timedelta(days=7), **user_filter
+        ).only('id','title','date','description','owner_id')
+         .order_by('date')   # override Meta.ordering که event_time داره
+         .prefetch_related('participants'))
+        _safe = {'event_time': None, 'reminder_sent_7d': False, 'reminder_sent_1d': False,
+                 'reminder_sent_3h': False, 'post_event_prompted': False}
+        for _ev in _upcoming_evs:
+            _ev.__dict__.update(_safe)
+        _post_evs = []
+
+    # رویدادهای آینده (۷ روز آینده)
+    for ev in _upcoming_evs:
         days = (ev.date - today).days
         parts = [p.display_name() for p in ev.participants.all()[:4]]
         ev_hol, ev_hol_name = is_holiday(ev.date)
         hol_note = f' — {ev_hol_name}' if ev_hol and ev_hol_name != 'جمعه' else ''
+        ev_time = getattr(ev, 'event_time', None)
+        time_note = f' ساعت {ev_time.strftime("%H:%M")}' if ev_time else ''
+
+        if days == 0:
+            pri = 'high'; title = f'📅 {ev.title} — امروز!{time_note}'
+        elif days == 1:
+            pri = 'high'; title = f'📅 {ev.title} — فردا!{time_note}'
+        elif days <= 7:
+            pri = 'medium'; title = f'📅 {ev.title} — {days} روز دیگر{time_note}'
+        else:
+            pri = 'low'; title = f'📅 {ev.title} — {days} روز دیگر{time_note}'
+
         alerts.append({
             'id': f'event_{ev.id}',
             'type': 'event',
-            'priority': 'high' if days == 0 else 'medium',
+            'priority': pri,
             'event_id': ev.id,
             'node_id': None,
             'node_name': None,
-            'title': f'📅 {ev.title}' + (' — امروز!' if days == 0 else f' — {days} روز دیگر'),
-            'body': f'{jalali_str(ev.date)}{hol_note}' + (f' | {ev.description}' if ev.description else '') + (f' | شرکت‌کنندگان: {", ".join(parts)}' if parts else ''),
+            'title': title,
+            'body': f'{jalali_str(ev.date)}{hol_note}{time_note}'
+                    + (f' | {ev.description}' if ev.description else '')
+                    + (f' | شرکت‌کنندگان: {", ".join(parts)}' if parts else ''),
             'days_until': days,
+            'event_time': str(ev_time) if ev_time else None,
+        })
+
+    # رویدادهای گذشته ۳ روز — prompt «چطور بود؟»
+    for ev in _post_evs:
+        parts = [p.display_name() for p in ev.participants.all()[:4]]
+        alerts.append({
+            'id': f'post_event_{ev.id}',
+            'type': 'post_event',
+            'priority': 'medium',
+            'event_id': ev.id,
+            'node_id': None,
+            'node_name': None,
+            'title': f'📝 {ev.title} — چطور بود؟',
+            'body': f'رویداد «{ev.title}» ({jalali_str(ev.date)}) تموم شد — یادداشت کوتاهی بنویس تا خاطراتت ثبت بشه.'
+                    + (f' | شرکت‌کنندگان: {", ".join(parts)}' if parts else ''),
+            'days_until': None,
+            'journal_prefill': ev.title,
         })
 
     # ── 4. Mood-based alerts from recent journal (7 days) ──────
@@ -251,6 +309,234 @@ def _compute_alerts(user=None):
     except Exception:
         pass
 
+    # ── 7. Relationship cooling (V4 — بر اساس موتور سلامت رابطه) ──────────
+    # دقیق‌تر از dormant/decay چون از تعامل‌های ثبت‌شده + رویدادها + ژورنال
+    # با هم استفاده می‌کنه و «انتظار تماس» هر نفر رو جدا حساب می‌کنه.
+    try:
+        from .health import compute_health
+        if user and user.is_authenticated:
+            hmap = compute_health(user)
+            week_bucket = today.isocalendar()[1]   # id هفتگی — بعد از dismiss، هفته بعد برمی‌گرده
+            cooling = [h for h in hmap.values()
+                       if h['status'] in ('yellow', 'red') and h['days_since'] is not None]
+            cooling.sort(key=lambda h: h['score'] or 0)
+            tier_names = {'inner': 'حلقه نزدیک', 'close': 'نزدیک', 'friend': 'دوست',
+                          'acquaintance': 'آشنا'}
+            for h in cooling[:6]:
+                tier_note = f" ({tier_names[h['closeness']]})" if h.get('closeness') in tier_names else ''
+                alerts.append({
+                    'id':       f"cooling_{h['node_id']}_w{week_bucket}",
+                    'type':     'cooling',
+                    'priority': 'high' if h['status'] == 'red' else 'medium',
+                    'node_id':   h['node_id'],
+                    'node_name': h['name'],
+                    'title': (f"🔴 رابطه با {h['name']} سرد شده" if h['status'] == 'red'
+                              else f"🟡 {h['name']} منتظر یه خبره"),
+                    'body': (f"{h['days_since']} روزه تعاملی با {h['name']} ثبت نشده — "
+                             f"انتظار{tier_note}: هر {h['expected']} روز. "
+                             f"یه تماس کوتاه هم کافیه."),
+                    'days_until': None,
+                    'health_score': h['score'],
+                })
+    except Exception:
+        pass
+
+    # ── 8. FollowUps due (V4 — موضوعات باز سررسید‌دار) ─────────────────────
+    try:
+        from .models import FollowUp
+        fu_qs = FollowUp.objects.filter(
+            done=False, due_date__isnull=False,
+            due_date__lte=today + timedelta(days=2), **user_filter,
+        ).select_related('node')[:10]
+        for fu in fu_qs:
+            dleft = (fu.due_date - today).days
+            nm = fu.node.display_name()
+            if dleft < 0:
+                pri   = 'high'
+                title = f'⏰ {-dleft} روز از سررسیدش گذشته: {fu.text[:50]}'
+            elif dleft == 0:
+                pri   = 'high'
+                title = f'⏰ امروز سررسیدشه: {fu.text[:50]}'
+            else:
+                pri   = 'medium'
+                title = f'📌 {dleft} روز تا سررسید: {fu.text[:50]}'
+            alerts.append({
+                'id':        f'followup_{fu.id}_{fu.due_date}',
+                'type':      'followup',
+                'priority':  pri,
+                'node_id':   fu.node_id,
+                'node_name': nm,
+                'title':     title,
+                'body':      f'موضوع باز با {nm}: «{fu.text}» — سررسید: {jalali_str(fu.due_date)}. '
+                             f'«انجام دادم» بزنی خودش تیک می‌خوره.',
+                'days_until': max(dleft, 0),
+            })
+    except Exception:
+        pass
+
+    # ── 9. یادآوری چک-این (V5 — اگه امروز هیچی ثبت نشده) ──────────────────
+    try:
+        if user and user.is_authenticated:
+            has_today = JournalEntry.objects.filter(
+                entry_date=today, **user_filter).exists() or JournalEntry.objects.filter(
+                created_at__date=today, **user_filter).exists()
+            if not has_today:
+                alerts.append({
+                    'id':       f'checkin_{today}',
+                    'type':     'checkin',
+                    'priority': 'low',
+                    'node_id':  None,
+                    'node_name': None,
+                    'title':    '⚡ چک-این امروز یادت نره',
+                    'body':     'حوصله‌ی ژورنال نوشتن نداری؟ چک-این ۳۰ ثانیه‌ست: /checkin/ '
+                                '— فقط بگو با کیا در تماس بودی و حالت چطوره.',
+                    'days_until': None,
+                })
+    except Exception:
+        pass
+
+    # ── 12. آیین‌های رویدادهای زندگی (V10 — سوگ/جراحی/کنکور/عروسی…) ──────
+    try:
+        from .models import LifeEvent, LIFE_EVENT_RITUALS
+        for le in LifeEvent.objects.filter(archived=False, **user_filter).select_related('node'):
+            rituals = LIFE_EVENT_RITUALS.get(le.kind, [])
+            nm = le.node.display_name()
+            for offset, action_text in rituals:
+                due = le.date + timedelta(days=offset)
+                # پنجره‌ی نمایش: از روزش تا ۲ روز بعد (که از دست نره)
+                if due <= today <= due + timedelta(days=2):
+                    late = (today - due).days
+                    pri = 'high' if le.kind in ('mourning', 'illness') or late == 0 else 'medium'
+                    alerts.append({
+                        'id':       f'lifeevent_{le.id}_{offset}',
+                        'type':     'lifeevent',
+                        'priority': pri,
+                        'node_id':   le.node_id,
+                        'node_name': nm,
+                        'title':    f'{le.get_kind_display().split()[0]} {nm} — {action_text}',
+                        'body':     (f'{le.get_kind_display()}'
+                                     + (f' ({le.title})' if le.title else '')
+                                     + f' — {jalali_str(le.date)}. '
+                                     + ('⏰ یه کم دیر شده، ولی هنوز ارزشش رو داره.' if late > 0 else
+                                        'این لحظه‌ها رابطه رو می‌سازن.')),
+                        'days_until': 0,
+                    })
+    except Exception:
+        pass
+
+    # ── 13. سنجش هفتگی اهداف رابطه (V10) ─────────────────────────────────
+    try:
+        from .models import RelationshipGoal
+        from .health import compute_health as _ch
+        if today.weekday() == 5:   # شنبه — شروع هفته ایرانی
+            hmap_g = _ch(user) if (user and user.is_authenticated) else {}
+            for g in RelationshipGoal.objects.filter(status='active', **user_filter).select_related('node')[:3]:
+                cur = hmap_g.get(g.node_id, {}).get('score')
+                prog = ''
+                if cur is not None and g.baseline_score is not None:
+                    diff = cur - g.baseline_score
+                    prog = f' پیشرفت تا الان: {"+" if diff >= 0 else ""}{diff} امتیاز.'
+                alerts.append({
+                    'id':       f'goal_{g.id}_w{today.isocalendar()[1]}',
+                    'type':     'goal',
+                    'priority': 'low',
+                    'node_id':   g.node_id,
+                    'node_name': g.node.display_name(),
+                    'title':    f'🎯 هدف هفته: {g.text[:60]}',
+                    'body':     f'هدفت روی {g.node.display_name()}: «{g.text}».{prog} '
+                                f'این هفته یه قدم براش بردار.',
+                    'days_until': None,
+                })
+    except Exception:
+        pass
+
+    # ── 10. پیشنهاد آشنایی (V5 — Triadic Closure روی گراف خود کاربر) ──────
+    # دوستِ دوست با ≥۲ آشنای مشترک = بیشترین شانس و سود اتصال
+    try:
+        if user and user.is_authenticated and user.root_node_id:
+            root_id_ = user.root_node_id
+            adj_ = {}
+            for r_ in Relationship.objects.filter(owner=user).only('source_id', 'target_id'):
+                adj_.setdefault(r_.source_id, set()).add(r_.target_id)
+                adj_.setdefault(r_.target_id, set()).add(r_.source_id)
+            my_nbrs_ = adj_.get(root_id_, set())
+            cand_ = {}
+            for nb_ in my_nbrs_:
+                for nn_ in adj_.get(nb_, set()):
+                    if nn_ != root_id_ and nn_ not in my_nbrs_:
+                        cand_[nn_] = cand_.get(nn_, 0) + 1
+            best_ = sorted(((n_, c_) for n_, c_ in cand_.items() if c_ >= 2),
+                           key=lambda x: -x[1])[:2]
+            month_bucket = today.strftime('%Y%m')
+            for nid_, cnt_ in best_:
+                try:
+                    nd_ = Node.objects.get(pk=nid_, owner=user)
+                except Node.DoesNotExist:
+                    continue
+                alerts.append({
+                    'id':       f'connect_{nid_}_{month_bucket}',
+                    'type':     'connect',
+                    'priority': 'low',
+                    'node_id':   nd_.id,
+                    'node_username': nd_.username,
+                    'node_name': nd_.display_name(),
+                    'title':    f'🌉 با {nd_.display_name()} آشنا شو — به نفعته',
+                    'body':     f'{cnt_} آشنای مشترک دارید — طبق نظریه بستار سه‌گانه (Simmel)، '
+                                f'این اتصال هم راحته هم شبکه‌ات رو منسجم‌تر می‌کنه. '
+                                f'توی پروفایلش «مسیر آشنایی» رو بزن تا پلن قدم‌به‌قدم بگیری.',
+                    'days_until': None,
+                })
+    except Exception:
+        pass
+
+    # ── 11. سررسید قرض و طلب (V6) ─────────────────────────────────────────
+    try:
+        from .models import Debt
+        due_debts = Debt.objects.filter(
+            settled=False, due_date__isnull=False,
+            due_date__lte=today + timedelta(days=3), **user_filter,
+        ).select_related('node')[:10]
+        for db_ in due_debts:
+            dleft = (db_.due_date - today).days
+            nm = db_.node.display_name()
+            rem = f'{db_.remaining:,} {db_.currency}'
+            if db_.direction == 'i_owe':
+                if dleft < 0:
+                    pri, title = 'high', f'💸 قرضت به {nm} {-dleft} روز گذشته!'
+                    body_ = (f'{rem} به {nm} بدهکاری و سررسیدش ({jalali_str(db_.due_date)}) رد شده — '
+                             f'دیر شدنِ پول، رابطه رو بی‌صدا خراب می‌کنه. امروز حلش کن.')
+                elif dleft == 0:
+                    pri, title = 'high', f'💸 امروز سررسید قرضت به {nm}'
+                    body_ = f'{rem} — قبل از اینکه خودش مجبور بشه بگه، تو پیش‌قدم شو.'
+                else:
+                    pri, title = 'medium', f'💸 {dleft} روز تا سررسید قرضت به {nm}'
+                    body_ = f'{rem} — از الان آماده‌ش کن. «انجام دادم» = تسویه کامل.'
+            else:
+                if dleft <= 0:
+                    pri, title = 'medium', f'💰 طلبت از {nm} سررسید شده'
+                    body_ = (f'{rem} — یه یادآوری دوستانه و محترمانه بکن؛ '
+                             f'شاید یادش رفته. «انجام دادم» = گرفتمش.')
+                else:
+                    pri, title = 'low', f'💰 {dleft} روز تا سررسید طلبت از {nm}'
+                    body_ = f'{rem} ({jalali_str(db_.due_date)})'
+            alerts.append({
+                'id':       f'debt_{db_.id}_{db_.due_date}',
+                'type':     'debt',
+                'priority': pri,
+                'node_id':   db_.node_id,
+                'node_name': nm,
+                'title':     title,
+                'body':      body_,
+                'days_until': max(dleft, 0),
+            })
+    except Exception:
+        pass
+
+    # cooling دقیق‌تر از dormant/decay است — برای یک نفر دوتا هشدار مشابه نشون نده
+    _cooling_nodes = {a['node_id'] for a in alerts if a['type'] == 'cooling'}
+    alerts = [a for a in alerts
+              if not (a['type'] in ('dormant', 'decay') and a.get('node_id') in _cooling_nodes)]
+
     # ── فیلتر کردن هشدارهایی که کاربر قبلاً اقدام کرده ────────────────────
     excluded_ids = set(
         AlertAction.objects.filter(
@@ -268,6 +554,30 @@ def _compute_alerts(user=None):
     excluded_ids -= dismissed_old
 
     alerts = [a for a in alerts if a['id'] not in excluded_ids]
+
+    if user and user.is_authenticated:
+        try:
+            from .models import FriendRequest
+            pending_social = FriendRequest.objects.filter(
+                receiver=user,
+                status='pending',
+            ).select_related('sender').order_by('-created_at')[:12]
+            for req in pending_social:
+                kind = 'connection' if getattr(req, 'request_type', '') == 'connection' else 'follow'
+                title = 'درخواست کانکشن جدید' if kind == 'connection' else 'درخواست فالو جدید'
+                alerts.append({
+                    'id': f'social_request_{req.id}',
+                    'type': 'social_request',
+                    'priority': 'high' if kind == 'connection' else 'medium',
+                    'title': title,
+                    'subtitle': f'{req.sender.username} برای {kind} درخواست داده است.',
+                    'message': req.message or '',
+                    'days_until': 0,
+                    'url': '/social/',
+                    'created_at': req.created_at.isoformat() if req.created_at else '',
+                })
+        except Exception:
+            pass
 
     # Sort: high > medium > low, then by days_until
     priority_order = {'high': 0, 'medium': 1, 'low': 2}
@@ -372,9 +682,50 @@ JSON:
 
 @login_required
 def alerts_view(request):
-    """Full /alerts/ page."""
-    alerts = _compute_alerts(request.user)
-    return render(request, 'alerts/alerts.html', {'alerts': alerts})
+    """Full /alerts/ page — includes daily context."""
+    today       = timezone.localdate()
+    is_hol, hol_name = is_holiday(today)
+    upcoming    = upcoming_holidays(30)
+    alerts      = _compute_alerts(request.user)
+
+    # ── V4: نوار خلاصه — سلامت روابط + موضوعات باز + رویدادهای امروز ──
+    health_counts = {}
+    try:
+        from .health import compute_health, health_summary
+        health_counts = health_summary(compute_health(request.user))
+    except Exception:
+        pass
+
+    open_followups_count = 0
+    try:
+        from .models import FollowUp
+        open_followups_count = FollowUp.objects.filter(
+            owner=request.user, done=False).count()
+    except Exception:
+        pass
+
+    today_events_count = 0
+    try:
+        today_events_count = Event.objects.filter(
+            owner=request.user, date=today).count()
+    except Exception:
+        pass
+
+    return render(request, 'alerts/alerts.html', {
+        'alerts': alerts,
+        'jalali_date': jalali_str(today),
+        'jalali_full': jalali_full_str(today),
+        'day_name': jalali_day_name(today),
+        'month_name': jalali_month_name(today),
+        'season': season_fa(today),
+        'is_holiday': is_hol,
+        'holiday_name': hol_name,
+        'upcoming_holidays': upcoming[:5],
+        # V4
+        'health_counts': health_counts,
+        'open_followups_count': open_followups_count,
+        'today_events_count': today_events_count,
+    })
 
 
 @login_required
@@ -396,15 +747,58 @@ def alert_action_api(request):
         except Node.DoesNotExist:
             pass
 
+    action_val = body.get('action', 'dismissed')
+    alert_type = body.get('alert_type', '')
+
     AlertAction.objects.create(
         alert_id=body.get('alert_id', ''),
-        alert_type=body.get('alert_type', ''),
+        alert_type=alert_type,
         node=node,
         title=body.get('title', ''),
-        action=body.get('action', 'dismissed'),
+        action=action_val,
         outcome=body.get('outcome', ''),
         owner=request.user,
     )
+
+    # V6: «انجام دادم» روی هشدار قرض → تسویه کامل
+    if action_val == 'completed' and alert_type == 'debt':
+        try:
+            from .models import Debt
+            from django.utils import timezone as _tz3
+            did = int((body.get('alert_id', '') or '').split('_')[1])
+            db_ = Debt.objects.get(pk=did, owner=request.user)
+            db_.paid = db_.amount
+            db_.settled = True
+            db_.settled_at = _tz3.now()
+            db_.save()
+        except Exception:
+            pass
+
+    # V4: «انجام دادم» روی هشدار موضوع باز → خود followup هم تیک بخوره
+    if action_val == 'completed' and alert_type == 'followup':
+        try:
+            from .models import FollowUp
+            from django.utils import timezone as _tz2
+            fid = int((body.get('alert_id', '') or '').split('_')[1])
+            FollowUp.objects.filter(pk=fid, owner=request.user).update(
+                done=True, done_at=_tz2.now())
+        except Exception:
+            pass
+
+    # V4/V10: «انجام دادم» روی هشدار سرد شدن یا آیین رویداد زندگی = تماس گرفتی
+    # → تعامل خودکار ثبت بشه تا سلامت همون لحظه سبز بشه.
+    if action_val == 'completed' and node and alert_type in ('cooling', 'dormant', 'decay', 'lifeevent'):
+        try:
+            from .models import Interaction
+            from django.utils import timezone as _tz
+            Interaction.objects.create(
+                node=node, kind='other', date=_tz.localdate(),
+                feeling=0, owner=request.user,
+                note=(body.get('outcome', '') or 'ثبت‌شده از هشدار')[:300],
+            )
+        except Exception:
+            pass   # جدول هنوز migrate نشده — مشکلی نیست
+
     # کش هشدارها رو پاک کن تا دفعه بعد تازه لود بشه
     cache.delete('alerts_list')
     return JsonResponse({'ok': True})
@@ -923,6 +1317,261 @@ def psychology_view(request):
         .values_list('mood', flat=True)[:20]
     )
 
+    # ═══════════════════════════════════════════════════════════
+    # 17. LONELINESS RISK (Cacioppo & Patrick, 2008)
+    # عوامل ریسک تنهایی اجتماعی بر اساس معیارهای شبکه
+    # "Loneliness: Human Nature and the Need for Social Connection"
+    # ═══════════════════════════════════════════════════════════
+    loneliness_risk = 0
+    loneliness_factors = []
+    if root and root.id in G:
+        if dunbar['intimate'] < 2:
+            loneliness_risk += 30
+            loneliness_factors.append('روابط بسیار صمیمی کم است (کمتر از ۲ نفر)')
+        if dunbar['intimate'] + dunbar['close'] < 5:
+            loneliness_risk += 20
+            loneliness_factors.append('لایه‌های نزدیک شبکه ضعیف است')
+        if total_direct < 10:
+            loneliness_risk += 20
+            loneliness_factors.append('شبکه کلی محدود است (کمتر از ۱۰ ارتباط)')
+        if my_clust_val < 20:
+            loneliness_risk += 15
+            loneliness_factors.append('اعضای شبکه یکدیگر را نمی‌شناسند')
+        if total_r_count > 0 and active_rels < total_r_count * 0.3:
+            loneliness_risk += 15
+            loneliness_factors.append('نسبت روابط فعال پایین است')
+    loneliness_risk = min(100, loneliness_risk)
+    if loneliness_risk >= 60:
+        loneliness_label = 'ریسک بالا'; loneliness_color = '#ef4444'
+    elif loneliness_risk >= 35:
+        loneliness_label = 'ریسک متوسط'; loneliness_color = '#f59e0b'
+    else:
+        loneliness_label = 'ریسک پایین'; loneliness_color = '#10b981'
+
+    # ═══════════════════════════════════════════════════════════
+    # 18. SHANNON DIVERSITY INDEX (Shannon, 1948)
+    # H = -Σ p_i × log₂(p_i) — تنوع انواع رابطه و حرفه
+    # شبکه متنوع = دسترسی به اطلاعات متنوع‌تر (Burt 1992)
+    # ═══════════════════════════════════════════════════════════
+    diversity_h = 0.0
+    diversity_normalized = 0
+    career_diversity_norm = 0
+    try:
+        if rel_type_counts:
+            total_c = sum(rel_type_counts.values())
+            probs = [c / total_c for c in rel_type_counts.values()]
+            diversity_h = -sum(p * math.log2(p) for p in probs if p > 0)
+            max_h = math.log2(len(rel_type_counts)) if len(rel_type_counts) > 1 else 1
+            diversity_normalized = round(diversity_h / max(max_h, 0.001) * 100)
+        careers = [n.career for n in all_nodes if n.career and n.career.strip()]
+        if careers:
+            from collections import Counter as _Counter
+            career_cnt = _Counter(careers)
+            total_ca = len(careers)
+            probs_ca = [c / total_ca for c in career_cnt.values()]
+            career_h = -sum(p * math.log2(p) for p in probs_ca if p > 0)
+            max_ca = math.log2(len(career_cnt)) if len(career_cnt) > 1 else 1
+            career_diversity_norm = round(career_h / max(max_ca, 0.001) * 100)
+    except Exception:
+        pass
+
+    if diversity_normalized >= 75:
+        diversity_label = 'عالی'; diversity_color = '#10b981'
+    elif diversity_normalized >= 50:
+        diversity_label = 'خوب'; diversity_color = '#6366f1'
+    elif diversity_normalized >= 25:
+        diversity_label = 'متوسط'; diversity_color = '#f59e0b'
+    else:
+        diversity_label = 'کم'; diversity_color = '#ef4444'
+
+    # ═══════════════════════════════════════════════════════════
+    # 19. SOCIAL SUPPORT TYPOLOGY (Cobb, 1976)
+    # چهار نوع حمایت اجتماعی: عاطفی، اطلاعاتی، ابزاری، ارزیابانه
+    # "Social Support as a Moderator of Life Stress" — Psychosomatic Med
+    # ═══════════════════════════════════════════════════════════
+    support_emotional     = 0
+    support_informational = 0
+    support_instrumental  = 0
+    support_appraisal     = 0
+    for r in all_rels:
+        rel_type = (r.rel or '').lower()
+        strength = r.strength or 3
+        is_family = any(t in rel_type for t in ['خانواده', 'خواهر', 'برادر', 'پدر', 'مادر', 'همسر', 'فرزند'])
+        is_friend = any(t in rel_type for t in ['دوست', 'رفیق', 'صمیمی'])
+        is_work   = any(t in rel_type for t in ['همکار', 'کار', 'شغل', 'استاد', 'مدیر', 'مشاور'])
+        if is_family or (is_friend and strength >= 4):
+            support_emotional += 1
+        if is_work:
+            support_instrumental += 1
+        if not is_family and not is_friend and not is_work:
+            support_informational += 1
+        if strength >= 3 and not is_family:
+            support_appraisal += 1
+
+    _st = max(total_r_count, 1)
+    support_emotional_pct     = round(support_emotional     / _st * 100)
+    support_informational_pct = round(support_informational / _st * 100)
+    support_instrumental_pct  = round(support_instrumental  / _st * 100)
+    support_appraisal_pct     = round(support_appraisal     / _st * 100)
+    support_notes = []
+    if support_emotional < 3:
+        support_notes.append('⚠️ پشتیبانی عاطفی ضعیف — روابط صمیمی بیشتری نیاز است')
+    if support_instrumental < 2:
+        support_notes.append('💡 شبکه حرفه‌ای محدود — ارتباطات شغلی را گسترش بده')
+    if support_informational < 5:
+        support_notes.append('💡 منابع اطلاعاتی کم — با افراد متنوع‌تر آشنا شو')
+
+    # ═══════════════════════════════════════════════════════════
+    # 20. EGO NETWORK EMBEDDEDNESS (Granovetter, 1985)
+    # هر رابطه چقدر با دوستان مشترک تقویت شده؟
+    # "Economic Action and Social Structure: The Problem of Embeddedness"
+    # ═══════════════════════════════════════════════════════════
+    embeddedness_list = []
+    avg_embeddedness  = 0
+    if root and root.id in G and total_direct > 0:
+        ego_nbrs = set(G.neighbors(root.id))
+        for nb in ego_nbrs:
+            nb_nbrs = set(G.neighbors(nb))
+            mutual  = len(ego_nbrs & nb_nbrs)
+            try:
+                nd = Node.objects.get(pk=nb)
+                embeddedness_list.append({
+                    'name': nd.display_name(),
+                    'mutual': mutual,
+                    'strength': G.get_edge_data(root.id, nb, {}).get('weight', 3),
+                })
+            except Exception:
+                pass
+        embeddedness_list.sort(key=lambda x: (-x['mutual'], -x['strength']))
+        avg_embeddedness = round(
+            sum(e['mutual'] for e in embeddedness_list) / max(len(embeddedness_list), 1), 1
+        )
+
+    # ═══════════════════════════════════════════════════════════
+    # 21. STRUCTURAL TRANSITIVITY & BALANCE (Heider, 1946)
+    # "The Psychology of Interpersonal Relations"
+    # Transitivity = 3 × مثلث‌ها / مسیرهای دو گام
+    # هر چه بالاتر → شبکه متعادل‌تر و پایدارتر
+    # ═══════════════════════════════════════════════════════════
+    transitivity_pct = 0
+    n_triangles      = 0
+    balance_label    = 'نامشخص'
+    balance_note     = ''
+    try:
+        transitivity     = nx.transitivity(G)
+        n_triangles      = sum(nx.triangles(G).values()) // 3
+        transitivity_pct = round(transitivity * 100)
+        if transitivity >= 0.5:
+            balance_label = 'بالا — شبکه منسجم'
+            balance_note  = 'بیش از نیمی از سه‌گانه‌ها بسته‌اند — نشانه روابط پایدار، اعتماد متقابل و تعادل ساختاری'
+        elif transitivity >= 0.25:
+            balance_label = 'متوسط'
+            balance_note  = 'تعادل نسبی در شبکه — ترکیبی از روابط باز و بسته'
+        else:
+            balance_label = 'پایین'
+            balance_note  = 'بیشتر روابط مستقل‌اند — فرصت زیادی برای Triadic Closure وجود دارد'
+    except Exception:
+        transitivity = 0
+
+    # ═══════════════════════════════════════════════════════════
+    # 22. EMOTIONAL CONTAGION RISK (Hatfield et al., 1993)
+    # "Emotional Contagion" — احساسات از طریق شبکه نزدیک منتقل می‌شن
+    # اگه دوستان صمیمی اخیراً حال بدی داشتن، خطر بالاتره
+    # ═══════════════════════════════════════════════════════════
+    negative_moods_nearby = 0
+    contagion_risk_pct    = 0
+    try:
+        neg_words = ['ناراحت', 'غمگین', 'استرس', 'اضطراب', 'عصبانی', 'نگران',
+                     'sad', 'stress', 'anxious', 'depressed', 'تنها', 'افسرده']
+        cutoff14 = date.today() - timedelta(days=14)
+        for entry in JournalEntry.objects.filter(
+            created_at__date__gte=cutoff14, ai_analyzed=True, **ufilter
+        ).prefetch_related('mentioned_nodes')[:20]:
+            if entry.mood and any(neg in entry.mood.lower() for neg in neg_words):
+                for mnode in entry.mentioned_nodes.all():
+                    edata = G.get_edge_data(root.id, mnode.id) if root and mnode.id in G else None
+                    if edata and edata.get('weight', 3) >= 3:
+                        negative_moods_nearby += 1
+                        break
+        contagion_risk_pct = min(100, negative_moods_nearby * 25)
+    except Exception:
+        pass
+
+    if contagion_risk_pct >= 60:
+        contagion_label = 'بالا'; contagion_color = '#ef4444'
+    elif contagion_risk_pct >= 30:
+        contagion_label = 'متوسط'; contagion_color = '#f59e0b'
+    else:
+        contagion_label = 'پایین'; contagion_color = '#10b981'
+
+    # ═══════════════════════════════════════════════════════════
+    # 23. CORE-PERIPHERY STRUCTURE (Borgatti & Everett, 2000)
+    # هسته: نودهایی با degree بالاتر از میانگین → core
+    # حاشیه: نودهایی با degree پایین‌تر → periphery
+    # "Models of Core/Periphery Structures" — Social Networks
+    # ═══════════════════════════════════════════════════════════
+    core_nodes     = []
+    periphery_nodes = []
+    core_pct       = 0
+    try:
+        avg_deg_val = avg_degree
+        for n in all_nodes:
+            deg = G.degree(n.id) if n.id in G else 0
+            if deg > avg_deg_val:
+                core_nodes.append({'name': n.display_name(), 'degree': deg})
+            else:
+                periphery_nodes.append({'name': n.display_name(), 'degree': deg})
+        core_nodes.sort(key=lambda x: -x['degree'])
+        core_pct = round(len(core_nodes) / max(n_nodes, 1) * 100)
+    except Exception:
+        pass
+
+    # ═══════════════════════════════════════════════════════════
+    # 24. RELATIONSHIP STRENGTH DISTRIBUTION
+    # توزیع قدرت روابط — آمار توصیفی
+    # ═══════════════════════════════════════════════════════════
+    strengths_all = [r.strength or 3 for r in all_rels]
+    if strengths_all:
+        avg_strength = round(sum(strengths_all) / len(strengths_all), 2)
+        str_dist = {}
+        for s in strengths_all:
+            k = max(1, min(5, s))
+            str_dist[k] = str_dist.get(k, 0) + 1
+        str_dist = {i: str_dist.get(i, 0) for i in range(1, 6)}
+    else:
+        avg_strength = 0
+        str_dist = {i: 0 for i in range(1, 6)}
+
+    # ═══════════════════════════════════════════════════════════
+    # 25. NETWORK HEALTH SCORE — COMPOSITE (FamilyGraph)
+    # امتیاز سلامت کلی شبکه از ۶ بُعد مستقل
+    # ═══════════════════════════════════════════════════════════
+    weak_ratio_pct_val = round(weak_ratio * 100)
+    health_components = {
+        'تنوع رابطه':     min(100, diversity_normalized),
+        'سرمایه پل‌سازی': min(100, bridging_score),
+        'روابط صمیمی':    min(100, dunbar.get('intimate', 0) * 25),
+        'تعادل پیوند':    max(0, 100 - abs(weak_ratio_pct_val - 50) * 2) if n_edges else 0,
+        'نرخ فعالیت':     round(active_rels / max(total_r_count, 1) * 100),
+        'تاب‌آوری':       min(100, resilience_score),
+    }
+    health_score = round(
+        health_components['تنوع رابطه']     * 0.15
+        + health_components['سرمایه پل‌سازی'] * 0.15
+        + health_components['روابط صمیمی']   * 0.20
+        + health_components['تعادل پیوند']   * 0.15
+        + health_components['نرخ فعالیت']    * 0.20
+        + health_components['تاب‌آوری']      * 0.15
+    )
+    if health_score >= 75:
+        health_label = 'عالی'; health_color = '#10b981'
+    elif health_score >= 55:
+        health_label = 'خوب'; health_color = '#6366f1'
+    elif health_score >= 35:
+        health_label = 'متوسط'; health_color = '#f59e0b'
+    else:
+        health_label = 'نیاز به توجه'; health_color = '#ef4444'
+
     context = {
         # Basic counts
         'n_nodes': n_nodes,
@@ -1017,7 +1666,68 @@ def psychology_view(request):
         'total_entries': total_entries,
         'analyzed_entries': analyzed_entries,
         'recent_moods_json': json.dumps(recent_moods, ensure_ascii=False),
+
+        # ── NEW: Loneliness Risk (17) ──────────────────────────
+        'loneliness_risk': loneliness_risk,
+        'loneliness_label': loneliness_label,
+        'loneliness_color': loneliness_color,
+        'loneliness_factors': loneliness_factors,
+
+        # ── NEW: Shannon Diversity (18) ────────────────────────
+        'diversity_normalized': diversity_normalized,
+        'diversity_label': diversity_label,
+        'diversity_color': diversity_color,
+        'career_diversity_norm': career_diversity_norm,
+
+        # ── NEW: Social Support (19) ───────────────────────────
+        'support_emotional': support_emotional,
+        'support_informational': support_informational,
+        'support_instrumental': support_instrumental,
+        'support_appraisal': support_appraisal,
+        'support_emotional_pct': support_emotional_pct,
+        'support_informational_pct': support_informational_pct,
+        'support_instrumental_pct': support_instrumental_pct,
+        'support_appraisal_pct': support_appraisal_pct,
+        'support_notes': support_notes,
+
+        # ── NEW: Embeddedness (20) ─────────────────────────────
+        'embeddedness_list': embeddedness_list[:8],
+        'avg_embeddedness': avg_embeddedness,
+
+        # ── NEW: Balance/Transitivity (21) ────────────────────
+        'transitivity_pct': transitivity_pct,
+        'n_triangles': n_triangles,
+        'balance_label': balance_label,
+        'balance_note': balance_note,
+
+        # ── NEW: Emotional Contagion (22) ─────────────────────
+        'contagion_risk_pct': contagion_risk_pct,
+        'contagion_label': contagion_label,
+        'contagion_color': contagion_color,
+
+        # ── NEW: Core-Periphery (23) ───────────────────────────
+        'core_nodes': core_nodes[:8],
+        'core_pct': core_pct,
+        'periphery_count': len(periphery_nodes),
+
+        # ── NEW: Strength Distribution (24) ───────────────────
+        'avg_strength': avg_strength,
+        'str_dist': str_dist,
+
+        # ── NEW: Health Score (25) ────────────────────────────
+        'health_score': health_score,
+        'health_label': health_label,
+        'health_color': health_color,
+        'health_components': health_components,
     }
+
+    # ── V5: نظریه‌های رفتاری (از داده‌های تعامل/فالوآپ/ژورنال) ──
+    try:
+        from .theories import extra_theories
+        context['extra_theories'] = extra_theories(user)
+    except Exception:
+        context['extra_theories'] = []
+
     return render(request, 'psychology/psychology.html', context)
 
 
@@ -1187,10 +1897,99 @@ def psychology_ai_api(request):
 
 @login_required
 def daily_tips_view(request):
-    """Daily briefing page /daily/."""
+    """V10: بریفینگ روزانه — ماموریت‌ها + نبض شبکه + فلش‌بک + نکته عمیق AI."""
+    user = request.user
     today = timezone.localdate()
     is_hol, hol_name = is_holiday(today)
     upcoming = upcoming_holidays(30)
+
+    alerts = _compute_alerts(user)
+
+    # ── 🎯 ماموریت‌های امروز: مهم‌ترین هشدارهای قابلِ اقدام ──
+    type_rank = {'lifeevent': 0, 'birthday': 1, 'followup': 2, 'debt': 3,
+                 'event': 4, 'cooling': 5, 'mood_alert': 6, 'connect': 7,
+                 'dormant': 8, 'decay': 9, 'goal': 10}
+    pri_rank = {'high': 0, 'medium': 1, 'low': 2}
+    mission_icons = {'lifeevent': '🎗', 'birthday': '🎂', 'followup': '📌',
+                     'debt': '💰', 'event': '📅', 'cooling': '🔥',
+                     'mood_alert': '💛', 'connect': '🌉', 'dormant': '🌱',
+                     'decay': '📉', 'goal': '🎯'}
+    actionable = [a for a in alerts if a.get('type') in type_rank]
+    actionable.sort(key=lambda a: (pri_rank.get(a.get('priority'), 3),
+                                   type_rank[a['type']]))
+    missions = actionable[:4]
+    for m in missions:
+        m['icon'] = mission_icons.get(m['type'], '🎯')
+
+    # ── 💓 نبض شبکه ──
+    health_counts = {}
+    try:
+        from .health import compute_health, health_summary
+        health_counts = health_summary(compute_health(user))
+    except Exception:
+        pass
+    open_fu = 0
+    try:
+        from .models import FollowUp
+        open_fu = FollowUp.objects.filter(owner=user, done=False).count()
+    except Exception:
+        pass
+    net_balance = 0
+    try:
+        from .models import Debt
+        for d_ in Debt.objects.filter(owner=user, settled=False):
+            net_balance += d_.remaining if d_.direction == 'they_owe' else -d_.remaining
+    except Exception:
+        pass
+    streak, checked_today = 0, False
+    try:
+        from .views_checkin import journal_streak, _todays_checkin
+        streak = journal_streak(user)
+        checked_today = _todays_checkin(user) is not None
+    except Exception:
+        pass
+
+    # ── 🕰 فلش‌بک: امروز در سال‌های گذشته ──
+    flashback = []
+    try:
+        for e in JournalEntry.objects.filter(
+                owner=user, entry_date__month=today.month,
+                entry_date__day=today.day, entry_date__lt=today
+        ).order_by('-entry_date')[:3]:
+            yrs = today.year - e.entry_date.year
+            flashback.append({
+                'icon': '📓', 'years': yrs,
+                'title': f'{yrs} سال پیش، همین روز نوشتی:',
+                'text': e.text[:220], 'mood': e.mood,
+            })
+    except Exception:
+        pass
+    try:
+        for ev in Event.objects.filter(
+                owner=user, date__month=today.month,
+                date__day=today.day, date__lt=today).order_by('-date')[:2]:
+            yrs = today.year - ev.date.year
+            parts = [p.display_name() for p in ev.participants.all()[:3]]
+            flashback.append({
+                'icon': '📅', 'years': yrs,
+                'title': f'{yrs} سال پیش، همین روز: {ev.title}',
+                'text': ('با ' + '، '.join(parts)) if parts else (ev.description or '')[:150],
+                'mood': '',
+            })
+    except Exception:
+        pass
+    flashback.sort(key=lambda f: f['years'])
+
+    # ── سلام بر اساس ساعت ──
+    hour = timezone.localtime().hour
+    if hour < 12:
+        greeting = 'صبح بخیر ☀️'
+    elif hour < 17:
+        greeting = 'ظهر بخیر 🌤'
+    elif hour < 20:
+        greeting = 'عصر بخیر 🌇'
+    else:
+        greeting = 'شب بخیر 🌙'
 
     context = {
         'today':         today,
@@ -1201,8 +2000,18 @@ def daily_tips_view(request):
         'season':        season_fa(today),
         'is_holiday':    is_hol,
         'holiday_name':  hol_name,
-        'upcoming_holidays': upcoming[:5],
-        'alerts_count':  len([a for a in _compute_alerts(request.user if request.user.is_authenticated else None) if a.get('priority') == 'high']),
+        'upcoming_holidays': upcoming[:4],
+        # V10
+        'greeting':        greeting,
+        'first_name':      user.first_name or user.username,
+        'missions':        missions,
+        'health_counts':   health_counts,
+        'open_fu':         open_fu,
+        'net_balance':     net_balance,
+        'net_balance_fmt': f'{abs(net_balance):,}',
+        'streak':          streak,
+        'checked_today':   checked_today,
+        'flashback':       flashback[:4],
     }
     return render(request, 'daily/daily.html', context)
 

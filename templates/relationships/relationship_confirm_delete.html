@@ -63,10 +63,10 @@
 	</div>
 
 	<div class="delete-info">
-		<strong>{{ relationship.rel }}</strong><br>
-		{{ relationship.father.username }}
-		→
-		{{ relationship.child.username }}
+		<strong>{{ relationship.rel|default:"بدون برچسب" }}</strong><br>
+		{{ relationship.source.display_name }}
+		⟵⟶
+		{{ relationship.target.display_name }}
 	</div>
 
 	<form method="post">

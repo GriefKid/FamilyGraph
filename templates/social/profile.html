@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}{{ profile_user.username }} - FamilyGraph{% endblock %}
+{% block page_title %}پروفایل{% endblock %}
+{% block nav_settings %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.content{padding:0!important}.profile-page{min-height:calc(100vh - var(--topbar-h));background:var(--bg);padding:22px;color:var(--text)}
+.shell{max-width:1120px;margin:0 auto}.cover{position:relative;min-height:330px;border:1px solid var(--border);border-radius:24px;overflow:hidden;background:{{ cover_css }}}
+.cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.72))}
+.cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.top{position:absolute;inset:auto 24px 24px 24px;z-index:2;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:end}
+.avatar{width:132px;height:132px;border-radius:34px;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:46px;font-weight:950;border:4px solid rgba(255,255,255,.24);overflow:hidden}.avatar img{width:100%;height:100%;object-fit:cover}
+.name{font-size:34px;font-weight:950;color:#fff;line-height:1.15}.handle{font-size:13px;color:rgba(255,255,255,.78);margin-top:7px}.bio{max-width:650px;color:rgba(255,255,255,.86);font-size:13px;line-height:1.9;margin-top:11px}
+.actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}.btn{height:42px;border:0;border-radius:12px;background:var(--grad-brand);color:#fff;font-family:'Vazirmatn',sans-serif;font-size:12px;font-weight:900;padding:0 15px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.btn.ghost{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);color:#fff}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 18px}.stat{border:1px solid var(--border);background:rgba(255,255,255,.03);border-radius:16px;padding:16px;text-align:center;text-decoration:none;color:inherit}.stat:hover{border-color:var(--primary-border);background:rgba(99,102,241,.07)}.stat b{display:block;font-size:25px;color:var(--text)}.stat span{font-size:12px;color:var(--text-muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.panel{border:1px solid var(--border);background:rgba(255,255,255,.028);border-radius:18px;padding:16px}.panel h3{margin:0 0 13px;font-size:15px;color:var(--text)}.kv{display:grid;grid-template-columns:120px 1fr;gap:8px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}.kv:last-child{border-bottom:0}.key{color:var(--text-muted)}.value{color:var(--text-soft)}
+.media-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.media{border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:12px;min-height:132px;display:flex;flex-direction:column}.media-title{font-size:13px;font-weight:900;color:var(--text);line-height:1.6}.media-meta{font-size:11px;color:var(--text-muted);margin-top:4px}.score{margin-top:auto;font-size:12px;color:#fbbf24;font-weight:900}.signal{font-size:11px;color:var(--text-muted);line-height:1.7;margin-top:5px}.empty{color:var(--text-muted);font-size:13px;line-height:1.9;padding:16px}
+.wide{grid-column:1/-1}
+/* V11: جلد آثار */
+.mcover{ width:58px; height:82px; border-radius:10px; flex-shrink:0; overflow:hidden;
+  display:flex; align-items:center; justify-content:center; font-size:24px;
+  background:linear-gradient(135deg, rgba(99,102,241,.2), rgba(236,72,153,.14));
+  border:1px solid var(--border-strong); box-shadow:0 4px 12px rgba(0,0,0,.3); }
+.mcover img{ width:100%; height:100%; object-fit:cover; }.locked{border:1px solid var(--border);background:rgba(255,255,255,.025);border-radius:16px;padding:24px;text-align:center;color:var(--text-muted);line-height:1.9}
+@media(max-width:900px){.top{grid-template-columns:1fr;text-align:center;justify-items:center}.actions{justify-content:center}.cover{min-height:460px}.grid,.stats,.media-row{grid-template-columns:1fr}.kv{grid-template-columns:1fr}.profile-page{padding:12px}}
+</style>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="profile-page"><div class="shell">
+  <section class="cover">
+    {% if profile_user.cover_image %}<img class="cover-img" src="{{ profile_user.cover_image.url }}" alt="">{% endif %}
+    <div class="top">
+      <div class="avatar">{% if profile_user.avatar %}<img src="{{ profile_user.avatar.url }}" alt="">{% else %}{{ profile_user.username|first|upper }}{% endif %}</div>
+      <div>
+        <div class="name">{{ profile_user.get_full_name|default:profile_user.username }}</div>
+        <div class="handle">@{{ profile_user.username }} · {% if profile_user.is_public %}پابلیک{% else %}پرایوت{% endif %}</div>
+        <div class="bio">{{ profile_user.bio|default:"هنوز بیویی ننوشته." }}</div>
+      </div>
+      <div class="actions">
+        {% if profile_user == request.user %}
+          <a class="btn" href="{% url 'profile_edit' %}">ویرایش اطلاعات</a>
+        {% else %}
+          {% if card.is_following %}<button class="btn ghost" disabled>فالو شده</button>{% else %}<button class="btn ghost" onclick="followUser({{ profile_user.id }})">فالو</button>{% endif %}
+          {% if card.is_connection %}<a class="btn" href="/social/chat/?u={{ profile_user.id }}">پیام</a>{% elif card.connection_request_sent %}<button class="btn" disabled>در انتظار کانکشن</button>{% else %}<button class="btn" onclick="connectUser({{ profile_user.id }})">کانکت</button>{% endif %}
+          {% if persona_node_id %}<a class="btn ghost" href="/nodes/{{ persona_node_id }}/">🕸 توی گراف من</a>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <a class="stat" href="{% url 'profile_network' profile_user.username 'followers' %}"><b>{{ card.followers_count|default:0 }}</b><span>فالوئر</span></a>
+    <a class="stat" href="{% url 'profile_network' profile_user.username 'following' %}"><b>{{ card.following_count|default:0 }}</b><span>فالوینگ</span></a>
+    <a class="stat" href="{% url 'profile_network' profile_user.username 'connections' %}"><b>{{ card.connections_count|default:0 }}</b><span>کانکشن</span></a>
+  </section>
+
+  {% if private_locked %}
+    <div class="locked">این پروفایل پرایوت است. برای دیدن جزئیات بیشتر باید درخواست کانکشن بدهی.</div>
+  {% else %}
+  <section class="grid">
+    <div class="panel">
+      <h3>اطلاعات اولیه</h3>
+      <div class="kv"><div class="key">یوزرنیم</div><div class="value">@{{ profile_user.username }}</div></div>
+      <div class="kv"><div class="key">شغل</div><div class="value">{{ profile_user.career|default:"-" }}</div></div>
+      <div class="kv"><div class="key">شهر</div><div class="value">{{ profile_user.city|default:"-" }}</div></div>
+      <div class="kv"><div class="key">کشور</div><div class="value">{{ profile_user.country|default:"-" }}</div></div>
+    </div>
+    <div class="panel">
+      <h3>ارتباط</h3>
+      <div class="kv"><div class="key">وضعیت</div><div class="value">{% if card.is_connection %}کانکشن دوطرفه{% elif card.is_following %}فالو شده{% else %}بدون ارتباط{% endif %}</div></div>
+      <div class="kv"><div class="key">چت</div><div class="value">{% if card.is_connection %}<a href="/social/chat/?u={{ profile_user.id }}">باز کردن چت</a>{% else %}بعد از کانکشن فعال می‌شود{% endif %}</div></div>
+    </div>
+
+    {# ── V11: آثار فرهنگی — ۳ بهترین + ۳ آخرین برای هر نوع ── #}
+    {% for sec in media_sections %}
+    <div class="panel wide">
+      <h3>{{ sec.icon }} {{ sec.label }}</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;" class="mk-grid">
+        <div>
+          <div style="font-size:11px;font-weight:800;color:#fbbf24;margin-bottom:8px;">⭐ بهترین‌ها</div>
+          {% for m in sec.best %}
+          <div class="media mcard" style="min-height:auto;margin-bottom:8px;flex-direction:row;gap:11px;align-items:flex-start;">
+            <div class="mcover" {% if m.work_id %}data-work="{{ m.work_id }}"{% endif %} data-fallback="{{ sec.icon }}">
+              {% if m.work and m.work.cover_url %}<img src="{{ m.work.cover_url }}" alt="" loading="lazy">{% else %}<span>{{ sec.icon }}</span>{% endif %}
+            </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+              <div class="media-title">{{ m.title }}</div>
+              <div class="media-meta">{% if m.creator %}{{ m.creator }} · {% endif %}{% if m.completed_on %}{{ m.completed_on|date:"Y/m/d" }}{% endif %}</div>
+              {% if m.rating %}<div class="score">{% for i in "12345" %}{% if forloop.counter <= m.rating %}★{% else %}☆{% endif %}{% endfor %} {{ m.rating|floatformat:"-1" }}/5</div>{% endif %}
+              {% if m.notes %}<div class="signal">💬 {{ m.notes|truncatechars:140 }}</div>{% endif %}
+            </div>
+          </div>
+          {% empty %}<div class="empty">هنوز نمره‌ای ثبت نشده</div>{% endfor %}
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:800;color:#67e8f9;margin-bottom:8px;">🕐 آخرین‌ها</div>
+          {% for m in sec.latest %}
+          <div class="media mcard" style="min-height:auto;margin-bottom:8px;flex-direction:row;gap:11px;align-items:flex-start;">
+            <div class="mcover" {% if m.work_id %}data-work="{{ m.work_id }}"{% endif %} data-fallback="{{ sec.icon }}">
+              {% if m.work and m.work.cover_url %}<img src="{{ m.work.cover_url }}" alt="" loading="lazy">{% else %}<span>{{ sec.icon }}</span>{% endif %}
+            </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+              <div class="media-title">{{ m.title }}</div>
+              <div class="media-meta">{% if m.creator %}{{ m.creator }} · {% endif %}{% if m.completed_on %}{{ m.completed_on|date:"Y/m/d" }}{% endif %}</div>
+              {% if m.rating %}<div class="score">{% for i in "12345" %}{% if forloop.counter <= m.rating %}★{% else %}☆{% endif %}{% endfor %} {{ m.rating|floatformat:"-1" }}/5</div>{% endif %}
+              {% if m.notes %}<div class="signal">💬 {{ m.notes|truncatechars:140 }}</div>{% endif %}
+            </div>
+          </div>
+          {% empty %}<div class="empty">هنوز اثری ثبت نشده</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="panel wide"><div class="empty">هنوز اثر فرهنگی‌ای ثبت نشده{% if profile_user == request.user %} — از «ویرایش اطلاعات» اضافه کن{% endif %}.</div></div>
+    {% endfor %}
+    {% if media_sections %}
+    <div class="wide" style="text-align:center;">
+      <button class="btn ghost" id="coverBtn" style="border:1px solid var(--border-strong);color:var(--text-soft);"
+              onclick="fetchCovers(true)">🔄 پیدا کردن جلدها</button>
+    </div>
+    {% endif %}
+
+    {# ── V11: شناخت — هر چی اپ تا حالا فهمیده ── #}
+    {% if persona_node_id %}
+    <div class="panel wide" id="personaPanel">
+      <h3 style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span>🧠 شناخت {% if profile_user == request.user %}از خودم{% else %}من از {{ profile_user.get_full_name|default:profile_user.username }}{% endif %}</span>
+        <button class="btn" style="height:36px;font-size:11.5px;" onclick="personaLoad(true)">✦ بگو چی می‌دونی</button>
+      </h3>
+      <div id="personaBox" class="empty">دکمه رو بزن — هر چیزی که اپ از همه‌جا (آثار، خاطرات، گفتگوها، رفتارها) فهمیده رو یکجا می‌گه.</div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+</div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const csrftoken=document.querySelector('[name=csrfmiddlewaretoken]')?.value||'{{ csrf_token }}';
+async function api(url,opts={}){opts.headers=Object.assign({'X-CSRFToken':csrftoken,'Content-Type':'application/json'},opts.headers||{});const r=await fetch(url,opts);const d=await r.json();if(!r.ok)throw new Error(d.error||'خطا');return d}
+async function followUser(id){await api(`/api/social/follow/${id}/`,{method:'POST',body:'{}'});location.reload()}
+async function connectUser(id){await api(`/api/social/request/${id}/`,{method:'POST',body:'{}'});location.reload()}
+
+// ── V11: شناخت ──
+const PERSONA_NODE = "{{ persona_node_id|default:'' }}";
+function personaRender(p){
+  const box = document.getElementById('personaBox');
+  if(!p || !(p.statements||[]).length){ box.textContent = 'هنوز شناختی ساخته نشده — دکمه بالا رو بزن.'; return; }
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html = '';
+  if(p.summary) html += `<div style="padding:11px 14px;border-radius:12px;background:rgba(99,102,241,.08);border:1px dashed rgba(99,102,241,.35);font-size:13px;line-height:1.9;margin-bottom:10px;">${esc(p.summary)}</div>`;
+  html += (p.statements||[]).map(s => `
+    <div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px dashed rgba(255,255,255,.07);font-size:13px;align-items:baseline;">
+      <span>✦</span><span style="flex:1;line-height:1.9;">${esc(s.text)}</span>
+      ${s.kind?`<span style="font-size:10px;color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:1px 9px;flex-shrink:0;">${esc(s.kind)}</span>`:''}
+    </div>`).join('');
+  if(p.updated_at) html += `<div style="font-size:10px;color:var(--text-muted);margin-top:8px;">آخرین به‌روزرسانی: ${esc(p.updated_at)}</div>`;
+  box.innerHTML = html;
+  box.classList.remove('empty');
+}
+async function personaLoad(fresh){
+  if(!PERSONA_NODE) return;
+  const box = document.getElementById('personaBox');
+  box.textContent = fresh ? '✦ دارم همه‌چیز رو کنار هم می‌ذارم…' : '…';
+  try{
+    const d = fresh
+      ? await api(`/api/persona/node/${PERSONA_NODE}/synthesize/`, {method:'POST', body:'{}'})
+      : await api(`/api/persona/node/${PERSONA_NODE}/`);
+    personaRender(d.persona);
+    if(d.warning) box.insertAdjacentHTML('beforeend', `<div style="color:#fbbf24;font-size:11px;margin-top:6px;">${d.warning}</div>`);
+  }catch(e){ box.textContent = e.message || 'خطا'; }
+}
+if(PERSONA_NODE) personaLoad(false);
+
+// ── V11: جلدهای جامانده رو پیدا کن (خودکار + دکمه با گزارش) ──
+async function fetchCovers(showReport){
+  const boxes = [...document.querySelectorAll('.mcover[data-work]')].filter(b => !b.querySelector('img'));
+  if(!boxes.length){ if(showReport) alert('همه‌ی آثار جلد دارن ✓'); return; }
+  let found = 0, lastTried = [];
+  const btn = document.getElementById('coverBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ در حال جستجو…'; }
+  for(const b of boxes){
+    try{
+      const d = await api(`/api/social/works/${b.dataset.work}/cover/`, {method:'POST', body:'{}'});
+      if(d.cover_url){
+        b.innerHTML = `<img src="${d.cover_url}" alt="" loading="lazy">`;
+        found++;
+      } else if(d.tried && d.tried.length){
+        lastTried = d.tried;
+      }
+    }catch(e){ /* ادامه بده */ }
+  }
+  if(btn){ btn.disabled = false; btn.textContent = '🔄 پیدا کردن جلدها'; }
+  if(showReport){
+    let msg = `${found} از ${boxes.length} جلد پیدا شد.`;
+    if(found < boxes.length && lastTried.length)
+      msg += '\n\nوضعیت منابع (برای عیب‌یابی):\n' + lastTried.join('\n');
+    alert(msg);
+  }
+}
+fetchCovers(false);
+</script>
+{% endblock %}

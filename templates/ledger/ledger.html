@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}دفتر قرض و طلب · FamilyGraph{% endblock %}
+{% block page_title %}💰 دفتر قرض و طلب{% endblock %}
+{% block nav_ledger %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.lg-wrap{ max-width:860px; margin:0 auto; }
+.lg-totals{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
+.lg-total{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; text-align:center; }
+.lg-total .n{ font-size:22px; font-weight:800; direction:ltr; }
+.lg-total .l{ font-size:11px; color:var(--text-muted); margin-top:4px; }
+
+.lg-card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px; }
+.lg-card-title{ font-size:14px; font-weight:800; margin-bottom:12px; }
+
+.lg-form{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.lg-in, .lg-sel{ background:transparent; border:1px solid var(--border-strong); border-radius:9px;
+  padding:8px 11px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:12.5px; }
+.lg-sel option{ background:var(--card); color:var(--text); }
+.lg-dir{ display:flex; border:1px solid var(--border-strong); border-radius:9px; overflow:hidden; }
+.lg-dir button{ padding:8px 14px; border:none; background:transparent; color:var(--text-muted);
+  font-family:'Vazirmatn',sans-serif; font-size:12.5px; font-weight:700; cursor:pointer; }
+.lg-dir button.on-owe{ background:rgba(244,63,94,.2); color:#fda4af; }
+.lg-dir button.on-get{ background:rgba(16,185,129,.2); color:#6ee7b7; }
+.lg-btn{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; border:none;
+  border-radius:9px; padding:9px 20px; font-size:12.5px; font-weight:800; cursor:pointer;
+  font-family:'Vazirmatn',sans-serif; }
+
+.lg-row{ display:flex; align-items:center; gap:10px; padding:10px 4px;
+  border-bottom:1px solid var(--border); font-size:13px; flex-wrap:wrap; }
+.lg-row:last-child{ border-bottom:none; }
+.lg-amount{ font-weight:800; direction:ltr; }
+.lg-pos{ color:#34d399; } .lg-neg{ color:#f87171; }
+.lg-badge{ font-size:10.5px; padding:2px 9px; border-radius:999px; }
+.lg-badge.overdue{ background:rgba(244,63,94,.15); color:#fda4af; border:1px solid rgba(244,63,94,.3); }
+.lg-badge.soon{ background:rgba(245,158,11,.13); color:#fcd34d; border:1px solid rgba(245,158,11,.3); }
+.lg-badge.ok{ background:rgba(99,102,241,.12); color:#a5b4fc; border:1px solid rgba(99,102,241,.3); }
+.lg-mini{ background:none; border:1px solid var(--border-strong); color:var(--text-soft);
+  border-radius:8px; padding:4px 11px; font-size:11px; cursor:pointer; font-family:'Vazirmatn',sans-serif; }
+.lg-mini:hover{ border-color:#6366f1; color:#a5b4fc; }
+.lg-note{ color:var(--text-muted); font-size:11.5px; }
+.lg-sug{ display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px dashed var(--border); }
+.lg-sug:last-child{ border-bottom:none; }
+.lg-sug-rank{ width:24px; height:24px; border-radius:50%; flex-shrink:0; display:flex; align-items:center;
+  justify-content:center; font-size:11px; font-weight:800; background:rgba(16,185,129,.15); color:#6ee7b7; }
+.lg-empty{ text-align:center; color:var(--text-muted); font-size:12.5px; padding:16px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lg-wrap">
+
+{% if table_missing %}
+<div class="lg-card" style="border-color:rgba(245,158,11,.4);color:#fcd34d;">
+  ⚠️ جدول قرض و طلب هنوز ساخته نشده — یه بار <b>migrate_and_run.bat</b> رو اجرا کن.
+</div>
+{% endif %}
+
+<!-- تراز کل -->
+<div class="lg-totals">
+  <div class="lg-total">
+    <div class="n lg-neg">{{ total_i_owe }}</div>
+    <div class="l">💸 جمع بدهی من (تومان)</div>
+  </div>
+  <div class="lg-total">
+    <div class="n lg-pos">{{ total_they_owe }}</div>
+    <div class="l">💰 جمع طلب من (تومان)</div>
+  </div>
+  <div class="lg-total">
+    <div class="n {% if net >= 0 %}lg-pos{% else %}lg-neg{% endif %}">{{ net_fmt }}</div>
+    <div class="l">⚖️ تراز خالص — {% if net >= 0 %}در مجموع طلبکاری{% else %}در مجموع بدهکاری{% endif %}</div>
+  </div>
+</div>
+
+<!-- ثبت جدید -->
+<div class="lg-card">
+  <div class="lg-card-title">➕ ثبت قرض / طلب جدید</div>
+  <div class="lg-form">
+    <select class="lg-sel" id="lgNode">
+      <option value="">با کی؟</option>
+      {% for n in nodes %}<option value="{{ n.id }}">{{ n.display_name }}</option>{% endfor %}
+    </select>
+    <div class="lg-dir" id="lgDir">
+      <button type="button" class="on-owe" data-dir="i_owe" onclick="lgSetDir(this)">💸 قرض گرفتم</button>
+      <button type="button" data-dir="they_owe" onclick="lgSetDir(this)">💰 قرض دادم</button>
+    </div>
+    <input class="lg-in" id="lgAmount" placeholder="مبلغ (تومان)" style="width:130px" inputmode="numeric" oninput="lgFmtAmount(this)">
+    <select class="lg-sel" id="lgCurrency">
+      <option>تومان</option><option>دلار</option><option>یورو</option>
+    </select>
+    <input class="lg-in" id="lgDue" type="date" title="سررسید (اختیاری)">
+    <input class="lg-in" id="lgNote" placeholder="بابت؟ (اختیاری)" maxlength="300" style="flex:1;min-width:130px">
+    <button class="lg-btn" onclick="lgCreate()">ثبت</button>
+    <span class="ix-msg" id="lgMsg" style="font-size:11px;min-width:60px;"></span>
+  </div>
+</div>
+
+<!-- از کی قرض بگیرم؟ -->
+<div class="lg-card">
+  <div class="lg-card-title">🤲 از کی قرض بگیرم؟</div>
+  <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;">
+    بر اساس قدرت رابطه، گرمی رابطه، سابقه‌ی قرض قبلی و اینکه الان بهش بدهکار نباشی
+  </div>
+  <button class="lg-mini" onclick="lgBorrow()">پیشنهاد بده</button>
+  <div id="lgBorrowBox"></div>
+</div>
+
+<!-- حساب به تفکیک افراد -->
+<div class="lg-card">
+  <div class="lg-card-title">👥 حساب با هر نفر</div>
+  {% for p in persons %}
+  <div class="lg-row">
+    <a href="/nodes/{{ p.node_id }}/" style="font-weight:700;color:var(--text);text-decoration:none;">{{ p.name }}</a>
+    <span class="lg-amount {% if p.net >= 0 %}lg-pos{% else %}lg-neg{% endif %}">{{ p.net_fmt }}</span>
+    <span class="lg-note">{% if p.net >= 0 %}به تو بدهکاره{% else %}بهش بدهکاری{% endif %} · {{ p.count }} قلم باز</span>
+    {% if p.fscore is not None %}
+    <span class="lg-badge {% if p.fscore >= 70 %}ok{% elif p.fscore >= 40 %}soon{% else %}overdue{% endif %}">💠 {{ p.fscore }}</span>
+    {% endif %}
+    {% if p.next_due_fa %}
+    <span class="lg-badge {% if p.next_due_overdue %}overdue{% else %}ok{% endif %}">سررسید: {{ p.next_due_fa }}</span>
+    {% endif %}
+  </div>
+  {% empty %}
+  <div class="lg-empty">حساب بازی با کسی نداری 🎉</div>
+  {% endfor %}
+</div>
+
+<!-- اقلام باز -->
+<div class="lg-card">
+  <div class="lg-card-title">📋 اقلام باز <span class="chip chip-gray">{{ open_count }}</span></div>
+  {% for d in open_items %}
+  <div class="lg-row" id="debt{{ d.id }}">
+    <span style="font-size:15px;">{% if d.direction == 'i_owe' %}💸{% else %}💰{% endif %}</span>
+    <span style="font-weight:700;">{{ d.node_name }}</span>
+    <span class="lg-amount {% if d.direction == 'i_owe' %}lg-neg{% else %}lg-pos{% endif %}">{{ d.remaining_fmt }}</span>
+    <span class="lg-note">{{ d.currency }}{% if d.paid %} · از {{ d.amount_fmt }} ({{ d.paid_fmt }} پرداخت شده){% endif %}{% if d.note %} · {{ d.note }}{% endif %} · {{ d.date_fa }}</span>
+    {% if d.due_fa %}
+    <span class="lg-badge {% if d.overdue %}overdue{% elif d.days_left is not none and d.days_left <= 3 %}soon{% else %}ok{% endif %}">
+      {% if d.overdue %}⏰ {{ d.overdue_days }} روز گذشته{% else %}📅 {{ d.due_fa }}{% endif %}
+    </span>
+    {% endif %}
+    <span style="margin-right:auto;display:flex;gap:6px;">
+      <button class="lg-mini" onclick="lgPay({{ d.id }}, true)">پرداخت جزئی</button>
+      <button class="lg-mini" onclick="lgPay({{ d.id }}, false)">✓ تسویه</button>
+      <button class="lg-mini" onclick="lgDelete({{ d.id }})">✕</button>
+    </span>
+  </div>
+  {% empty %}
+  <div class="lg-empty">قلم بازی نیست</div>
+  {% endfor %}
+</div>
+
+<!-- تسویه‌شده‌های اخیر -->
+{% if settled_items %}
+<div class="lg-card" style="opacity:.75;">
+  <div class="lg-card-title">✅ تسویه‌شده‌های اخیر</div>
+  {% for d in settled_items %}
+  <div class="lg-row">
+    <span>{% if d.direction == 'i_owe' %}💸{% else %}💰{% endif %}</span>
+    <span>{{ d.node_name }}</span>
+    <span class="lg-amount" style="color:var(--text-muted);text-decoration:line-through;">{{ d.amount_fmt }}</span>
+    <span class="lg-note">{{ d.currency }}{% if d.note %} · {{ d.note }}{% endif %}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let lgDir = 'i_owe';
+function lgSetDir(btn){
+  lgDir = btn.dataset.dir;
+  document.querySelectorAll('#lgDir button').forEach(b => b.className = '');
+  btn.className = lgDir === 'i_owe' ? 'on-owe' : 'on-get';
+}
+function lgFmtAmount(el){
+  const fa='۰۱۲۳۴۵۶۷۸۹';
+  let s = el.value.split('').map(c => { const i = fa.indexOf(c); return i >= 0 ? String(i) : c; }).join('');
+  s = s.replace(/[^0-9]/g,'');
+  el.value = s ? parseInt(s).toLocaleString('en-US') : '';
+}
+async function lgCreate(){
+  const msg = document.getElementById('lgMsg');
+  const node = document.getElementById('lgNode').value;
+  if(!node){ msg.style.color='#f43f5e'; msg.textContent='شخص رو انتخاب کن'; return; }
+  msg.style.color='var(--text-muted)'; msg.textContent='…';
+  try{
+    const r = await fetch('/api/debts/create/', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify({
+        node_id: parseInt(node),
+        direction: lgDir,
+        amount: document.getElementById('lgAmount').value,
+        currency: document.getElementById('lgCurrency').value,
+        due_date: document.getElementById('lgDue').value,
+        note: document.getElementById('lgNote').value,
+      })
+    });
+    const d = await r.json();
+    if(!d.ok){ msg.style.color='#f43f5e'; msg.textContent = d.error || 'خطا'; return; }
+    location.reload();
+  }catch(e){ msg.style.color='#f43f5e'; msg.textContent='خطای سرور'; }
+}
+async function lgPay(id, partial){
+  let amount = null;
+  if(partial){
+    amount = prompt('چقدر پرداخت شد؟ (تومان)');
+    if(!amount) return;
+  } else if(!confirm('کل مبلغ تسویه بشه؟')) return;
+  try{
+    const r = await fetch(`/api/debts/${id}/pay/`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify(amount ? {amount: amount} : {})
+    });
+    const d = await r.json();
+    if(!d.ok){ alert(d.error || 'خطا'); return; }
+    location.reload();
+  }catch(e){ alert('خطای سرور'); }
+}
+async function lgDelete(id){
+  if(!confirm('این قلم حذف بشه؟')) return;
+  try{
+    const r = await fetch(`/api/debts/${id}/delete/`, {
+      method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}
+    });
+    const d = await r.json();
+    if(d.ok) document.getElementById('debt'+id).remove();
+    else alert(d.error || 'خطا');
+  }catch(e){ alert('خطای سرور'); }
+}
+async function lgBorrow(){
+  const box = document.getElementById('lgBorrowBox');
+  box.innerHTML = '<div class="lg-empty">در حال تحلیل…</div>';
+  try{
+    const r = await fetch('/api/borrow/suggest/');
+    const d = await r.json();
+    if(!d.ok){ box.innerHTML = `<div class="lg-empty" style="color:#f87171">${d.error||'خطا'}</div>`; return; }
+    if(!d.suggestions.length){ box.innerHTML = '<div class="lg-empty">هنوز رابطه‌ای ثبت نشده</div>'; return; }
+    box.innerHTML = d.suggestions.map((s,i) => `
+      <div class="lg-sug">
+        <div class="lg-sug-rank">${i+1}</div>
+        <div>
+          <a href="/nodes/${s.node_id}/" style="font-weight:800;font-size:13px;color:var(--text);text-decoration:none;">${s.name}</a>
+          <div class="lg-note" style="margin-top:2px;">${s.reasons.map(x=>`<span>· ${x}</span>`).join(' ')}</div>
+        </div>
+      </div>`).join('');
+  }catch(e){ box.innerHTML = '<div class="lg-empty" style="color:#f87171">خطای سرور</div>'; }
+}
+</script>
+{% endblock %}

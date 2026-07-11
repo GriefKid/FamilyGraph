@@ -1,105 +1,147 @@
 {% extends "base.html" %}
-
-{% block title %}
-جزئیات رابطه
-{% endblock %}
+{% block title %}پروفایل رابطه · FamilyGraph{% endblock %}
+{% block page_title %}💞 پروفایل رابطه{% endblock %}
+{% block nav_rels %}active{% endblock %}
 
 {% block extra_css %}
-
-.rel-container{
-	max-width:500px;
-	margin:auto;
+<style>
+.rp-wrap{ max-width:760px; margin:0 auto; }
+.rp-hero{
+  background:linear-gradient(135deg, rgba(99,102,241,.13), rgba(236,72,153,.09));
+  border:1px solid rgba(99,102,241,.28); border-radius:20px;
+  padding:26px 24px; margin-bottom:16px; text-align:center;
 }
-
-.rel-row{
-	display:flex;
-	justify-content:space-between;
-	padding:10px 0;
-	border-bottom:1px solid var(--border);
-	font-size:14px;
+.rp-pair{ display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; }
+.rp-person{ text-decoration:none; color:var(--text); }
+.rp-av{
+  width:74px; height:74px; border-radius:50%; margin:0 auto 8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:28px; font-weight:800; color:#fff; overflow:hidden;
 }
-
-.rel-label{
-	color:#94a3b8;
-}
-
-.rel-value{
-	font-weight:500;
-}
-
-.rel-actions{
-	display:flex;
-	gap:10px;
-	margin-top:20px;
-}
-
-.back-btn{
-	margin-top:20px;
-	display:inline-block;
-}
-
+.rp-av img{ width:100%; height:100%; object-fit:cover; }
+.rp-av.a{ background:linear-gradient(135deg,#6366f1,#8b5cf6); }
+.rp-av.b{ background:linear-gradient(135deg,#ec4899,#f59e0b); }
+.rp-name{ font-size:14.5px; font-weight:800; }
+.rp-link{ font-size:26px; color:#a855f7; }
+.rp-label{ margin-top:12px; font-size:13px; color:var(--text-soft); }
+.rp-chips{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+.rp-chip{ font-size:11.5px; padding:4px 13px; border-radius:999px;
+  background:rgba(255,255,255,.05); border:1px solid var(--border-strong); }
+.rp-pips{ display:inline-flex; gap:3px; }
+.rp-pip{ width:11px; height:5px; border-radius:3px; background:var(--border-strong); }
+.rp-pip.on{ background:linear-gradient(90deg,#6366f1,#a855f7); box-shadow:0 0 6px rgba(139,92,246,.5); }
+.rp-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.rp-title{ font-size:14px; font-weight:800; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.rp-hist{ display:flex; align-items:flex-end; gap:5px; height:44px; }
+.rp-hist-bar{ flex:1; border-radius:3px 3px 0 0; background:linear-gradient(180deg,#a855f7,#6366f1); opacity:.85; min-height:5px; }
+.rp-note{ font-size:11px; color:var(--text-muted); margin-top:6px; }
+.rp-actions{ display:flex; gap:8px; justify-content:center; margin-top:6px; }
+.rp-actions a{ font-size:11px; color:var(--text-muted); text-decoration:none; padding:5px 13px;
+  border:1px solid var(--border); border-radius:9px; }
+.rp-actions a:hover{ color:#a5b4fc; border-color:var(--primary-border); }
+</style>
 {% endblock %}
 
 {% block content %}
+<div class="rp-wrap">
 
-<div class="card rel-container">
+  <!-- هویت رابطه -->
+  <div class="rp-hero">
+    <div class="rp-pair">
+      <a class="rp-person" href="{% url 'node_detail' relationship.source.id %}">
+        <div class="rp-av a">
+          {% if relationship.source.picture %}<img src="{{ relationship.source.picture.url }}" alt="">
+          {% else %}{{ relationship.source.display_name|first|upper }}{% endif %}
+        </div>
+        <div class="rp-name">{{ relationship.source.display_name }}</div>
+      </a>
+      <div class="rp-link">⟵{{ relationship.emoji }}⟶</div>
+      <a class="rp-person" href="{% url 'node_detail' relationship.target.id %}">
+        <div class="rp-av b">
+          {% if relationship.target.picture %}<img src="{{ relationship.target.picture.url }}" alt="">
+          {% else %}{{ relationship.target.display_name|first|upper }}{% endif %}
+        </div>
+        <div class="rp-name">{{ relationship.target.display_name }}</div>
+      </a>
+    </div>
+    <div class="rp-label">{{ relationship.rel|default:"بدون برچسب" }}</div>
+    <div class="rp-chips">
+      <span class="rp-chip">
+        قدرت:
+        <span class="rp-pips">{% for i in "12345" %}<span class="rp-pip {% if forloop.counter <= relationship.strength %}on{% endif %}"></span>{% endfor %}</span>
+        {{ relationship.strength }}/5
+      </span>
+      <span class="rp-chip">
+        {% if relationship.status == 'active' %}🟢 فعال{% elif relationship.status == 'distant' %}🟡 دور{% else %}⚪ غیرفعال{% endif %}
+      </span>
+      {% if relationship.met_at %}<span class="rp-chip">🤝 آشنایی: {{ relationship.met_at|date:"Y/m/d" }}</span>{% endif %}
+    </div>
+  </div>
 
-	<div class="card-title">
-		رابطه: {{ relationship.rel }}
-	</div>
+  <!-- روند قدرت -->
+  {% with hist=relationship.strength_history.all %}
+  {% if hist|length > 1 %}
+  <div class="rp-card">
+    <div class="rp-title">📈 روند قدرت رابطه</div>
+    <div class="rp-hist">
+      {% for h in hist reversed %}
+      <div class="rp-hist-bar" title="{{ h.changed_at|date:'Y/m/d' }} — قدرت {{ h.strength }}"
+           style="height:{% widthratio h.strength 5 100 %}%;"></div>
+      {% endfor %}
+    </div>
+    <div class="rp-note">هر میله = یک تغییر ثبت‌شده‌ی قدرت (قدیمی ← جدید)</div>
+  </div>
+  {% endif %}
+  {% endwith %}
 
-	<div class="rel-row">
-		<div class="rel-label">
-			ID
-		</div>
-		<div class="rel-value">
-			#{{ relationship.id }}
-		</div>
-	</div>
+  <!-- شناخت رابطه -->
+  <div class="rp-card">
+    <div class="rp-title">
+      <span>🧠 شناخت این رابطه</span>
+      <button class="btn btn-primary btn-sm" onclick="rpersonaLoad(true)">✦ بگو چی می‌دونی</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;">
+      جمع‌بندی کلی اپ از این رابطه — از همه‌ی نشانه‌ها، بدون ذکر منبع.
+    </div>
+    <div id="rpersonaBox" style="font-size:13px;color:var(--text-muted);">هنوز شناختی ساخته نشده — دکمه رو بزن.</div>
+  </div>
 
-	<div class="rel-row">
-		<div class="rel-label">
-			نوع رابطه
-		</div>
-		<div class="rel-value">
-			{{ relationship.rel }}
-		</div>
-	</div>
-
-	<div class="rel-row">
-		<div class="rel-label">
-			پدر
-		</div>
-		<div class="rel-value">
-			{{ relationship.father.username }} ({{ relationship.father.id }})
-		</div>
-	</div>
-
-	<div class="rel-row">
-		<div class="rel-label">
-			فرزند
-		</div>
-		<div class="rel-value">
-			{{ relationship.child.username }} ({{ relationship.child.id }})
-		</div>
-	</div>
-
-	<div class="rel-actions">
-
-		<a href="{% url 'relationship_update' relationship.id %}" class="btn">
-			ویرایش
-		</a>
-
-		<a href="{% url 'relationship_delete' relationship.id %}" class="btn btn-danger">
-			حذف
-		</a>
-
-	</div>
+  <div class="rp-actions">
+    <a href="{% url 'relationship_update' relationship.id %}">✏️ ویرایش</a>
+    <a href="{% url 'relationship_delete' relationship.id %}">🗑 حذف</a>
+    <a href="/relationships/">← همه‌ی روابط</a>
+  </div>
 
 </div>
+{% endblock %}
 
-<a href="/relationships/" class="btn back-btn">
-	← لیست روابط
-</a>
-
+{% block extra_js %}
+<script>
+function rpersonaRender(p){
+  const box = document.getElementById('rpersonaBox');
+  if(!p || !(p.statements||[]).length){ box.textContent = 'هنوز شناختی ساخته نشده — دکمه بالا رو بزن.'; return; }
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html = '';
+  if(p.summary) html += `<div style="padding:11px 14px;border-radius:12px;background:rgba(236,72,153,.06);border:1px dashed rgba(236,72,153,.3);line-height:1.9;margin-bottom:10px;color:var(--text);">${esc(p.summary)}</div>`;
+  html += (p.statements||[]).map(s => `
+    <div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px dashed var(--border);align-items:baseline;color:var(--text);">
+      <span style="color:#f9a8d4;">✦</span><span style="flex:1;line-height:1.9;">${esc(s.text)}</span>
+      ${s.kind?`<span class="chip chip-gray" style="font-size:10px;flex-shrink:0;">${esc(s.kind)}</span>`:''}
+    </div>`).join('');
+  if(p.updated_at) html += `<div style="font-size:10px;color:var(--text-muted);margin-top:8px;">آخرین به‌روزرسانی: ${esc(p.updated_at)}</div>`;
+  box.innerHTML = html;
+}
+async function rpersonaLoad(fresh){
+  const box = document.getElementById('rpersonaBox');
+  box.textContent = fresh ? '✦ دارم نشانه‌ها رو کنار هم می‌ذارم…' : '…';
+  try{
+    const r = await fetch(fresh ? '/api/persona/rel/{{ relationship.id }}/synthesize/' : '/api/persona/rel/{{ relationship.id }}/',
+      fresh ? {method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}} : {});
+    const d = await r.json();
+    if(!d.ok){ box.innerHTML = `<span style="color:#f87171">${d.error||'خطا'}</span>`; return; }
+    rpersonaRender(d.persona);
+  }catch(e){ box.textContent = 'خطا در ارتباط با سرور'; }
+}
+rpersonaLoad(false);
+</script>
 {% endblock %}

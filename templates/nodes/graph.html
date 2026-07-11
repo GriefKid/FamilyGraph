@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}گراف شبکه — FamilyGraph{% endblock %}
-{% block page_title %}گراف شبکه{% endblock %}
+{% block page_title %}🕸 گراف شبکه{% endblock %}
 {% block nav_graph %}active{% endblock %}
 
 {% block extra_css %}
@@ -126,6 +126,12 @@
 #node-panel .np-primary{ background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }
 #node-panel .np-ghost{ background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:#94a3b8; }
 #node-panel .np-close{ position:absolute; top:12px; left:14px; background:none; border:none; color:#64748b; cursor:pointer; font-size:15px; line-height:1; }
+#node-panel .np-log{ margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08); }
+#node-panel .np-log-title{ font-size:11px; color:#94a3b8; margin-bottom:6px; }
+#node-panel .np-log-btns{ display:flex; gap:6px; }
+#node-panel .np-log-btn{ flex:1; padding:6px 0; font-size:15px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:8px; cursor:pointer; transition:.15s; }
+#node-panel .np-log-btn:hover{ background:rgba(99,102,241,.25); border-color:#6366f1; transform:translateY(-1px); }
+#node-panel .np-log-msg{ font-size:11px; margin-top:6px; min-height:14px; color:#34d399; }
 
 /* ── Edge draw (right-click drag) ── */
 #edge-draw-line{
@@ -279,7 +285,7 @@
       <div id="group-filter">
         <span id="no-groups-hint" style="font-size:11px;color:#475569;">
           هنوز گروهی تعریف نشده —
-          <a href="/groups/" style="color:#a5b4fc;text-decoration:none;">گروه‌بندی</a>
+          <a href="#" onclick="openGroupsMgr();return false;" style="color:#a5b4fc;text-decoration:none;">گروه‌بندی</a>
         </span>
       </div>
     </div>
@@ -289,6 +295,47 @@
       <div class="tb-sep"></div>
       <button class="tb-btn" onclick="toggleLayout()">تغییر layout</button>
       <button class="tb-btn" onclick="fitAll()">Fit</button>
+    </div>
+    <!-- Groups manager button -->
+    <div class="tb-glass" style="cursor:pointer;" onclick="openGroupsMgr()">
+      <span style="font-size:13px;">🗂</span>
+      <span style="font-size:11px;color:#94a3b8;">گروه‌بندی</span>
+    </div>
+  </div>
+
+  <!-- Groups Manager Modal -->
+  <div id="groups-mgr-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;backdrop-filter:blur(4px);" onclick="if(event.target===this)closeGroupsMgr()">
+    <div id="groups-mgr-panel" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+         width:min(700px,95vw);max-height:80vh;overflow-y:auto;
+         background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:24px 26px;direction:rtl;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <h3 style="font-size:16px;font-weight:700;margin:0;">🗂 مدیریت گروه‌ها</h3>
+        <button onclick="closeGroupsMgr()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">✕</button>
+      </div>
+
+      <!-- ساخت گروه جدید -->
+      <div style="background:rgba(99,102,241,.06);border:1px solid var(--primary-border);border-radius:12px;padding:14px 16px;margin-bottom:20px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:10px;letter-spacing:.5px;">+ گروه جدید</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="new-group-name" type="text" placeholder="نام گروه (مثلاً: خانواده، کار...)"
+            style="flex:2;min-width:140px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);
+            background:var(--surface);color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13px;outline:none;">
+          <select id="new-group-first-member"
+            style="flex:2;min-width:140px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);
+            background:var(--surface);color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:13px;outline:none;">
+            <option value="">اولین عضو را انتخاب کن</option>
+          </select>
+          <button onclick="createGroup()" style="padding:8px 16px;border-radius:8px;background:var(--primary);
+            border:none;color:#fff;font-family:'Vazirmatn',sans-serif;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ساخت گروه
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:7px;">گروه با افزودن اولین عضو ساخته می‌شه</div>
+      </div>
+
+      <div id="groups-mgr-content">
+        <div style="text-align:center;padding:30px;color:var(--text-muted);">⏳ در حال بارگذاری...</div>
+      </div>
     </div>
   </div>
 
@@ -342,6 +389,24 @@
     <div class="np-row">
       <span>Community</span>
       <span class="np-val"><span class="np-com" id="npDot"></span><span id="npCom">—</span></span>
+    </div>
+    <div class="np-row" id="npHealthRow" style="display:none">
+      <span>سلامت رابطه</span>
+      <span class="np-val" id="npHealth">—</span>
+    </div>
+    <div class="np-row" id="npScoreRow" style="display:none">
+      <span>💠 نمره دوستی</span>
+      <span class="np-val" id="npScore">—</span>
+    </div>
+    <div class="np-log" id="npLog" style="display:none">
+      <div class="np-log-title">ثبت تعامل امروز:</div>
+      <div class="np-log-btns">
+        <button class="np-log-btn" onclick="quickLog('call')"    title="تلفنی">📞</button>
+        <button class="np-log-btn" onclick="quickLog('meet')"    title="حضوری">🤝</button>
+        <button class="np-log-btn" onclick="quickLog('message')" title="پیام">💬</button>
+        <button class="np-log-btn" onclick="quickLog('online')"  title="آنلاین">🌐</button>
+      </div>
+      <div class="np-log-msg" id="npLogMsg"></div>
     </div>
     <div class="np-actions">
       <a class="np-btn np-primary" id="npLink" href="#">پروفایل</a>
@@ -713,7 +778,7 @@ function paint(nodes, edges, rootId, nMap){
     .attr("y1", d => (nMap[d.source] || {y:0}).y)
     .attr("x2", d => (nMap[d.target] || {x:0}).x)
     .attr("y2", d => (nMap[d.target] || {y:0}).y)
-    .attr("stroke", "rgba(165,180,252,.4)")
+    .attr("stroke", d => edgeStroke(d))
     .attr("stroke-width", d => Math.max(1.5, (d.strength || 3) * .55))
     .attr("stroke-linecap", "round");
 
@@ -846,6 +911,7 @@ function buildLegend(commSet, nodes){
       `;
       c.appendChild(row);
     }
+    appendHealthLegend(c);
   } else {
     // Louvain fallback (وقتی هیچ گروه دستی‌ای تنظیم نشده)
     [...commSet].slice(0, 8).forEach(ci => {
@@ -863,7 +929,33 @@ function buildLegend(commSet, nodes){
       row.onclick = () => toggleCommunity(ci);
       c.appendChild(row);
     });
+    appendHealthLegend(c);
   }
+}
+
+// V4: بخش سلامت رابطه در legend
+function appendHealthLegend(c){
+  const hc = gData && gData.health_counts;
+  if(!hc || (hc.green + hc.yellow + hc.red) === 0) return;
+  const div = document.createElement("div");
+  div.style.cssText = "margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);";
+  div.innerHTML = `<div style="font-size:10px;color:#64748b;margin-bottom:5px;">سلامت روابط من</div>`;
+  const items = [
+    ["#34d399", "سالم",         hc.green],
+    ["#fbbf24", "نیاز به توجه", hc.yellow],
+    ["#f87171", "سرد شده",      hc.red],
+  ];
+  items.forEach(([color, label, cnt]) => {
+    if(!cnt) return;
+    const row = document.createElement("div");
+    row.className = "leg-row";
+    row.innerHTML = `
+      <div class="leg-dot" style="background:${color};box-shadow:0 0 5px ${color}88;"></div>
+      <span>${label} <span style="color:${color};font-weight:700">(${cnt})</span></span>
+    `;
+    div.appendChild(row);
+  });
+  c.appendChild(div);
 }
 
 async function renameGroup(oldName, color){
@@ -897,7 +989,7 @@ function buildGroupFilter(){
   if(!all_groups || all_groups.length === 0){
     container.innerHTML = `<span style="font-size:11px;color:#475569;">
       هنوز گروهی تعریف نشده —
-      <a href="/groups/" style="color:#a5b4fc;text-decoration:none;">گروه‌بندی</a>
+      <a href="#" onclick="openGroupsMgr();return false;" style="color:#a5b4fc;text-decoration:none;">گروه‌بندی</a>
     </span>`;
     return;
   }
@@ -998,10 +1090,24 @@ function onLeave(){
 function isAdj(e, id){
   return e.source===id || e.target===id || e.source?.id===id || e.target?.id===id;
 }
+// V4: رنگ یال بر اساس سلامت رابطه (فقط یال‌های root)
+function edgeStroke(d){
+  return d.health_color ? d.health_color + "aa" : "rgba(165,180,252,.4)";
+}
+
 function resetEdges(){
   eLayer.selectAll(".eline")
-    .attr("stroke","rgba(165,180,252,.4)")
+    .attr("stroke", d => edgeStroke(d))
     .attr("stroke-width", d => Math.max(1.5,(d.strength||3)*.55));
+}
+
+// سلامت یک نود از روی یال root↔node
+function healthOf(id){
+  if(!gData || !gData.root_id) return null;
+  const e = gData.edges.find(e =>
+    (e.source === gData.root_id && e.target === id) ||
+    (e.target === gData.root_id && e.source === id));
+  return (e && e.health_status) ? e : null;
 }
 
 function onClick(ev, d){
@@ -1014,7 +1120,84 @@ function onClick(ev, d){
   document.getElementById("npCom").textContent    = (d.groups && d.groups.length) ? d.groups.join(' · ') : `گروه ${d.community+1}`;
   document.getElementById("npDot").style.background = d.color;
   document.getElementById("npLink").href          = "/nodes/" + d.id + "/";
+
+  // V9: نمره دوستی از شناخت‌نامه
+  const sRow = document.getElementById("npScoreRow");
+  if(d.fscore !== null && d.fscore !== undefined){
+    const sc = parseInt(d.fscore);
+    const col = sc >= 70 ? "#34d399" : (sc >= 40 ? "#fbbf24" : "#f87171");
+    document.getElementById("npScore").innerHTML =
+      `<span style="color:${col};font-weight:800">${sc}</span><span style="color:#64748b;font-size:10px">/100</span>`;
+    sRow.style.display = "flex";
+  } else { sRow.style.display = "none"; }
+
+  // V4: سلامت رابطه + ثبت سریع تعامل (فقط برای غیر root)
+  const isRoot = d.id === gData.root_id;
+  const hRow = document.getElementById("npHealthRow");
+  const logBox = document.getElementById("npLog");
+  document.getElementById("npLogMsg").textContent = "";
+  if(isRoot){
+    hRow.style.display = "none";
+    logBox.style.display = "none";
+  } else {
+    logBox.style.display = "block";
+    const h = healthOf(d.id);
+    if(h){
+      const ic = {green:"🟢",yellow:"🟡",red:"🔴"}[h.health_status] || "⚪";
+      const days = (h.days_since === 0) ? "امروز"
+                 : (h.days_since != null ? h.days_since + " روز پیش" : "بدون داده");
+      document.getElementById("npHealth").textContent = `${ic} ${days}`;
+      hRow.style.display = "flex";
+    } else {
+      document.getElementById("npHealth").textContent = "⚪ بدون داده";
+      hRow.style.display = gData.root_id ? "flex" : "none";
+    }
+  }
   document.getElementById("node-panel").style.display = "block";
+}
+
+// V4: ثبت تعامل امروز از داخل گراف
+async function quickLog(kind){
+  if(!panelId) return;
+  const msg = document.getElementById("npLogMsg");
+  msg.style.color = "#94a3b8"; msg.textContent = "در حال ثبت…";
+  try{
+    const r = await fetch("/api/interactions/log/", {
+      method: "POST",
+      headers: {"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
+      body: JSON.stringify({ node_id: panelId, kind: kind })
+    });
+    const d = await r.json();
+    if(d.ok){
+      msg.style.color = "#34d399";
+      msg.textContent = "✓ ثبت شد";
+      if(d.open_followups && d.open_followups.length){
+        msg.style.color = "#fbbf24";
+        msg.textContent = `✓ ثبت شد — ${d.open_followups.length} موضوع باز باهاش داری (پروفایل)`;
+      }
+      // آپدیت زنده‌ی یال root↔node بدون reload
+      if(d.health && gData.root_id){
+        gData.edges.forEach(e => {
+          const match = (e.source === gData.root_id && e.target === panelId) ||
+                        (e.target === gData.root_id && e.source === panelId);
+          if(match){
+            e.health_status = d.health.status;
+            e.health_color  = d.health.color;
+            e.health_score  = d.health.score;
+            e.days_since    = d.health.days_since;
+          }
+        });
+        resetEdges();
+        const ic = {green:"🟢",yellow:"🟡",red:"🔴"}[d.health.status] || "⚪";
+        document.getElementById("npHealth").textContent = `${ic} امروز`;
+        document.getElementById("npHealthRow").style.display = "flex";
+      }
+    } else {
+      msg.style.color = "#f87171"; msg.textContent = d.error || "خطا در ثبت";
+    }
+  } catch(e){
+    msg.style.color = "#f87171"; msg.textContent = "خطا در ارتباط با سرور";
+  }
 }
 svgEl.on("click", () => closePanel());
 
@@ -1404,5 +1587,168 @@ function persianNum(n){
 }
 
 initDropZone();
+
+// ══════════════════════════════════════════════════════════
+//  Groups Manager Modal
+// ══════════════════════════════════════════════════════════
+function openGroupsMgr(){
+  document.getElementById('groups-mgr-overlay').style.display = 'block';
+  loadGroupsMgr();
+}
+function closeGroupsMgr(){
+  document.getElementById('groups-mgr-overlay').style.display = 'none';
+}
+
+const PAL_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
+let _gmgrData = null;  // cached data for modal
+
+async function loadGroupsMgr(){
+  try{
+    // BUGFIX: قبلاً /api/home/graph/ بود که فرمت Cytoscape می‌ده ({data:{...}})
+    // و باعث می‌شد اسم‌ها undefined/unknown بشن و گروه‌ها خالی بیان.
+    const r = await fetch('/api/graph/all/');
+    const d = await r.json();
+    _gmgrData = d;
+    // پر کردن dropdown اولین عضو گروه جدید
+    const sel = document.getElementById('new-group-first-member');
+    if(sel && d.nodes){
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">اولین عضو را انتخاب کن</option>'
+        + (d.nodes||[]).map(n=>`<option value="${n.id}">${n.label||n.id}</option>`).join('');
+      sel.value = cur;
+    }
+    renderGroupsMgr(d);
+  } catch(e){
+    document.getElementById('groups-mgr-content').innerHTML = '<div style="color:#f87171">خطا در بارگذاری</div>';
+  }
+}
+
+function renderGroupsMgr(d){
+  const groups  = d.all_groups || [];
+  const colors  = d.group_colors || {};
+  const nodes   = d.nodes || [];
+  const ungrouped = nodes.filter(n => !n.group);
+  const el = document.getElementById('groups-mgr-content');
+  let html = '';
+
+  groups.forEach((g,i) => {
+    const col = colors[g] || PAL_COLORS[i % PAL_COLORS.length];
+    const members = nodes.filter(n => n.group === g);
+    html += `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0;"></div>
+        <span style="font-weight:700;font-size:14px;flex:1;">${g}</span>
+        <span style="font-size:11px;color:var(--text-muted);background:rgba(255,255,255,.06);border:1px solid var(--border);padding:2px 8px;border-radius:10px;">${members.length} نفر</span>
+        <button onclick="mgr_renameGroup('${g.replace(/'/g,"\\'")}')"
+          style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:12px;padding:3px 6px;">✏</button>
+        <button onclick="mgr_deleteGroup('${g.replace(/'/g,"\\'")}')"
+          style="background:none;border:none;color:#f87171;cursor:pointer;font-size:12px;padding:3px 6px;">✕</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;">
+        ${members.map(n => `<span style="font-size:11px;padding:3px 10px;background:rgba(99,102,241,.1);border:1px solid var(--primary-border);border-radius:20px;color:var(--text-soft);display:flex;align-items:center;gap:5px;">
+          ${n.label||n.id}
+          <button onclick="mgr_removeFromGroup(${n.id},'${g.replace(/'/g,"\\'")}')" style="background:none;border:none;color:#6b7280;cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
+        </span>`).join('')}
+        ${members.length===0 ? '<span style="font-size:11px;color:#374151;font-style:italic;">خالی</span>' : ''}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+        <select id="add-to-${i}" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:12px;outline:none;">
+          <option value="">+ افزودن نفر به این گروه</option>
+          ${nodes.filter(n => n.group !== g).map(n => `<option value="${n.id}">${n.label||n.id}</option>`).join('')}
+        </select>
+        <button onclick="mgr_addToGroup(${i},'${g.replace(/'/g,"\\'")}')"
+          style="padding:6px 14px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-family:'Vazirmatn',sans-serif;font-size:12px;cursor:pointer;">افزودن</button>
+      </div>
+    </div>`;
+  });
+
+  if(ungrouped.length > 0){
+    html += `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:10px;">بدون گروه (${ungrouped.length} نفر)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${ungrouped.map(n => `<span style="font-size:11px;padding:3px 10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:20px;color:var(--text-muted);">${n.label||n.id}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  if(groups.length === 0){
+    html = `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">هنوز گروهی تعریف نشده.<br>از فیلد بالا یه گروه بساز.</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+async function createGroup(){
+  const nameInp = document.getElementById('new-group-name');
+  const name = nameInp.value.trim();
+  const sel  = document.getElementById('new-group-first-member');
+  const nodeId = sel ? parseInt(sel.value) : 0;
+  if(!name){ nameInp.focus(); return; }   // BUGFIX: قبلاً فوکوس اشتباهی روی select می‌رفت
+  if(!nodeId){
+    sel && sel.focus();
+    return;
+  }
+  const r = await fetch('/api/groups/assign/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({node_ids:[nodeId], group_name:name, action:'add'})
+  });
+  const d = await r.json();
+  if(d.ok){
+    document.getElementById('new-group-name').value = '';
+    if(sel) sel.value = '';
+    await loadGroupsMgr();
+    loadGraph();
+  } else {
+    alert(d.error||'خطا در ساخت گروه');
+  }
+}
+
+async function mgr_renameGroup(oldName){
+  const newName = prompt(`تغییر نام گروه «${oldName}» به:`, oldName);
+  if(!newName || newName.trim() === oldName || !newName.trim()) return;
+  const r = await fetch('/api/groups/rename/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({old_name: oldName, new_name: newName.trim()})
+  });
+  const d = await r.json();
+  if(d.ok){ await loadGroupsMgr(); loadGraph(); }
+  else alert(d.error||'خطا');
+}
+
+async function mgr_deleteGroup(name){
+  if(!confirm(`گروه «${name}» حذف شود؟ نودها از این گروه خارج می‌شن.`)) return;
+  const r = await fetch('/api/groups/delete/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})
+  });
+  const d = await r.json();
+  if(d.ok){ await loadGroupsMgr(); loadGraph(); }
+  else alert(d.error||'خطا');
+}
+
+async function mgr_addToGroup(selIdx, groupName){
+  const sel = document.getElementById(`add-to-${selIdx}`);
+  const nodeId = parseInt(sel.value);
+  if(!nodeId){ return; }
+  const r = await fetch('/api/groups/assign/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({node_ids:[nodeId], group_name:groupName, action:'add'})
+  });
+  const d = await r.json();
+  if(d.ok){ await loadGroupsMgr(); loadGraph(); }
+  else alert(d.error||'خطا');
+}
+
+async function mgr_removeFromGroup(nodeId, groupName){
+  const r = await fetch('/api/groups/assign/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({node_ids:[nodeId], group_name:groupName, action:'remove'})
+  });
+  const d = await r.json();
+  if(d.ok){ await loadGroupsMgr(); loadGraph(); }
+  else alert(d.error||'خطا');
+}
+
 </script>
 {% endblock %}

@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}چت AI — FamilyGraph{% endblock %}
-{% block page_title %}چت با شبکه روابط{% endblock %}
+{% block page_title %}💜 همدم{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-ghost btn-sm" onclick="chatSaveJournal()" title="حرف‌های امروزت بره توی ژورنال تا تحلیل بشه">📓 ذخیره در ژورنال</button>
+<button class="btn btn-ghost btn-sm" onclick="chatClear()" title="حافظه پاک بشه و از نو شروع کنیم">🗑 گفتگوی نو</button>
+{% endblock %}
 {% block nav_chat %}active{% endblock %}
 
 {% block extra_css %}
@@ -48,9 +53,9 @@ background:linear-gradient(135deg,#6366f1,#8b5cf6);
 }
 
 .msg.user .msg-avatar{
-background:var(--surface);
-border:1px solid var(--border);
-color:var(--text-muted);
+background:linear-gradient(135deg,#ec4899,#f59e0b);
+border:none;
+color:#fff;
 }
 
 .msg-bubble{
@@ -69,9 +74,10 @@ color:var(--text);
 }
 
 .msg.user .msg-bubble{
-background:var(--primary);
+background:linear-gradient(135deg,#6366f1,#8b5cf6,#a855f7);
 color:#fff;
 border-top-left-radius:4px;
+box-shadow:0 4px 16px rgba(139,92,246,.3);
 }
 
 .msg-bubble p{ margin:0; }
@@ -206,22 +212,31 @@ color:var(--primary);
 <div class="chat-wrap">
 
   <div class="chat-messages" id="msgList">
+    {% for m in past_messages %}
+    <div class="msg {% if m.role == 'user' %}user{% else %}ai{% endif %}">
+      <div class="msg-avatar">{% if m.role == 'user' %}ش{% else %}✦{% endif %}</div>
+      <div class="msg-bubble"><p>{{ m.content|linebreaksbr }}</p></div>
+    </div>
+    {% endfor %}
+    {% if not past_messages %}
     <div class="welcome" id="welcome">
-      <div class="welcome-icon">✦</div>
-      <div class="welcome-title">چت با شبکه روابط</div>
-      <div class="welcome-hint">درباره افراد، روابط، و الگوهای شبکه‌ات بپرس</div>
+      <div class="welcome-icon">💜</div>
+      <div class="welcome-title">همدم — اینجا می‌تونی حرف بزنی</div>
+      <div class="welcome-hint">هم درد دل، هم سوال درباره‌ی روابط و شبکه‌ات — من هر دو رو بلدم و گفتگومون رو یادم می‌مونه</div>
       <div class="suggestion-chips">
-        <button class="chip-btn" onclick="sendSuggestion(this)">با چند نفر ارتباط دارم؟</button>
-        <button class="chip-btn" onclick="sendSuggestion(this)">کدام نود بیشترین ارتباط را دارد؟</button>
-        <button class="chip-btn" onclick="sendSuggestion(this)">انواع روابط من چیست؟</button>
+        <button class="chip-btn" onclick="sendSuggestion(this)">😮‍💨 می‌خوام درد دل کنم</button>
+        <button class="chip-btn" onclick="sendSuggestion(this)">امروز حالم خوب نیست</button>
+        <button class="chip-btn" onclick="sendSuggestion(this)">با یکی دعوام شده، بشنو</button>
         <button class="chip-btn" onclick="sendSuggestion(this)">خلاصه‌ای از شبکه من بده</button>
+        <button class="chip-btn" onclick="sendSuggestion(this)">کدوم روابطم نیاز به توجه دارن؟</button>
       </div>
     </div>
+    {% endif %}
   </div>
 
   <div class="chat-input-bar">
     <textarea id="chatInput" class="chat-input" rows="1"
-              placeholder="سوالت را بنویس..."
+              placeholder="هر چی تو دلته بنویس... 💬"
               onkeydown="handleKey(event)"
               oninput="autoResize(this)"></textarea>
     <button class="chat-send" id="sendBtn" onclick="sendMessage()">ارسال</button>
@@ -234,6 +249,12 @@ const msgList  = document.getElementById("msgList")
 const chatInput= document.getElementById("chatInput")
 const sendBtn  = document.getElementById("sendBtn")
 const welcome  = document.getElementById("welcome")
+let chatHistory = []   // V5: حافظه گفتگو — چت پیوسته و دوطرفه
+// V8: ادامه از گفتگوی قبلی (حافظه بین‌جلسه‌ای)
+{% for m in past_messages %}
+chatHistory.push({role:"{{ m.role }}", content:"{{ m.content|escapejs }}"})
+{% endfor %}
+if(chatHistory.length > 16) chatHistory = chatHistory.slice(-16)
 
 function autoResize(el){
   el.style.height="auto"
@@ -250,7 +271,7 @@ function sendSuggestion(btn){
 }
 
 function appendMsg(role, html){
-  if(welcome.parentNode) welcome.remove()
+  if(welcome && welcome.parentNode) welcome.remove()
 
   let div=document.createElement("div")
   div.className="msg "+role
@@ -318,11 +339,16 @@ async function sendMessage(){
     let res=await fetch("/api/chat/",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
-      body:JSON.stringify({message:msg})
+      body:JSON.stringify({message:msg, history:chatHistory})
     })
     let data=await res.json()
     removeTyping()
-    if(data.reply) appendMsg("ai",formatReply(data.reply))
+    if(data.reply){
+      appendMsg("ai",formatReply(data.reply))
+      chatHistory.push({role:"user",content:msg})
+      chatHistory.push({role:"assistant",content:data.reply})
+      if(chatHistory.length>16) chatHistory=chatHistory.slice(-16)
+    }
     else appendMsg("ai","<p style='color:#f43f5e'>خطا: "+(data.error||"نامشخص")+"</p>")
   }catch(e){
     removeTyping()
@@ -337,5 +363,30 @@ function getCookie(name){
   let v=document.cookie.match("(^|;)\\s*"+name+"\\s*=\\s*([^;]+)")
   return v ? v.pop() : ""
 }
+
+// ═══ V8: ذخیره در ژورنال + گفتگوی نو ═══
+async function chatSaveJournal(){
+  try{
+    const r = await fetch("/api/chat/save-journal/", {
+      method:"POST", headers:{"X-CSRFToken":getCookie("csrftoken")}
+    })
+    const d = await r.json()
+    if(d.ok) appendMsg("ai","<p>📓 "+(d.msg||"ذخیره شد")+"</p>")
+    else appendMsg("ai","<p style='color:#fbbf24'>"+(d.error||"خطا")+"</p>")
+  }catch(e){ alert("خطا در ارتباط با سرور") }
+}
+async function chatClear(){
+  if(!confirm("حافظه‌ی همدم پاک بشه و گفتگوی نو شروع بشه؟")) return
+  try{
+    const r = await fetch("/api/chat/clear/", {
+      method:"POST", headers:{"X-CSRFToken":getCookie("csrftoken")}
+    })
+    const d = await r.json()
+    if(d.ok) location.reload()
+  }catch(e){ alert("خطا در ارتباط با سرور") }
+}
+
+// اسکرول به آخر گفتگوی قبلی
+msgList.scrollTop = msgList.scrollHeight
 </script>
 {% endblock %}

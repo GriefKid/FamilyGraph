@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}چک-این روزانه{% endblock %}
+{% block page_title %}⚡ چک-این روزانه{% endblock %}
+{% block nav_checkin %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.ck-wrap{ max-width:720px; margin:0 auto; }
+
+.ck-head{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  flex-wrap:wrap; margin-bottom:22px;
+}
+.ck-title{ font-size:20px; font-weight:800; }
+.ck-title .ck-day{ font-size:12px; font-weight:400; color:var(--text-muted); margin-top:3px; }
+.ck-streak{
+  display:flex; align-items:center; gap:7px; padding:9px 16px; border-radius:14px;
+  background:linear-gradient(135deg, rgba(245,158,11,.18), rgba(236,72,153,.14));
+  border:1px solid rgba(245,158,11,.35); font-weight:800; font-size:14px;
+}
+.ck-streak .n{ font-size:19px; color:#fbbf24; }
+
+.ck-done-banner{
+  display:flex; align-items:center; gap:10px; padding:13px 18px; border-radius:14px;
+  background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.3);
+  color:#34d399; font-weight:700; font-size:13.5px; margin-bottom:18px;
+}
+
+.ck-card{
+  background:var(--card); border:1px solid var(--border); border-radius:18px;
+  padding:20px; margin-bottom:16px; transition:.2s;
+}
+.ck-card:hover{ border-color:var(--border-strong); }
+.ck-q{ font-size:15.5px; font-weight:800; margin-bottom:4px; }
+.ck-sub{ font-size:12px; color:var(--text-muted); margin-bottom:14px; }
+
+/* ── people chips ── */
+.ck-people{ display:flex; flex-wrap:wrap; gap:9px; }
+.ck-chip{
+  display:flex; align-items:center; gap:8px; padding:7px 13px 7px 9px;
+  border-radius:999px; cursor:pointer; user-select:none;
+  background:rgba(99,102,241,.06); border:1.5px solid var(--border-strong);
+  font-size:13px; font-weight:600; transition:.16s;
+}
+.ck-chip:hover{ transform:translateY(-2px); }
+.ck-chip.sel{
+  background:linear-gradient(135deg, rgba(99,102,241,.28), rgba(139,92,246,.22));
+  border-color:#818cf8; box-shadow:0 3px 14px rgba(99,102,241,.3);
+}
+.ck-av{
+  width:26px; height:26px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  background:rgba(99,102,241,.25); display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800;
+}
+.ck-av img{ width:100%; height:100%; object-fit:cover; }
+.ck-dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.ck-kind{
+  display:none; font-size:14px; background:rgba(255,255,255,.12);
+  border-radius:8px; padding:2px 6px; cursor:pointer;
+}
+.ck-chip.sel .ck-kind{ display:inline-block; }
+.ck-more{ font-size:12px; color:#a5b4fc; cursor:pointer; padding:8px 6px; }
+
+/* ── mood ── */
+.ck-moods{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.ck-mood{
+  font-size:33px; padding:10px 15px; border-radius:16px; cursor:pointer;
+  border:1.5px solid transparent; filter:grayscale(.55); transition:.18s;
+}
+.ck-mood:hover{ transform:scale(1.18) rotate(-4deg); filter:none; }
+.ck-mood.sel{
+  filter:none; transform:scale(1.14);
+  background:rgba(99,102,241,.14); border-color:#818cf8;
+  box-shadow:0 4px 18px rgba(99,102,241,.3);
+}
+
+/* ── highlight + followup ── */
+.ck-input, .ck-select{
+  width:100%; background:transparent; border:1px solid var(--border-strong);
+  border-radius:11px; padding:10px 13px; color:var(--text);
+  font-family:'Vazirmatn',sans-serif; font-size:13px; margin-bottom:9px;
+}
+.ck-select option{ background:var(--card); color:var(--text); }
+.ck-fu-row{ display:flex; gap:9px; flex-wrap:wrap; }
+.ck-fu-row .ck-select{ flex:0 0 190px; }
+.ck-fu-row .ck-input{ flex:1; min-width:170px; }
+
+.ck-submit{
+  width:100%; padding:15px; border:none; border-radius:16px; cursor:pointer;
+  background:linear-gradient(135deg,#6366f1,#a855f7,#ec4899);
+  color:#fff; font-family:'Vazirmatn',sans-serif; font-size:15.5px; font-weight:800;
+  transition:transform .2s ease, box-shadow .25s ease;
+}
+.ck-submit:hover{ transform:translateY(-2px); box-shadow:0 8px 28px rgba(168,85,247,.4); }
+.ck-submit:disabled{ opacity:.6; cursor:wait; }
+
+/* ── success ── */
+#ck-success{ display:none; text-align:center; padding:44px 20px; }
+#ck-success .big{ font-size:56px; animation:ckPop .5s cubic-bezier(.2,1.6,.4,1); }
+#ck-success h3{ font-size:20px; font-weight:800; margin:14px 0 6px; }
+#ck-success p{ color:var(--text-muted); font-size:13px; }
+@keyframes ckPop{ 0%{transform:scale(0)} 100%{transform:scale(1)} }
+.ck-confetti{ position:fixed; top:-40px; font-size:24px; pointer-events:none; z-index:999;
+  animation:ckFall linear forwards; }
+@keyframes ckFall{ to{ transform:translateY(105vh) rotate(340deg); opacity:.15; } }
+.ck-links{ display:flex; gap:10px; justify-content:center; margin-top:20px; flex-wrap:wrap; }
+.ck-links a{
+  padding:9px 20px; border-radius:11px; text-decoration:none; font-size:13px; font-weight:700;
+  background:rgba(99,102,241,.14); border:1px solid var(--primary-border); color:#a5b4fc;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ck-wrap">
+
+  <div class="ck-head">
+    <div class="ck-title">
+      امروز چطور گذشت؟ ✨
+      <div class="ck-day">{{ day_name }}، {{ jalali_full }}</div>
+    </div>
+    <div class="ck-streak" title="روزهای پشت سر هم که ثبت کردی">
+      🔥 <span class="n" id="ckStreak">{{ streak }}</span> روز
+    </div>
+  </div>
+
+  {% if already %}
+  <div class="ck-done-banner">✅ امروز چک-این کردی — آفرین! دوباره بفرستی، به همون امروز اضافه می‌شه.</div>
+  {% endif %}
+
+  <div id="ck-form">
+
+    <!-- Step 1 -->
+    <div class="ck-card">
+      <div class="ck-q">۱ · امروز با کیا در تماس بودی؟ 👋</div>
+      <div class="ck-sub">ضربه بزن تا انتخاب بشه — با ضربه روی آیکن، نوع تماس عوض می‌شه (💬 📞 🤝 🌐)</div>
+      <div class="ck-people" id="ckPeople"></div>
+      {% if people_count == 0 %}
+      <div style="color:var(--text-muted);font-size:12.5px;">هنوز کسی توی گرافت نیست — اول چند نفر <a href="/nodes/create/" style="color:#a5b4fc">اضافه کن</a></div>
+      {% endif %}
+    </div>
+
+    <!-- Step 2 -->
+    <div class="ck-card">
+      <div class="ck-q">۲ · حال امروزت چطور بود؟</div>
+      <div class="ck-sub">یکی رو انتخاب کن</div>
+      <div class="ck-moods" id="ckMoods">
+        <span class="ck-mood" data-mood="2"  title="عالی">😄</span>
+        <span class="ck-mood" data-mood="1"  title="خوب">🙂</span>
+        <span class="ck-mood" data-mood="0"  title="معمولی">😐</span>
+        <span class="ck-mood" data-mood="-1" title="ناراحت">😕</span>
+        <span class="ck-mood" data-mood="-2" title="خیلی بد">😞</span>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="ck-card">
+      <div class="ck-q">۳ · چیز مهمی امروز شد؟ 📝</div>
+      <div class="ck-sub">اختیاری — یه خط کافیه</div>
+      <input class="ck-input" id="ckHighlight" maxlength="500"
+             placeholder="مثلاً: با علی آشتی کردم / مامان‌بزرگ مریض شده">
+      <div class="ck-sub" style="margin-top:6px;">قولی دادی یا قراری گذاشتی؟ (اختیاری — می‌ره توی موضوعات باز 📌)</div>
+      <div class="ck-fu-row">
+        <select class="ck-select" id="ckFuNode"><option value="">با کی؟</option></select>
+        <input class="ck-input" id="ckFuText" maxlength="300" placeholder="مثلاً: قرار شد پنجشنبه بهش زنگ بزنم">
+      </div>
+    </div>
+
+    <button class="ck-submit" id="ckSubmit" onclick="ckSubmit()">ثبت امروز ⚡</button>
+  </div>
+
+  <!-- Success -->
+  <div id="ck-success">
+    <div class="big">🎉</div>
+    <h3 id="ckSuccessTitle">ثبت شد!</h3>
+    <p id="ckSuccessSub"></p>
+    <div class="ck-links">
+      <a href="/">🕸 گراف</a>
+      <a href="/alerts/">🔔 هشدارها</a>
+      <a href="/journal/">📓 ژورنال کامل</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CK_PEOPLE = {{ people_json|safe }};
+const CK_KINDS  = ['message','call','meet','online'];
+const CK_ICONS  = {message:'💬', call:'📞', meet:'🤝', online:'🌐'};
+const CK_DOTS   = {green:'#34d399', yellow:'#fbbf24', red:'#f87171', unknown:'#64748b'};
+const CK_LIMIT  = 14;
+
+let ckSel  = {};     // node_id -> kind
+let ckMood = null;
+let ckShowAll = false;
+
+function ckRender(){
+  const box = document.getElementById('ckPeople');
+  box.innerHTML = '';
+  const list = ckShowAll ? CK_PEOPLE : CK_PEOPLE.slice(0, CK_LIMIT);
+  list.forEach(p => {
+    const sel = ckSel[p.id] !== undefined;
+    const chip = document.createElement('div');
+    chip.className = 'ck-chip' + (sel ? ' sel' : '');
+    const av = p.image
+      ? `<span class="ck-av"><img src="${p.image}" alt=""></span>`
+      : `<span class="ck-av">${(p.label||'؟').slice(0,1)}</span>`;
+    chip.innerHTML = `
+      ${av}
+      <span class="ck-dot" style="background:${CK_DOTS[p.status]||CK_DOTS.unknown}"></span>
+      <span></span>
+      <span class="ck-kind">${sel ? CK_ICONS[ckSel[p.id]] : '💬'}</span>`;
+    chip.children[2].textContent = p.label;
+    chip.onclick = (e) => {
+      if(e.target.classList.contains('ck-kind')){
+        // چرخش نوع تماس
+        const cur = CK_KINDS.indexOf(ckSel[p.id]);
+        ckSel[p.id] = CK_KINDS[(cur + 1) % CK_KINDS.length];
+      } else if(ckSel[p.id] !== undefined){
+        delete ckSel[p.id];
+      } else {
+        ckSel[p.id] = 'message';
+      }
+      ckRender(); ckFuOptions();
+    };
+    box.appendChild(chip);
+  });
+  if(!ckShowAll && CK_PEOPLE.length > CK_LIMIT){
+    const more = document.createElement('span');
+    more.className = 'ck-more';
+    more.textContent = `+ ${CK_PEOPLE.length - CK_LIMIT} نفر دیگه…`;
+    more.onclick = () => { ckShowAll = true; ckRender(); };
+    box.appendChild(more);
+  }
+}
+
+function ckFuOptions(){
+  const sel = document.getElementById('ckFuNode');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">با کی؟</option>';
+  const selectedIds = Object.keys(ckSel);
+  const source = selectedIds.length
+    ? CK_PEOPLE.filter(p => ckSel[p.id] !== undefined)
+    : CK_PEOPLE.slice(0, 30);
+  source.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id; o.textContent = p.label;
+    sel.appendChild(o);
+  });
+  if(cur) sel.value = cur;
+}
+
+document.querySelectorAll('.ck-mood').forEach(m => m.onclick = () => {
+  document.querySelectorAll('.ck-mood').forEach(x => x.classList.remove('sel'));
+  m.classList.add('sel');
+  ckMood = parseInt(m.dataset.mood);
+});
+
+async function ckSubmit(){
+  const btn = document.getElementById('ckSubmit');
+  btn.disabled = true; btn.textContent = 'در حال ثبت… ⏳';
+  const contacts = Object.entries(ckSel).map(([id, kind]) => ({node_id: parseInt(id), kind}));
+  const payload = {
+    contacts: contacts,
+    mood: ckMood,
+    highlight: document.getElementById('ckHighlight').value,
+  };
+  const fuText = document.getElementById('ckFuText').value.trim();
+  const fuNode = document.getElementById('ckFuNode').value;
+  if(fuText && fuNode) payload.followup = {node_id: parseInt(fuNode), text: fuText};
+
+  try{
+    const r = await fetch('/api/checkin/', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(!d.ok){ alert(d.error || 'خطا در ثبت'); btn.disabled=false; btn.textContent='ثبت امروز ⚡'; return; }
+    document.getElementById('ck-form').style.display = 'none';
+    const parts = [];
+    if(d.interactions_logged) parts.push(`${d.interactions_logged} تعامل ثبت شد`);
+    if(d.followup_created)    parts.push('یه موضوع باز ساخته شد 📌');
+    parts.push(`استریک: 🔥 ${d.streak} روز`);
+    document.getElementById('ckSuccessSub').textContent = parts.join(' · ');
+    document.getElementById('ck-success').style.display = 'block';
+    ckConfetti();
+  }catch(e){
+    alert('خطا در ارتباط با سرور');
+    btn.disabled = false; btn.textContent = 'ثبت امروز ⚡';
+  }
+}
+
+function ckConfetti(){
+  const EMO = ['🎉','✨','💜','🔥','🎊','⭐','💫','🥳'];
+  for(let i = 0; i < 26; i++){
+    const s = document.createElement('span');
+    s.className = 'ck-confetti';
+    s.textContent = EMO[Math.floor(Math.random()*EMO.length)];
+    s.style.left = Math.random()*100 + 'vw';
+    s.style.animationDuration = (2 + Math.random()*2.5) + 's';
+    s.style.animationDelay = (Math.random()*.8) + 's';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 6000);
+  }
+}
+
+ckRender();
+ckFuOptions();
+</script>
+{% endblock %}

@@ -17,6 +17,7 @@ from django.core.cache import cache
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from .models import Node, Information, Event
 from django.views.generic import ListView
 from django.views.generic import TemplateView
@@ -137,7 +138,14 @@ class UpdateNodeView(LoginRequiredMixin, UpdateView):
             if existing:
                 form.add_error('username', 'این نام قبلاً استفاده شده')
                 return self.form_invalid(form)
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        # BUGFIX مفهومی: فیلد متنی «گروه» → گروه واقعی M2M
+        if self.object.group and self.object.group.strip():
+            from .models import Group as _G
+            _g, _ = _G.objects.get_or_create(
+                name=self.object.group.strip(), owner=self.request.user)
+            self.object.groups.add(_g)
+        return response
 
 
 
@@ -173,13 +181,28 @@ def node_delete(request, pk):
 @require_http_methods(["GET"])
 def node_detail(request, pk):
     node = get_object_or_404(Node, pk=pk, owner=request.user)
+    linked_user = None
+    if node.imported_from_id:
+        linked_user = node.imported_from
+    elif node.username:
+        linked_user = get_user_model().objects.filter(username=node.username).first()
+    if linked_user:
+        return redirect('public_profile', username=linked_user.username)
 
     relationships = Relationship.objects.filter(
         Q(source=node) | Q(target=node), owner=request.user
     ).select_related('source', 'target')
 
     informations = Information.objects.filter(node=node)
-    events = node.events.order_by('-date')[:10]
+    from django.db import ProgrammingError as _PE
+    try:
+        events = list(node.events.order_by('-date')[:10])
+    except _PE:
+        events = list(node.events.only('id','title','date','description').order_by('-date')[:10])
+        for _ev in events:
+            _ev.__dict__.update({'event_time': None, 'reminder_sent_7d': False,
+                                 'reminder_sent_1d': False, 'reminder_sent_3h': False,
+                                 'post_event_prompted': False})
 
     # ── community + centrality for this node ──
     community_idx = None
@@ -203,6 +226,132 @@ def node_detail(request, pk):
     # Journal entries that mention this node
     journal_entries = node.journal_entries.prefetch_related('images').order_by('-created_at')[:10]
 
+    # ── V4: تعامل‌ها + سلامت رابطه ──
+    from django.db.utils import OperationalError as _OE
+    interactions = []
+    try:
+        from .models import Interaction
+        interactions = list(Interaction.objects.filter(node=node, owner=request.user)[:15])
+    except (_OE, _PE):
+        interactions = []
+
+    node_health = None
+    try:
+        from .health import compute_health
+        node_health = compute_health(request.user).get(node.id)
+    except Exception:
+        node_health = None
+
+    node_closeness = ''
+    try:
+        from .models import NodeCloseness
+        nc = NodeCloseness.objects.filter(node=node, owner=request.user).first()
+        node_closeness = nc.tier if nc else ''
+    except Exception:
+        node_closeness = ''
+
+    # V4: موضوعات باز
+    followups_open, followups_done = [], []
+    try:
+        from .models import FollowUp
+        followups_open = list(FollowUp.objects.filter(
+            node=node, owner=request.user, done=False)[:50])
+        followups_done = list(FollowUp.objects.filter(
+            node=node, owner=request.user, done=True).order_by('-done_at')[:5])
+    except Exception:
+        pass
+
+    # V6: قرض و طلب با این شخص
+    node_debts, node_debt_balance = [], 0
+    try:
+        from .views_ledger import serialize_debt, node_balance
+        from .models import Debt
+        node_debts = [serialize_debt(d) for d in
+                      Debt.objects.filter(node=node, owner=request.user, settled=False)[:20]]
+        node_debt_balance = node_balance(request.user, node.id)
+    except Exception:
+        pass
+
+    # V9: شناخت‌نامه — تحلیل ذخیره‌شده
+    node_insight = None
+    try:
+        _info0 = informations.first() if hasattr(informations, 'first') else (informations[0] if informations else None)
+        if _info0 and isinstance(_info0.data, dict) and (
+                _info0.data.get('friendship_score') is not None or _info0.data.get('personality')):
+            node_insight = _info0.data
+    except Exception:
+        pass
+
+    # V10: روند ۱۲ ماهه‌ی تعامل + حس (برای sparkline)
+    trend = []
+    try:
+        from .models import Interaction as _Ix
+        _today = timezone.localdate()
+        from datetime import timedelta as _td
+        rows = list(_Ix.objects.filter(
+            node=node, owner=request.user,
+            date__gte=_today - _td(days=370)).values_list('date', 'feeling'))
+        buckets = {}
+        for d_, f_ in rows:
+            k = (d_.year, d_.month)
+            b = buckets.setdefault(k, {'n': 0, 'fs': 0, 'fn': 0})
+            b['n'] += 1
+            if f_:
+                b['fs'] += f_
+                b['fn'] += 1
+        seq = []
+        yy, mm = _today.year, _today.month
+        for i in range(11, -1, -1):
+            m2, y2 = mm - i, yy
+            while m2 <= 0:
+                m2 += 12
+                y2 -= 1
+            b = buckets.get((y2, m2), {'n': 0, 'fs': 0, 'fn': 0})
+            avgf = (b['fs'] / b['fn']) if b['fn'] else 0
+            seq.append({'label': f'{y2}/{m2:02d}', 'n': b['n'], 'feel': avgf})
+        mx = max((s['n'] for s in seq), default=0) or 1
+        for s in seq:
+            s['h'] = max(6, round(s['n'] / mx * 100)) if s['n'] else 4
+            s['color'] = ('#34d399' if s['feel'] > 0.25 else
+                          ('#f87171' if s['feel'] < -0.25 else '#818cf8'))
+        if any(s['n'] for s in seq):
+            trend = seq
+    except Exception:
+        trend = []
+
+    # V10: رویدادهای زندگی + هدف فعال
+    life_events = []
+    try:
+        from .models import LifeEvent
+        life_events = list(LifeEvent.objects.filter(
+            node=node, owner=request.user, archived=False)[:10])
+    except Exception:
+        pass
+
+    active_goal, goal_progress = None, None
+    try:
+        from .models import RelationshipGoal
+        active_goal = RelationshipGoal.objects.filter(
+            node=node, owner=request.user, status='active').first()
+        if active_goal and node_health and node_health.get('score') is not None \
+                and active_goal.baseline_score is not None:
+            goal_progress = node_health['score'] - active_goal.baseline_score
+    except Exception:
+        pass
+
+    # V11: اگه این نود یه کاربر واقعی اپه → لینک به پروفایل اجتماعیش
+    social_username = None
+    try:
+        from django.contrib.auth import get_user_model as _gum
+        if _gum().objects.filter(username=node.username).exists():
+            social_username = node.username
+    except Exception:
+        pass
+
+    from .models import CLOSENESS_CHOICES, LifeEvent as _LE
+    life_event_kinds = _LE.KIND_CHOICES
+    is_root_node = bool(request.user.root_node_id and node.id == request.user.root_node_id)
+
     context = {
         'node': node,
         'relationships': relationships,
@@ -213,6 +362,26 @@ def node_detail(request, pk):
         'degree_centrality': degree_centrality,
         'betweenness_centrality': betweenness_centrality,
         'journal_entries': journal_entries,
+        # V4
+        'interactions':      interactions,
+        'node_health':       node_health,
+        'node_closeness':    node_closeness,
+        'closeness_choices': CLOSENESS_CHOICES,
+        'is_root_node':      is_root_node,
+        'followups_open':    followups_open,
+        'followups_done':    followups_done,
+        'today':             timezone.localdate(),
+        'node_debts':        node_debts,
+        'node_debt_balance': node_debt_balance,
+        'node_debt_balance_fmt': f'{abs(node_debt_balance):,}',
+        'node_insight':      node_insight,
+        # V10
+        'trend':             trend,
+        'life_events':       life_events,
+        'life_event_kinds':  life_event_kinds,
+        'active_goal':       active_goal,
+        'goal_progress':     goal_progress,
+        'social_username':   social_username,
     }
     return render(request, 'nodes/node_detail.html', context)
 
@@ -226,6 +395,12 @@ def create_node(request):
             node.owner = request.user
             node.save()
             form.save_m2m()
+            # BUGFIX مفهومی: فیلد متنی «گروه» توی فرم هیچ اثری نداشت —
+            # حالا به گروه واقعی (M2M) تبدیل می‌شه تا توی گراف رنگ بگیره
+            if node.group and node.group.strip():
+                from .models import Group as _G
+                _g, _ = _G.objects.get_or_create(name=node.group.strip(), owner=request.user)
+                node.groups.add(_g)
             messages.success(request, f'نود "{node.username}" ایجاد شد')
             return redirect('node_list')
     else:
@@ -238,10 +413,14 @@ class RelationshipListView(LoginRequiredMixin, ListView):
     model = Relationship
     template_name = 'relationships/relationship_list.html'
     context_object_name = 'relationships'
-    paginate_by = 20
+    # BUGFIX: pagination باعث می‌شد فقط ۲۰ رابطه‌ی اول دیده بشه و
+    # بقیه (مثل رابطه با همسر) «صفحه نداشته باشن» — همه رو نشون بده
+    paginate_by = None
 
     def get_queryset(self):
-        return Relationship.objects.filter(owner=self.request.user).select_related('source', 'target')
+        return Relationship.objects.filter(owner=self.request.user) \
+                                   .select_related('source', 'target') \
+                                   .order_by('-strength', 'source__username')
 
 class RelationshipDetailView(LoginRequiredMixin, DetailView):
     model = Relationship
@@ -421,24 +600,108 @@ def home_graph_api(request):
 
 @login_required
 def events_list(request):
-    events = Event.objects.filter(owner=request.user).prefetch_related('participants')
-    return render(request, 'events/events_list.html', {'events': events})
+    from django.db import ProgrammingError
+    today = timezone.localdate()
+    try:
+        all_events = list(Event.objects.filter(owner=request.user).prefetch_related('participants').order_by('date'))
+        upcoming_raw = [e for e in all_events if e.date >= today]
+        past_events  = sorted([e for e in all_events if e.date < today], key=lambda e: e.date, reverse=True)
+        upcoming_events = [{'event': ev, 'days_left': (ev.date - today).days} for ev in upcoming_raw]
+    except ProgrammingError:
+        # migration هنوز اجرا نشده — فیلد event_time وجود نداره
+        # از .only() استفاده می‌کنیم تا event_time در SELECT نباشه
+        # بعد مقدار None رو مستقیم در __dict__ می‌ذاریم تا template lazy load نزنه
+        all_events = list(
+            Event.objects.filter(owner=request.user)
+            .only('id', 'title', 'date', 'description', 'owner_id')
+            .prefetch_related('participants')
+            .order_by('date')   # override Meta.ordering که event_time داره
+        )
+        _safe_defaults = {
+            'event_time': None,
+            'reminder_sent_7d': False,
+            'reminder_sent_1d': False,
+            'reminder_sent_3h': False,
+            'post_event_prompted': False,
+        }
+        for ev in all_events:
+            ev.__dict__.update(_safe_defaults)
+        upcoming_raw = [e for e in all_events if e.date >= today]
+        past_events  = sorted([e for e in all_events if e.date < today], key=lambda e: e.date, reverse=True)
+        upcoming_events = [{'event': ev, 'days_left': (ev.date - today).days} for ev in upcoming_raw]
+
+    return render(request, 'events/events_list.html', {
+        'upcoming_events': upcoming_events,
+        'past_events': past_events,
+        'events': all_events,
+        'today': today,
+    })
 
 @login_required
 def event_create(request):
+    from django.db import ProgrammingError
     if request.method == 'POST':
         form = EventForm(request.POST)
         form.fields['participants'].queryset = Node.objects.filter(owner=request.user)
         if form.is_valid():
             ev = form.save(commit=False)
             ev.owner = request.user
-            ev.save()
-            form.save_m2m()
+            try:
+                ev.save()
+                form.save_m2m()
+            except ProgrammingError:
+                # migration هنوز نخورده — بدون event_time ذخیره می‌کنیم
+                ev.event_time = None
+                # raw INSERT بدون ستون‌های جدید
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO main_event (title, date, description, owner_id) VALUES (%s,%s,%s,%s)",
+                        [ev.title, ev.date, ev.description or '', request.user.id]
+                    )
+                    ev.id = cur.lastrowid
+                # participants M2M
+                for p in form.cleaned_data.get('participants', []):
+                    with connection.cursor() as cur:
+                        cur.execute(
+                            "INSERT OR IGNORE INTO main_event_participants (event_id, node_id) VALUES (%s,%s)",
+                            [ev.id, p.id]
+                        )
             return redirect('events_list')
     else:
         form = EventForm()
         form.fields['participants'].queryset = Node.objects.filter(owner=request.user)
     return render(request, 'events/event_form.html', {'form': form})
+
+@login_required
+@csrf_exempt
+def event_complete_api(request, pk):
+    """V11: «✓ برگزار شد» — برای همه‌ی شرکت‌کننده‌ها تعامل حضوری ثبت می‌کنه.
+    این همون چیزیه که صفحه رویدادها رو به موتور سلامت رابطه وصل می‌کنه."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    event = get_object_or_404(Event, pk=pk, owner=request.user)
+    logged = 0
+    try:
+        from .models import Interaction
+        for p in event.participants.all():
+            if request.user.root_node_id and p.id == request.user.root_node_id:
+                continue
+            _, was_new = Interaction.objects.get_or_create(
+                node=p, owner=request.user, kind='meet', date=event.date,
+                defaults={'feeling': 0, 'note': f'رویداد: {event.title[:80]}'},
+            )
+            if was_new:
+                logged += 1
+    except Exception:
+        return JsonResponse({'error': 'جدول تعامل‌ها آماده نیست'}, status=503)
+    try:
+        event.post_event_prompted = True
+        event.save(update_fields=['post_event_prompted'])
+    except Exception:
+        pass
+    return JsonResponse({'ok': True, 'logged': logged})
+
 
 @login_required
 def event_delete(request, pk):
@@ -557,130 +820,10 @@ def assign_group_api(request):
     return JsonResponse({'ok': True, 'count': len(nodes)})
 
 
+# «بینش‌ها» حذف شد — تحلیل‌هاش در «روانشناسی» و «بریفینگ روزانه» پوشش داده می‌شن.
 @login_required
 def insights_view(request):
-    all_nodes = list(Node.objects.filter(owner=request.user))
-    all_rels  = list(Relationship.objects.filter(owner=request.user).select_related('source', 'target'))
-
-    node_count = len(all_nodes)
-    edge_count = len(all_rels)
-    node_map   = {n.id: n for n in all_nodes}
-
-    # degree per node
-    degree = {n.id: 0 for n in all_nodes}
-    for r in all_rels:
-        degree[r.source_id] = degree.get(r.source_id, 0) + 1
-        degree[r.target_id] = degree.get(r.target_id, 0) + 1
-
-    top_nodes = sorted(degree.items(), key=lambda x: -x[1])[:8]
-    top_nodes = [(node_map[nid], deg) for nid, deg in top_nodes if nid in node_map]
-
-    most_connected        = top_nodes[0][0] if top_nodes else None
-    most_connected_degree = top_nodes[0][1] if top_nodes else 0
-    isolated              = [n for n in all_nodes if degree.get(n.id, 0) == 0]
-
-    rel_types = {}
-    for r in all_rels:
-        label = r.rel or "نامشخص"
-        rel_types[label] = rel_types.get(label, 0) + 1
-    rel_types = sorted(rel_types.items(), key=lambda x: -x[1])
-
-    max_edges  = node_count * (node_count - 1)
-    density    = round(edge_count / max_edges, 3) if max_edges > 0 else 0
-    avg_degree = round(2 * edge_count / node_count, 2) if node_count > 0 else 0
-
-    # ── Centrality ──────────────────────────────────────────────────────
-    centrality_rows = []
-    clustering_coef = 0.0
-    structural_holes_count = 0  # nodes bridging communities
-    strong_tie_pct  = 0.0
-    weak_tie_pct    = 0.0
-
-    try:
-        import networkx as nx
-        G, _, _ = _build_graph(request.user)
-
-        if G.number_of_nodes() > 1:
-            deg_c  = nx.degree_centrality(G)
-            bet_c  = nx.betweenness_centrality(G)
-            clo_c  = nx.closeness_centrality(G)
-
-            for n in all_nodes:
-                centrality_rows.append({
-                    'node':        n,
-                    'degree_c':    round(deg_c.get(n.id, 0), 3),
-                    'between_c':   round(bet_c.get(n.id, 0), 3),
-                    'closeness_c': round(clo_c.get(n.id, 0), 3),
-                })
-            centrality_rows.sort(key=lambda x: -x['degree_c'])
-
-            # Clustering coefficient (0-1): how tightly knit neighbourhoods are
-            clustering_coef = round(nx.average_clustering(G), 3)
-
-            # Structural holes: nodes with high betweenness relative to degree
-            structural_holes_count = sum(
-                1 for n in all_nodes
-                if bet_c.get(n.id, 0) > 0.15
-            )
-
-    except ImportError:
-        pass
-
-    # Strong / weak tie balance
-    if all_rels:
-        strong = sum(1 for r in all_rels if r.strength >= 4)
-        weak   = sum(1 for r in all_rels if r.strength <= 2)
-        strong_tie_pct = round(strong / len(all_rels) * 100, 1)
-        weak_tie_pct   = round(weak   / len(all_rels) * 100, 1)
-
-    # ── Enhanced Health Score (100 points) ──────────────────────────────
-    isolated_ratio = len(isolated) / node_count if node_count else 1
-    avg_strength   = (sum(r.strength for r in all_rels) / len(all_rels)) if all_rels else 0
-    active_ratio   = (sum(1 for r in all_rels if r.status == 'active') / len(all_rels)) if all_rels else 0
-
-    # 1. Density (max 20): well-connected but not clique
-    density_score     = min(density * 300, 20)
-    # 2. Isolation (max 20): fewer isolated nodes is better
-    isolation_score   = max(0, 20 - isolated_ratio * 20)
-    # 3. Clustering (max 20): tight social circles
-    clustering_score  = round(clustering_coef * 20, 1)
-    # 4. Strength (max 20): quality of relationships
-    strength_score    = round((avg_strength / 5) * 20, 1)
-    # 5. Stability (max 20): active vs inactive
-    stability_score   = round(active_ratio * 20, 1)
-
-    health_score = round(density_score + isolation_score + clustering_score + strength_score + stability_score)
-    health_color = "#10b981" if health_score >= 70 else "#f59e0b" if health_score >= 40 else "#ef4444"
-    health_label = "سالم" if health_score >= 70 else "متوسط" if health_score >= 40 else "نیاز به توجه"
-
-    health_components = [
-        {'name': 'تراکم شبکه',    'score': round(density_score, 1),   'max': 20, 'desc': 'چقدر شبکه‌ات به‌هم وصله'},
-        {'name': 'کاهش انزوا',    'score': round(isolation_score, 1), 'max': 20, 'desc': 'چقدر کم نودهای بدون ارتباط داری'},
-        {'name': 'خوشه‌بندی',     'score': clustering_score,          'max': 20, 'desc': 'چقدر دوستانت با هم آشنا هستند'},
-        {'name': 'کیفیت روابط',   'score': strength_score,            'max': 20, 'desc': 'میانگین قدرت روابطت'},
-        {'name': 'پایداری شبکه',  'score': stability_score,           'max': 20, 'desc': '٪ روابط فعال'},
-    ]
-
-    return render(request, 'insights/insights.html', {
-        'node_count':              node_count,
-        'edge_count':              edge_count,
-        'density':                 density,
-        'avg_degree':              avg_degree,
-        'most_connected':          most_connected,
-        'most_connected_degree':   most_connected_degree,
-        'isolated':                isolated,
-        'top_nodes':               top_nodes,
-        'rel_types':               rel_types,
-        'centrality_rows':         centrality_rows,
-        'health_score':            health_score,
-        'health_color':            health_color,
-        'health_label':            health_label,
-        'health_components':       health_components,
-        'clustering_coef':         clustering_coef,
-        'structural_holes_count':  structural_holes_count,
-        'strong_tie_pct':          strong_tie_pct,
-        'weak_tie_pct':            weak_tie_pct,
-    })
+    return redirect('daily')
 
 
 @login_required
@@ -735,7 +878,58 @@ def node_ai_summary(request, pk):
 
 @login_required
 def chat_view(request):
-    return render(request, 'chat/chat.html')
+    # V8: گفتگوی قبلی رو هم بیار — همدم حافظه داره
+    past = []
+    try:
+        from .models import ChatMessage
+        past = list(ChatMessage.objects.filter(owner=request.user)
+                    .order_by('-created_at')[:30])[::-1]
+    except Exception:
+        pass
+    return render(request, 'chat/chat.html', {'past_messages': past})
+
+
+@login_required
+@csrf_exempt
+def chat_clear_api(request):
+    """POST → پاک کردن حافظه‌ی همدم (شروع گفتگوی نو)."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        from .models import ChatMessage
+        ChatMessage.objects.filter(owner=request.user).delete()
+        return JsonResponse({'ok': True})
+    except Exception:
+        return JsonResponse({'ok': True})
+
+
+@login_required
+@csrf_exempt
+def chat_to_journal_api(request):
+    """POST → حرف‌های امروزِ کاربر در چت → یادداشت ژورنال.
+    این‌طوری درد دل‌ها وارد موتور mood-alert و روانشناسی می‌شن."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    today = timezone.localdate()
+    texts = []
+    try:
+        from .models import ChatMessage
+        msgs = ChatMessage.objects.filter(
+            owner=request.user, role='user', created_at__date=today)
+        texts = [m.content for m in msgs]
+    except Exception:
+        pass
+    if not texts:
+        return JsonResponse({'error': 'امروز هنوز چیزی توی چت نگفتی'}, status=400)
+
+    entry = JournalEntry.objects.create(
+        text='(از گفتگو با همدم)\n' + '\n'.join(texts)[:4000],
+        entry_date=today,
+        tags=['chat'],
+        owner=request.user,
+    )
+    return JsonResponse({'ok': True, 'entry_id': entry.id,
+                         'msg': 'ذخیره شد — از صفحه ژورنال می‌تونی تحلیل AI هم بزنی'})
 
 
 @login_required
@@ -746,11 +940,30 @@ def chat_api(request):
     try:
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
+        raw_history  = data.get('history') or []
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
 
     if not user_message:
         return JsonResponse({'error': 'message is empty'}, status=400)
+
+    # ── V5: تاریخچه گفتگو — چت دوطرفه و پیوسته ──
+    history = []
+    for m in raw_history[-12:]:
+        role = m.get('role')
+        content = (m.get('content') or '').strip()
+        if role in ('user', 'assistant') and content:
+            history.append({'role': role, 'content': content[:2000]})
+
+    # ── V8: حافظه‌ی بین‌جلسه‌ای — اگه صفحه تازه باز شده، از DB ادامه بده ──
+    if not history:
+        try:
+            from .models import ChatMessage
+            recent = list(ChatMessage.objects.filter(owner=request.user)
+                          .order_by('-created_at')[:12])[::-1]
+            history = [{'role': m.role, 'content': m.content[:2000]} for m in recent]
+        except Exception:
+            pass
 
     # ─── root node (کاربر اصلی که داره چت می‌کنه) ───────────────────────────
     root_node = request.user.root_node
@@ -801,11 +1014,31 @@ def chat_api(request):
         for n in others
     ) or "موردی ثبت نشده"
 
-    info_text = "\n".join(
-        f"- {i.node.display_name()}: {i.data}"
-        for i in all_info
-        if not root_node or i.node_id != root_node.id
-    ) or "موردی ثبت نشده"
+    # V9: شناخت‌نامه — تحلیل‌های ذخیره‌شده هر شخص، خوانا برای AI
+    info_lines = []
+    for i in all_info:
+        if root_node and i.node_id == root_node.id:
+            continue
+        d = i.data if isinstance(i.data, dict) else {}
+        nm = i.node.display_name()
+        bits = []
+        if d.get('friendship_score') is not None:
+            bits.append(f"نمره دوستی: {d['friendship_score']}/100")
+        if d.get('personality'):
+            bits.append(f"شخصیت: {str(d['personality'])[:140]}")
+        if d.get('values'):
+            bits.append("ارزش‌ها: " + '، '.join(str(v) for v in list(d['values'])[:4]))
+        if d.get('interests'):
+            bits.append("علایق: " + '، '.join(str(v) for v in list(d['interests'])[:4]))
+        if d.get('red_flags'):
+            bits.append("⚠️ هشدارها: " + '، '.join(str(v) for v in list(d['red_flags'])[:3]))
+        if d.get('relationship_quality'):
+            bits.append(f"کیفیت رابطه: {str(d['relationship_quality'])[:100]}")
+        if not bits and d:
+            bits.append(str(d)[:150])
+        if bits:
+            info_lines.append(f"- {nm}: " + " | ".join(bits))
+    info_text = "\n".join(info_lines) or "موردی ثبت نشده"
 
     # یادداشت‌های اخیر
     recent_journals = JournalEntry.objects.filter(owner=request.user).order_by('-entry_date')[:5]
@@ -829,30 +1062,78 @@ def chat_api(request):
         "کاربر اصلی (root node) هنوز در تنظیمات مشخص نشده"
     )
 
+    # V6: خلاصه قرض و طلب — چت از حساب‌ها خبر داره
+    ledger_text = "حسابی ثبت نشده"
+    try:
+        from .models import Debt
+        _open = list(Debt.objects.filter(owner=request.user, settled=False)
+                     .select_related('node')[:20])
+        if _open:
+            _lines = []
+            for _d in _open:
+                _who = _d.node.display_name()
+                if _d.direction == 'i_owe':
+                    _lines.append(f"- من به {_who} بدهکارم: {_d.remaining:,} {_d.currency}"
+                                  + (f" (سررسید: {_d.due_date})" if _d.due_date else ""))
+                else:
+                    _lines.append(f"- {_who} به من بدهکاره: {_d.remaining:,} {_d.currency}"
+                                  + (f" (سررسید: {_d.due_date})" if _d.due_date else ""))
+            ledger_text = "\n".join(_lines)
+    except Exception:
+        pass
+
     system_prompt = (
-        "تو یک دستیار هوشمند شخصی هستی که به صاحب این شبکه روابط کمک می‌کنی.\n\n"
-        f"## من کیستم (صاحب شبکه که داره باهات صحبت می‌کنه):\n{who_am_i}\n\n"
-        f"## روابط من با دیگران:\n{rels_text}\n\n"
-        f"## افراد دیگر در شبکه:\n{nodes_text}\n\n"
-        f"## اطلاعات بیشتر درباره افراد:\n{info_text}\n\n"
-        f"## یادداشت‌های اخیر من:\n{journal_text}\n\n"
-        f"## اقدامات اخیر من روی هشدارها و نکات روزانه:\n{actions_text}\n\n"
-        "وقتی کاربر می‌گه «من»، «خودم»، «شبکه‌ام» منظورش همون شخص اصلی بالاست. "
-        "از اقدامات ثبت‌شده برای درک الگوهای رابطه‌ای استفاده کن. "
-        "به فارسی، مختصر و کاربردی پاسخ بده."
+        "تو «همدم» هستی — همراهِ شخصی صاحب این شبکه روابط. دو نقش داری و بسته به حرف کاربر "
+        "روان بین‌شون جابه‌جا می‌شی:\n\n"
+        "۱) **همدمِ درد دل** — وقتی کاربر از احساساتش می‌گه (دلخوری، تنهایی، استرس، دعوا، دلتنگی، شادی): "
+        "اول فقط بشنو. احساسش رو نام‌گذاری و تأیید کن («سخته که...»، «حق داری ناراحت باشی»). "
+        "سریع نصیحت نکن — فقط اگه خودش راه‌حل خواست پیشنهاد بده. با سوال‌های کوتاه و ملایم کمکش کن "
+        "بیشتر باز بشه («بعدش چی شد؟»، «الان چه حسی داری؟»). لحن گرم، خودمونی، بدون قضاوت. "
+        "اگه کسی از شبکه‌ش رو اسم برد، از شناختت درباره اون رابطه با ظرافت استفاده کن.\n"
+        "۲) **تحلیلگر شبکه** — وقتی سوال داده‌ای یا تحلیلی می‌پرسه، دقیق و کاربردی از داده‌ها جواب بده.\n\n"
+        f"## کاربر کیست:\n{who_am_i}\n\n"
+        f"## روابطش:\n{rels_text}\n\n"
+        f"## افراد شبکه‌اش:\n{nodes_text}\n\n"
+        f"## شناخت‌نامه افراد (تحلیل‌های ذخیره‌شده — نمره دوستی، شخصیت، هشدارها):\n{info_text}\n\n"
+        f"## یادداشت‌های اخیرش:\n{journal_text}\n\n"
+        f"## اقدامات اخیرش:\n{actions_text}\n\n"
+        f"## قرض و طلب‌های باز:\n{ledger_text}\n\n"
+        "قواعد: وقتی می‌گه «من» منظورش شخص اصلی بالاست. داده‌های شبکه رو فقط وقتی وسط بکش که "
+        "به حرفش مربوطه — وسط درد دل آمار نریز. "
+        "وقتی درباره‌ی یه شخص خاص سوال می‌کنه یا تحلیل رابطه می‌خواد، حتماً از شناخت‌نامه‌ش "
+        "(نمره دوستی، شخصیت، ارزش‌ها، هشدارها) استفاده کن و تحلیلت رو مستند بده. "
+        "پاسخ‌ها کوتاه (۲ تا ۵ جمله) مگه تحلیل مفصل بخواد. "
+        "به فارسی محاوره‌ای و صمیمی. اگه نشانه‌ی ناراحتی عمیق یا مداوم دیدی، با مهربونی پیشنهاد کن "
+        "با یه آدم مورد اعتماد یا مشاور هم حرف بزنه — بدون بزرگ‌نمایی."
     )
 
     try:
         client, ai_model = _get_ai_client_and_model()
         response = client.chat.completions.create(
             model=ai_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_message},
-            ],
+            messages=(
+                [{"role": "system", "content": system_prompt}]
+                + history
+                + [{"role": "user", "content": user_message}]
+            ),
             max_tokens=1024,
         )
-        return JsonResponse({'reply': response.choices[0].message.content})
+        reply = response.choices[0].message.content
+
+        # ── V8: ذخیره‌ی دوطرفه — درد دل‌ها دیگه گم نمی‌شن ──
+        # BUGFIX: صفحه insights هم از همین API استفاده می‌کنه؛ با فلگ ephemeral
+        # سوال‌های اون صفحه دیگه حافظه‌ی همدم رو آلوده نمی‌کنن.
+        if not data.get('ephemeral'):
+            try:
+                from .models import ChatMessage
+                ChatMessage.objects.create(role='user', content=user_message[:4000],
+                                           owner=request.user)
+                ChatMessage.objects.create(role='assistant', content=(reply or '')[:4000],
+                                           owner=request.user)
+            except Exception:
+                pass   # جدول migrate نشده — چت بدون حافظه هم کار کنه
+
+        return JsonResponse({'reply': reply})
     except Exception as e:
         return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
@@ -901,6 +1182,16 @@ def graph_all_api(request):
     for i, g in enumerate(all_groups_sorted):
         group_color_map[g] = db_groups.get(g) or COMMUNITY_PALETTE[i % len(COMMUNITY_PALETTE)]
 
+    # V9: نمره دوستی از شناخت‌نامه
+    fscore_map = {}
+    try:
+        for nid_, d_ in Information.objects.filter(
+                node__owner=request.user).values_list('node_id', 'data'):
+            if isinstance(d_, dict) and d_.get('friendship_score') is not None:
+                fscore_map[nid_] = d_['friendship_score']
+    except Exception:
+        pass
+
     node_data = []
     for n in all_nodes:
         c_idx   = com_map.get(n.id, 0)
@@ -917,24 +1208,47 @@ def graph_all_api(request):
             "groups":     gnames,           # لیست گروه‌ها (M2M)
             "group":      gnames[0] if gnames else '',   # backward compat
             "color":      color,
+            "fscore":     fscore_map.get(n.id),
         })
 
-    edge_data = [
-        {
+    # ── V4: سلامت رابطه — رنگ یال‌های متصل به root ──
+    health_map = {}
+    health_counts = {}
+    try:
+        from .health import compute_health, health_summary
+        health_map = compute_health(request.user)
+        health_counts = health_summary(health_map)
+    except Exception:
+        pass
+
+    root_id_int = request.user.root_node_id if request.user.is_authenticated else None
+
+    edge_data = []
+    for r in all_rels:
+        e = {
             "source":   str(r.source_id),
             "target":   str(r.target_id),
             "label":    r.rel or "",
             "strength": r.strength,
         }
-        for r in all_rels
-    ]
+        # فقط یال‌هایی که یه سرشون root است رنگ سلامت می‌گیرن
+        if root_id_int and root_id_int in (r.source_id, r.target_id):
+            other = r.target_id if r.source_id == root_id_int else r.source_id
+            h = health_map.get(other)
+            if h:
+                e["health_status"] = h["status"]
+                e["health_color"]  = h["color"]          # None برای unknown
+                e["health_score"]  = h["score"]
+                e["days_since"]    = h["days_since"]
+        edge_data.append(e)
 
     return JsonResponse({
-        "nodes":        node_data,
-        "edges":        edge_data,
-        "root_id":      root_id,
-        "all_groups":   all_groups_sorted,
-        "group_colors": group_color_map,
+        "nodes":         node_data,
+        "edges":         edge_data,
+        "root_id":       root_id,
+        "all_groups":    all_groups_sorted,
+        "group_colors":  group_color_map,
+        "health_counts": health_counts,
     })
 
 
@@ -944,6 +1258,16 @@ def graph_all_api(request):
 
 @login_required
 def settings_view(request):
+    # BUGFIX: دکمه «تنظیم به عنوان root» توی گراف به اینجا POST می‌زنه؛
+    # قبلاً POST نادیده گرفته می‌شد و root واقعاً ذخیره نمی‌شد!
+    if request.method == 'POST' and request.POST.get('root_node'):
+        try:
+            request.user.root_node = Node.objects.get(
+                pk=request.POST['root_node'], owner=request.user)
+            request.user.save(update_fields=['root_node'])
+            return JsonResponse({'ok': True})
+        except (Node.DoesNotExist, ValueError):
+            return JsonResponse({'error': 'نود پیدا نشد'}, status=404)
     # صفحه تنظیمات به پروفایل ادغام شده
     return redirect('profile')
 
@@ -1141,6 +1465,12 @@ def journal_analyze_api(request):
         if image_ids:
             JournalImage.objects.filter(id__in=image_ids, entry__isnull=True).update(entry=entry)
 
+        try:
+            from .views_journal_extra import _extract_profile_media_from_journal
+            _extract_profile_media_from_journal(entry)
+        except Exception:
+            pass
+
         return JsonResponse({'result': result})
     except json.JSONDecodeError:
         return JsonResponse({'error': 'AI پاسخ معتبر JSON نداد', 'raw': content[:600]}, status=500)
@@ -1293,6 +1623,7 @@ def journal_apply_api(request):
             created['relationships'].append(f"{src.username}→{tgt.username}")
 
     # ── Events ────────────────────────────────────────────
+    from django.db import ProgrammingError as _PErrJ
     for ed in data.get('events', []):
         title = (ed.get('title') or '').strip()
         if not title:
@@ -1303,14 +1634,31 @@ def journal_apply_api(request):
             event_date = date.fromisoformat(date_str) if date_str else today_date.today()
         except Exception:
             event_date = today_date.today()
-        ev = Event.objects.create(
-            title=title, date=event_date,
-            description=ed.get('description', ''),
-            owner=req_user,
-        )
-        if root_node:
-            ev.participants.add(root_node)
-        created['events'].append(title)
+        try:
+            ev = Event.objects.create(
+                title=title, date=event_date,
+                description=ed.get('description', ''),
+                owner=req_user,
+            )
+            if root_node:
+                ev.participants.add(root_node)
+            created['events'].append(title)
+        except _PErrJ:
+            # migration هنوز نخورده — raw INSERT
+            from django.db import connection as _conn
+            with _conn.cursor() as _cur:
+                _cur.execute(
+                    "INSERT INTO main_event (title, date, description, owner_id) VALUES (%s,%s,%s,%s)",
+                    [title, event_date, ed.get('description', ''), req_user.id]
+                )
+                ev_id = _cur.lastrowid
+            if root_node:
+                with _conn.cursor() as _cur:
+                    _cur.execute(
+                        "INSERT OR IGNORE INTO main_event_participants (event_id, node_id) VALUES (%s,%s)",
+                        [ev_id, root_node.id]
+                    )
+            created['events'].append(title)
 
     # ── Rich attributes → Information model ───────────────
     LIST_KEYS = ['personality', 'interests', 'preferences', 'strengths',
@@ -1368,12 +1716,36 @@ def journal_apply_api(request):
                 u = (nd.get('username') or '').strip()
                 if u:
                     mentioned.add(u)
+
+            mentioned_nodes_resolved = []
             for uname in mentioned:
                 n = resolve_node(uname)
                 if n:
                     entry.mentioned_nodes.add(n)
+                    mentioned_nodes_resolved.append(n)
             if root_node:
                 entry.mentioned_nodes.add(root_node)
+
+            # ── V4: ذکر در ژورنال = تعامل خودکار ──────────────
+            # برای هر نود ذکرشده (غیر از root) یه Interaction با
+            # kind='journal' ثبت می‌شه — روزی یکی، تکراری نمی‌سازه.
+            try:
+                from .models import Interaction
+                ix_date = entry.entry_date or timezone.localdate()
+                auto_logged = 0
+                for n in mentioned_nodes_resolved:
+                    if root_node and n.id == root_node.id:
+                        continue
+                    _, was_new = Interaction.objects.get_or_create(
+                        node=n, owner=req_user, kind='journal', date=ix_date,
+                        defaults={'feeling': 0,
+                                  'note': (entry.text or '')[:100]},
+                    )
+                    if was_new:
+                        auto_logged += 1
+                created['auto_interactions'] = auto_logged
+            except Exception:
+                pass   # جدول هنوز migrate نشده — مشکلی نیست
         except JournalEntry.DoesNotExist:
             pass
 

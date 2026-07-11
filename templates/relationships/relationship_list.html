@@ -1,128 +1,153 @@
 {% extends "base.html" %}
+{% block title %}روابط · FamilyGraph{% endblock %}
+{% block page_title %}💞 روابط{% endblock %}
+{% block nav_rels %}active{% endblock %}
 
-{% block title %}
-روابط
+{% block topbar_actions %}
+<a href="{% url 'relationship_create' %}" class="btn btn-primary btn-sm">＋ رابطه جدید</a>
 {% endblock %}
 
 {% block extra_css %}
+<style>
+.rl-wrap{ max-width:920px; margin:0 auto; }
 
-.table{
-	width:100%;
-	border-collapse:collapse;
+/* ── هدر آماری ── */
+.rl-hero{
+  background:linear-gradient(135deg, rgba(236,72,153,.1), rgba(99,102,241,.12));
+  border:1px solid rgba(236,72,153,.25); border-radius:20px;
+  padding:18px 22px; margin-bottom:16px;
+  display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+}
+.rl-stat{ text-align:center; }
+.rl-stat .n{ font-size:23px; font-weight:800; }
+.rl-stat .l{ font-size:10px; color:var(--text-muted); margin-top:2px; }
+.rl-search{
+  flex:1; min-width:200px; background:rgba(255,255,255,.05);
+  border:1px solid var(--border-strong); border-radius:12px;
+  padding:10px 15px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:13px;
 }
 
-.table th{
-	text-align:right;
-	font-size:13px;
-	padding:12px;
-	border-bottom:1px solid var(--border);
-	color:#94a3b8;
+/* ── گرید کارت‌ها ── */
+.rl-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+.rl-card{
+  background:var(--card); border:1px solid var(--border); border-radius:18px;
+  padding:18px; text-decoration:none; color:var(--text); display:block;
+  transition:transform .2s ease, box-shadow .22s ease, border-color .2s ease;
+  position:relative; overflow:hidden;
 }
-
-.table td{
-	padding:14px 12px;
-	border-bottom:1px solid var(--border);
-	font-size:14px;
+.rl-card::before{
+  content:''; position:absolute; top:0; right:14%; left:14%; height:2px; border-radius:2px;
 }
-
-.table tr:hover{
-	background:rgba(99,102,241,.08);
+.rl-card.s-active::before{ background:linear-gradient(90deg,transparent,#34d399,transparent); }
+.rl-card.s-distant::before{ background:linear-gradient(90deg,transparent,#fbbf24,transparent); }
+.rl-card.s-inactive::before{ background:linear-gradient(90deg,transparent,#64748b,transparent); }
+.rl-card:hover{
+  transform:translateY(-3px); border-color:var(--primary-border);
+  box-shadow:0 12px 34px rgba(0,0,0,.4), 0 0 20px rgba(236,72,153,.1);
 }
-
-.actions{
-	display:flex;
-	gap:8px;
+.rl-pair{ display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:10px; }
+.rl-av{
+  width:46px; height:46px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:17px; font-weight:800; color:#fff;
+  border:2px solid rgba(255,255,255,.15);
 }
-
-.header-row{
-	display:flex;
-	justify-content:space-between;
-	align-items:center;
-	margin-bottom:20px;
-}
-
+.rl-av img{ width:100%; height:100%; object-fit:cover; }
+.rl-av.a{ background:linear-gradient(135deg,#6366f1,#8b5cf6); }
+.rl-av.b{ background:linear-gradient(135deg,#ec4899,#f59e0b); }
+.rl-heart{ font-size:15px; }
+.rl-names{ text-align:center; font-size:13px; font-weight:800; line-height:1.8; }
+.rl-label{ text-align:center; font-size:11px; color:var(--text-soft); margin-top:2px; }
+.rl-foot{ display:flex; align-items:center; justify-content:center; gap:10px; margin-top:11px; flex-wrap:wrap; }
+.rl-pips{ display:inline-flex; gap:3px; }
+.rl-pip{ width:10px; height:4px; border-radius:2px; background:var(--border-strong); }
+.rl-pip.on{ background:linear-gradient(90deg,#6366f1,#a855f7); box-shadow:0 0 5px rgba(139,92,246,.5); }
+.rl-status{ font-size:10px; padding:2px 10px; border-radius:999px; }
+.rl-status.active{ background:rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.3); }
+.rl-status.distant{ background:rgba(245,158,11,.1); color:#fbbf24; border:1px solid rgba(245,158,11,.28); }
+.rl-status.inactive{ background:rgba(255,255,255,.05); color:var(--text-muted); border:1px solid var(--border); }
+.rl-empty{ text-align:center; padding:60px 20px; grid-column:1/-1; }
+.rl-empty .e{ font-size:46px; }
+.rl-empty p{ color:var(--text-muted); font-size:13.5px; margin:12px 0 18px; }
+</style>
 {% endblock %}
 
 {% block content %}
+<div class="rl-wrap">
 
-<div class="card">
+  <div class="rl-hero">
+    <div class="rl-stat"><div class="n" style="color:#f9a8d4">{{ relationships|length }}</div><div class="l">💞 رابطه</div></div>
+    <div class="rl-stat"><div class="n" style="color:#34d399" id="rlActive">—</div><div class="l">🟢 فعال</div></div>
+    <div class="rl-stat"><div class="n" style="color:#a5b4fc" id="rlAvg">—</div><div class="l">⚡ میانگین قدرت</div></div>
+    <input class="rl-search" id="rlSearch" placeholder="🔍 جستجو — اسم یا نوع رابطه…" oninput="rlFilter(this.value)">
+  </div>
 
-	<div class="header-row">
+  <div class="rl-grid" id="rlGrid">
+    {% for rel in relationships %}
+    <a class="rl-card s-{{ rel.status }}"
+       href="{% url 'relationship_detail' rel.id %}"
+       data-strength="{{ rel.strength }}" data-status="{{ rel.status }}"
+       data-search="{{ rel.source.display_name|lower }} {{ rel.target.display_name|lower }} {{ rel.rel|lower }}">
+      <div class="rl-pair">
+        <div class="rl-av a">
+          {% if rel.source.picture %}<img src="{{ rel.source.picture.url }}" alt="">{% else %}{{ rel.source.display_name|first|upper }}{% endif %}
+        </div>
+        <span class="rl-heart">{{ rel.emoji }}</span>
+        <div class="rl-av b">
+          {% if rel.target.picture %}<img src="{{ rel.target.picture.url }}" alt="">{% else %}{{ rel.target.display_name|first|upper }}{% endif %}
+        </div>
+      </div>
+      <div class="rl-names">{{ rel.source.display_name }} ⟷ {{ rel.target.display_name }}</div>
+      <div class="rl-label">{{ rel.rel|default:"بدون برچسب" }}{% if rel.met_at %} · از {{ rel.met_at|date:"Y" }}{% endif %}</div>
+      <div class="rl-foot">
+        <span class="rl-pips">{% for i in "12345" %}<span class="rl-pip {% if forloop.counter <= rel.strength %}on{% endif %}"></span>{% endfor %}</span>
+        <span class="rl-status {{ rel.status }}">
+          {% if rel.status == 'active' %}🟢 فعال{% elif rel.status == 'distant' %}🟡 دور{% else %}⚪ غیرفعال{% endif %}
+        </span>
+      </div>
+    </a>
+    {% empty %}
+    <div class="rl-empty">
+      <div class="e">💞</div>
+      <p>هنوز رابطه‌ای ثبت نشده — اولین یال گرافت رو بساز</p>
+      <a href="{% url 'relationship_create' %}" class="btn btn-primary">＋ رابطه جدید</a>
+    </div>
+    {% endfor %}
+  </div>
 
-		<div class="card-title">
-			روابط ({{ relationships|length }})
-		</div>
-
-		<a href="{% url 'relationship_create' %}" class="btn">
-			رابطه جدید
-		</a>
-
-	</div>
-
-	<table class="table">
-
-		<thead>
-			<tr>
-				<th>ID</th>
-				<th>نوع رابطه</th>
-				<th>پدر</th>
-				<th>فرزند</th>
-				<th>عملیات</th>
-			</tr>
-		</thead>
-
-		<tbody>
-
-		{% for rel in relationships %}
-
-			<tr>
-
-				<td>#{{ rel.id }}</td>
-
-				<td>
-					{{ rel.rel }}
-				</td>
-
-				<td>
-					{{ rel.father.username }}
-				</td>
-
-				<td>
-					{{ rel.child.username }}
-				</td>
-
-				<td class="actions">
-
-					<a href="{% url 'relationship_detail' rel.id %}" class="btn">
-						مشاهده
-					</a>
-
-					<a href="{% url 'relationship_update' rel.id %}" class="btn">
-						ویرایش
-					</a>
-
-					<a href="{% url 'relationship_delete' rel.id %}" class="btn btn-danger">
-						حذف
-					</a>
-
-				</td>
-
-			</tr>
-
-		{% empty %}
-
-			<tr>
-				<td colspan="5">
-					هیچ رابطه‌ای ثبت نشده است
-				</td>
-			</tr>
-
-		{% endfor %}
-
-		</tbody>
-
-	</table>
+  {# BUGFIX: صفحه‌بندی — قبلاً فقط ۲۰ تای اول دیده می‌شد و بقیه‌ی روابط «صفحه نداشتن» #}
+  {% if page_obj.has_other_pages %}
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:18px;align-items:center;">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm">→ قبلی</a>
+    {% endif %}
+    <span style="font-size:12px;color:var(--text-muted);">صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm">بعدی ←</a>
+    {% endif %}
+  </div>
+  {% endif %}
 
 </div>
+{% endblock %}
 
+{% block extra_js %}
+<script>
+// آمار سریع از خود کارت‌ها
+(function(){
+  const cards = [...document.querySelectorAll('.rl-card')];
+  if(!cards.length) return;
+  const active = cards.filter(c => c.dataset.status === 'active').length;
+  const avg = cards.reduce((s, c) => s + (parseInt(c.dataset.strength) || 0), 0) / cards.length;
+  document.getElementById('rlActive').textContent = active;
+  document.getElementById('rlAvg').textContent = avg.toFixed(1) + '/5';
+})();
+
+function rlFilter(q){
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('.rl-card').forEach(c => {
+    c.style.display = (!q || (c.dataset.search || '').includes(q)) ? '' : 'none';
+  });
+}
+</script>
 {% endblock %}

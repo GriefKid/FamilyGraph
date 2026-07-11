@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - {{ profile_user.username }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block nav_settings %}active{% endblock %}
+{% block extra_css %}
+<style>.wrap{max-width:860px;margin:0 auto;padding:22px}.panel{border:1px solid var(--border);background:rgba(255,255,255,.028);border-radius:18px;padding:16px}.person{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid transparent;border-radius:14px;text-decoration:none;color:inherit}.person:hover{border-color:var(--primary-border);background:rgba(99,102,241,.07)}.av{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#6366f1,#06b6d4);display:flex;align-items:center;justify-content:center;color:white;font-weight:900}.name{font-weight:900}.meta{font-size:12px;color:var(--text-muted);margin-top:3px}.empty{padding:24px;color:var(--text-muted)}</style>
+{% endblock %}
+{% block content %}
+<div class="wrap"><div class="panel">
+  {% for person in people %}
+  <a class="person" href="/u/{{ person.username }}/"><span class="av">{{ person.username|first|upper }}</span><span><div class="name">{{ person.get_full_name|default:person.username }}</div><div class="meta">@{{ person.username }}</div></span></a>
+  {% empty %}<div class="empty">این لیست فعلا خالی است.</div>{% endfor %}
+</div></div>
+{% endblock %}

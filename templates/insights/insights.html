@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}بینش‌ها — FamilyGraph{% endblock %}
-{% block page_title %}بینش‌های شبکه{% endblock %}
+{% block page_title %}💡 بینش‌های شبکه{% endblock %}
 {% block nav_insights %}active{% endblock %}
 
 {% block extra_css %}
@@ -518,7 +518,7 @@ async function generateInsight(){
     let res=await fetch("/api/chat/",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
-      body:JSON.stringify({message:`یک تحلیل کامل و مفید از شبکه روابط من بنویس. روی این موارد تمرکز کن:
+      body:JSON.stringify({ephemeral:true, message:`یک تحلیل کامل و مفید از شبکه روابط من بنویس. روی این موارد تمرکز کن:
 ۱. ساختار کلی شبکه (چقدر متراکمه، آیا سالمه)
 ۲. مهم‌ترین افراد و نقش‌شان
 ۳. نقاط ضعف یا فرصت‌های بهبود رابطه

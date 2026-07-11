@@ -116,16 +116,16 @@ body{
 .orb-2{
   width:550px; height:550px;
   bottom:-180px; left:-100px;
-  background:radial-gradient(circle, rgba(139,92,246,.12) 0%, transparent 60%);
+  background:radial-gradient(circle, rgba(236,72,153,.13) 0%, transparent 60%);
   animation-delay:-3s;
 }
 .orb-3{
   width:380px; height:380px;
   top:40%; left:36%;
-  background:radial-gradient(circle, rgba(6,182,212,.06) 0%, transparent 60%);
+  background:radial-gradient(circle, rgba(245,158,11,.07) 0%, transparent 60%);
   animation-delay:-6s;
 }
-.light .orb{ opacity:.18; }
+.light .orb{ opacity:.3; }
 @keyframes orbPulse{
   0%,100%{ opacity:.55; transform:scale(1); }
   50%{ opacity:.75; transform:scale(1.06); }
@@ -147,12 +147,13 @@ body{
   overflow:hidden;
 }
 
-/* shimmer top line */
+/* shimmer top line — رنگین‌کمونی (استاتیک — بدون repaint دائمی) */
 .sidebar::before{
   content:'';
   position:absolute;
-  top:0; left:0; right:0; height:1px;
-  background:linear-gradient(90deg,transparent 0%,rgba(99,102,241,.5) 50%,transparent 100%);
+  top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,#6366f1,#a855f7,#ec4899,#f59e0b,#10b981,#06b6d4);
+  opacity:.75;
 }
 /* subtle grid texture */
 .sidebar::after{
@@ -438,9 +439,9 @@ body{
 .light .topbar{ background:rgba(244,244,252,.88); }
 
 .page-title{
-  font-size:13px;
-  font-weight:600;
-  color:var(--text-soft);
+  font-size:13.5px;
+  font-weight:800;
+  color:var(--text);
   letter-spacing:.15px;
   display:flex;
   align-items:center;
@@ -849,6 +850,195 @@ select option{ background-color:#0c0c1e; color:#e8eaf6; }
 .strength-pip.filled.s4{ background:#a5b4fc; }
 .strength-pip.filled.s5{ background:#c4b5fd; box-shadow:0 0 6px rgba(196,181,253,.5); }
 
+/* ═══════════════ V7: لایه‌ی مدرن — زنده، رنگی، جاندار ═══════════════ */
+:root{
+  --grad-candy:linear-gradient(135deg,#6366f1,#a855f7,#ec4899);
+  --grad-sunset:linear-gradient(135deg,#f59e0b,#ec4899);
+  --grad-mint:linear-gradient(135deg,#10b981,#06b6d4);
+  --grad-aurora:linear-gradient(120deg,#6366f1,#a855f7,#ec4899,#f59e0b,#10b981,#06b6d4);
+}
+
+/* ── پس‌زمینه: مش گرادیانی خیلی لطیف زیر همه‌چیز ── */
+body::before{
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 55% 42% at 82% 8%,  rgba(99,102,241,.09), transparent 70%),
+    radial-gradient(ellipse 48% 40% at 8% 92%,  rgba(236,72,153,.07), transparent 70%),
+    radial-gradient(ellipse 40% 34% at 50% 55%, rgba(6,182,212,.05),  transparent 70%);
+}
+.light body::before, body.light::before{ opacity:.5; }
+
+/* orbs: کاملاً استاتیک — blur واقعی و انیمیشن هر دو حذف شدن.
+   (انیمیشنِ زیرِ backdrop-filter سایدبار = re-filter دائمی = لگ)
+   گرادیان شعاعی خودش نرمه؛ ظاهر همونه، هزینه صفر. */
+.orb{
+  filter:none !important;
+  animation:none !important;
+  opacity:.65;
+}
+
+/* ── اسکرول‌بار گرادیانی ── */
+::-webkit-scrollbar{ width:5px; height:5px; }
+::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,#6366f1,#a855f7,#ec4899);
+  border-radius:10px;
+}
+::-webkit-scrollbar-thumb:hover{ background:linear-gradient(180deg,#818cf8,#c084fc); }
+
+/* ── لوگو: نگین گرادیانی (استاتیک = بدون هزینه؛ فقط hover حرکت داره) ── */
+.logo-icon{
+  background:var(--grad-candy);
+  box-shadow:0 0 30px rgba(168,85,247,.55), 0 4px 16px rgba(0,0,0,.5);
+  transition:transform .25s cubic-bezier(.2,1.6,.4,1);
+}
+.logo-mark:hover .logo-icon{ transform:rotate(-8deg) scale(1.08); }
+
+/* ── nav: آیتم فعال = قرص گرادیانی ── */
+.nav-item{ margin-bottom:2px; }
+.nav-item.active{
+  color:#fff;
+  background:linear-gradient(135deg, rgba(99,102,241,.32), rgba(168,85,247,.22));
+  border-right:2px solid #a855f7;
+  box-shadow:0 2px 14px rgba(99,102,241,.25), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.light .nav-item.active{ color:var(--primary); }
+.nav-item:hover{ transform:translateX(-2px); }
+.nav-icon{ font-size:15px; transition:transform .18s cubic-bezier(.2,1.6,.4,1); }
+.nav-item:hover .nav-icon{ transform:scale(1.3) rotate(-10deg); }
+.nav-item.active .nav-icon{ transform:scale(1.18); }
+.nav-group-label{ font-size:10px; }
+
+/* ── آواتار کاربر: گرادیان استاتیک + hover ── */
+.su-avatar{ background:var(--grad-candy); transition:transform .2s; }
+.sidebar-user:hover .su-avatar{ transform:scale(1.1) rotate(6deg); }
+
+/* ── topbar: خط مویی گرادیانی ── */
+.topbar{ border-bottom:none; }
+.topbar::after{
+  content:''; position:absolute; left:0; right:0; bottom:0; height:1.5px;
+  background:linear-gradient(90deg, transparent, rgba(99,102,241,.55), rgba(236,72,153,.45), transparent);
+}
+.page-title::before{
+  content:''; width:4px; height:16px; border-radius:3px;
+  background:var(--grad-candy); flex-shrink:0;
+}
+
+/* ── کارت‌ها: شیشه + خط مویی رنگی + hover شناور ── */
+.section, .ai-card, .metric-card, .full-card, .lg-card, .lg-total,
+.ck-card, .daily-card, .je-item{
+  position:relative;
+  transition:transform .22s ease, box-shadow .25s ease, border-color .2s ease;
+}
+.section::after, .metric-card::after, .lg-card::after, .ck-card::after, .full-card::after{
+  content:''; position:absolute; top:0; right:14%; left:14%; height:1.5px;
+  border-radius:2px; opacity:.5; pointer-events:none;
+  background:linear-gradient(90deg, transparent, rgba(99,102,241,.6), rgba(168,85,247,.5), transparent);
+}
+.section:hover, .metric-card:hover, .lg-card:hover, .ck-card:hover, .ai-card:hover,
+.node-card:hover, .tl-card:hover, .info-card:hover{
+  transform:translateY(-3px);
+  box-shadow:0 14px 44px rgba(0,0,0,.45), 0 0 24px rgba(99,102,241,.12);
+}
+.node-card, .tl-card, .stat-pill, .participant-chip{
+  transition:transform .22s ease, box-shadow .25s ease, border-color .2s ease;
+}
+.stat-pill:hover{ transform:translateY(-2px) scale(1.03); box-shadow:0 8px 22px rgba(99,102,241,.18); }
+.alert-card:hover{ transform:translateY(-3px); }
+.lg-total:hover{ transform:translateY(-2px) scale(1.02); box-shadow:0 10px 30px rgba(99,102,241,.15); }
+
+/* ── دکمه‌ها: جون‌دار ── */
+button, .np-btn, .fu-btn, .ix-submit, .lg-btn, .cn-btn, .btn{
+  transition:transform .16s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
+}
+button:active{ transform:scale(.95); }
+.btn-primary:hover{ box-shadow:0 6px 22px rgba(99,102,241,.45); }
+
+/* ── چیپ‌های رنگی ── */
+.chip-indigo{ background:rgba(99,102,241,.14); color:#a5b4fc; border:1px solid rgba(99,102,241,.3); }
+.chip-pink  { background:rgba(236,72,153,.12); color:#f9a8d4; border:1px solid rgba(236,72,153,.3); }
+.chip-amber { background:rgba(245,158,11,.12); color:#fcd34d; border:1px solid rgba(245,158,11,.3); }
+.chip-mint  { background:rgba(16,185,129,.12); color:#6ee7b7; border:1px solid rgba(16,185,129,.3); }
+.grad-text{
+  background:var(--grad-candy);
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:transparent;
+}
+
+/* ── empty state: رنگی و شناور به جای خاکستری ── */
+.empty-icon, .big-emoji{
+  filter:none !important; opacity:1 !important;
+  animation:floaty 3.2s ease-in-out infinite;
+}
+@keyframes floaty{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-7px) } }
+
+/* ── BUGFIX سراسری: گزینه‌های dropdown با تم تیره سفید-روی-سفید بودن ── */
+select{ color:var(--text); }
+select option, select optgroup{
+  background:#14142c !important;
+  color:#eceef8 !important;
+}
+.light select option, .light select optgroup{
+  background:#ffffff !important;
+  color:#10102a !important;
+}
+input::placeholder, textarea::placeholder{ color:var(--text-muted); opacity:.8; }
+
+/* ── انتخاب متن و focus ── */
+::selection{ background:rgba(168,85,247,.35); }
+input:focus, textarea:focus, select:focus{
+  outline:none; border-color:#a855f7 !important;
+  box-shadow:0 0 0 3px rgba(168,85,247,.15);
+}
+
+/* ── ورود پلکانی محتوا ── */
+.content > *{ animation:fadeUp .45s ease both; }
+.content > *:nth-child(1){ animation-delay:.02s }
+.content > *:nth-child(2){ animation-delay:.08s }
+.content > *:nth-child(3){ animation-delay:.14s }
+.content > *:nth-child(4){ animation-delay:.20s }
+.content > *:nth-child(5){ animation-delay:.26s }
+.content > *:nth-child(6){ animation-delay:.32s }
+@keyframes fadeUp{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
+
+/* ── لینک‌ها ── */
+.content a{ transition:color .15s ease; }
+
+/* ── V8: میکروفن شناور — ویس‌به‌متن روی هر فیلد متنی ── */
+#gmic{
+  position:fixed; z-index:9000; width:34px; height:34px; border-radius:50%;
+  border:1px solid rgba(99,102,241,.4); background:rgba(15,15,35,.94); color:#a5b4fc;
+  font-size:15px; cursor:pointer; display:none; align-items:center; justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.4); font-family:'Vazirmatn',sans-serif;
+  transition:transform .15s ease, background .2s ease; padding:0; line-height:1;
+  touch-action:none; user-select:none;
+}
+.light #gmic{ background:rgba(255,255,255,.96); }
+#gmic:hover{ transform:scale(1.14); }
+#gmic.rec{
+  background:linear-gradient(135deg,#ef4444,#ec4899); color:#fff; border-color:transparent;
+  animation:gmicPulse 1.2s ease-in-out infinite;
+}
+@keyframes gmicPulse{
+  0%,100%{ box-shadow:0 0 0 0 rgba(239,68,68,.45); }
+  50%{ box-shadow:0 0 0 9px rgba(239,68,68,0); }
+}
+#gmic-hint{
+  position:fixed; z-index:9001; display:none; padding:6px 12px; border-radius:10px;
+  background:rgba(10,10,26,.96); border:1px solid rgba(99,102,241,.4); color:#d4d4ea;
+  font-size:11.5px; max-width:300px; font-family:'Vazirmatn',sans-serif; line-height:1.7;
+}
+.light #gmic-hint{ background:rgba(255,255,255,.97); color:#3a3a5c; }
+
+/* ── PERF: بلورهای سنگین → سبک (ظاهر تقریباً یکسان، هزینه‌ی خیلی کمتر) ── */
+.sidebar{ backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+.topbar{ backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+.alert-card{ backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
+
+/* ── حرکت کمتر برای کسانی که ترجیح می‌دن ── */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{ animation-duration:.001s !important; transition-duration:.001s !important; }
+}
+
 {% block extra_css %}{% endblock %}
 
 </style>
@@ -869,13 +1059,13 @@ select option{ background-color:#0c0c1e; color:#e8eaf6; }
       <div class="logo-icon">⬡</div>
       <div class="logo-text">
         <div class="logo-name">FamilyGraph</div>
-        <div class="logo-sub">نقشه روابط شخصی</div>
+        <div class="logo-sub">✨ دستیار روابط اجتماعی تو</div>
       </div>
     </div>
   </div>
 
   <!-- User mini card -->
-  <a href="/profile/" class="sidebar-user">
+  <a href="/u/{{ request.user.username }}/" class="sidebar-user">
     <div class="su-avatar">{{ request.user.username|first|upper }}</div>
     <div class="su-info">
       <div class="su-name">{{ request.user.get_full_name|default:request.user.username }}</div>
@@ -890,26 +1080,35 @@ select option{ background-color:#0c0c1e; color:#e8eaf6; }
     <!-- Group: فضای کاری -->
     <div class="nav-group">
       <div class="nav-group-label" id="g1-hdr" onclick="toggleNavGroup('g1')">
-        <span>فضای کاری</span>
+        <span>🌟 فضای کاری</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="nav-group-items" id="g1-items">
         <a href="/"              class="nav-item {% block nav_home %}{% endblock %}">
-          <span class="nav-icon">◈</span><span>گراف</span>
+          <span class="nav-icon">🕸</span><span>گراف</span>
         </a>
         <a href="/nodes/"        class="nav-item {% block nav_nodes %}{% endblock %}">
-          <span class="nav-icon">◉</span><span>افراد</span>
+          <span class="nav-icon">👥</span><span>افراد</span>
         </a>
         <a href="/relationships/" class="nav-item {% block nav_rels %}{% endblock %}">
-          <span class="nav-icon">⟶</span><span>روابط</span>
+          <span class="nav-icon">💞</span><span>روابط</span>
         </a>
         <a href="/events/"       class="nav-item {% block nav_events %}{% endblock %}">
-          <span class="nav-icon">◷</span><span>رویدادها</span>
+          <span class="nav-icon">📅</span><span>رویدادها</span>
+        </a>
+        <a href="/checkin/"      class="nav-item {% block nav_checkin %}{% endblock %}">
+          <span class="nav-icon">⚡</span><span>چک-این روزانه</span>
+        </a>
+        <a href="/ledger/"       class="nav-item {% block nav_ledger %}{% endblock %}">
+          <span class="nav-icon">💰</span><span>قرض و طلب</span>
+        </a>
+        <a href="/import/telegram/" class="nav-item {% block nav_import %}{% endblock %}">
+          <span class="nav-icon">📥</span><span>ایمپورت تلگرام</span>
         </a>
         <a href="/journal/"      class="nav-item {% block nav_journal %}{% endblock %}">
-          <span class="nav-icon">✎</span><span>دفترچه خاطرات</span>
+          <span class="nav-icon">📓</span><span>دفترچه خاطرات</span>
         </a>
       </div>
     </div>
@@ -917,7 +1116,7 @@ select option{ background-color:#0c0c1e; color:#e8eaf6; }
     <!-- Group: تحلیل -->
     <div class="nav-group">
       <div class="nav-group-label" id="g2-hdr" onclick="toggleNavGroup('g2')">
-        <span>تحلیل هوشمند</span>
+        <span>🧠 تحلیل هوشمند</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
@@ -927,16 +1126,16 @@ select option{ background-color:#0c0c1e; color:#e8eaf6; }
           <span class="nav-icon">🧠</span><span>روانشناسی</span>
         </a>
         <a href="/daily/"        class="nav-item {% block nav_daily %}{% endblock %}">
-          <span class="nav-icon">✦</span><span>نکات روزانه</span>
+          <span class="nav-icon">✨</span><span>بریفینگ روزانه</span>
         </a>
         <a href="/alerts/"       class="nav-item {% block nav_alerts %}{% endblock %}">
           <span class="nav-icon">🔔</span><span>هشدارها</span>
         </a>
-        <a href="/chat/"         class="nav-item {% block nav_chat %}{% endblock %}">
-          <span class="nav-icon">◈</span><span>چت AI</span>
+        <a href="/social/"       class="nav-item {% block nav_social %}{% endblock %}">
+          <span class="nav-icon">👥</span><span>دوستان و اشتراک</span>
         </a>
-        <a href="/groups/"       class="nav-item {% block nav_groups %}{% endblock %}">
-          <span class="nav-icon">🗂</span><span>گروه‌ها</span>
+        <a href="/chat/"         class="nav-item {% block nav_chat %}{% endblock %}">
+          <span class="nav-icon">🤖</span><span>چت AI</span>
         </a>
       </div>
     </div>
@@ -944,19 +1143,19 @@ select option{ background-color:#0c0c1e; color:#e8eaf6; }
     <!-- Group: تنظیمات -->
     <div class="nav-group">
       <div class="nav-group-label" id="g3-hdr" onclick="toggleNavGroup('g3')">
-        <span>حساب کاربری</span>
+        <span>👤 حساب کاربری</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="nav-group-items" id="g3-items">
         <a href="/notifications/" class="nav-item {% block nav_notifs %}{% endblock %}">
-          <span class="nav-icon">🔔</span><span>اطلاعیه‌ها</span>
+          <span class="nav-icon">📬</span><span>اطلاعیه‌ها</span>
           {% with cnt=request.user.pending_sync_count %}{% if cnt > 0 %}
           <span class="nav-badge">{{ cnt }}</span>
           {% endif %}{% endwith %}
         </a>
-        <a href="/profile/"       class="nav-item {% block nav_settings %}{% endblock %}">
+        <a href="/u/{{ request.user.username }}/"       class="nav-item {% block nav_settings %}{% endblock %}">
           <span class="nav-icon">⚙</span><span>پروفایل</span>
         </a>
       </div>
@@ -1129,6 +1328,164 @@ function getCookie(n){
 function _esc(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ═══════════════════════════════════════════════════════════
+// V8: ویس‌به‌متن سراسری 🎤
+// روی هر input/textarea فوکوس کنی، میکروفن کنارش ظاهر می‌شه.
+// نگه‌داری = ضبط تا ول کنی | کلیک کوتاه = روشن می‌مونه تا کلیک بعدی
+// مسیر ۱: Web Speech API مرورگر (فارسی، بدون سرور)
+// مسیر ۲ (fallback): ضبط + /api/stt/ (Whisper از طریق Groq)
+// ═══════════════════════════════════════════════════════════
+(function(){
+  const EXCLUDE = ['password','email','number','date','time','file','url','checkbox',
+                   'radio','range','color','hidden','submit','button'];
+
+  const mic = document.createElement('button');
+  mic.id = 'gmic'; mic.type = 'button'; mic.textContent = '🎤';
+  mic.title = 'نگه‌دار و حرف بزن — یا کلیک کن (کلیک دوباره = توقف)';
+  document.body.appendChild(mic);
+  const hint = document.createElement('div');
+  hint.id = 'gmic-hint';
+  document.body.appendChild(hint);
+
+  let target = null, hideT = null, recActive = false, downAt = 0;
+
+  function eligible(el){
+    if(!el || el.readOnly || el.disabled || el.dataset.noMic !== undefined) return false;
+    if(el.tagName === 'TEXTAREA') return true;
+    if(el.tagName === 'INPUT'){
+      const t = (el.type || 'text').toLowerCase();
+      return !EXCLUDE.includes(t);
+    }
+    return false;
+  }
+
+  function place(){
+    if(!target){ return; }
+    const r = target.getBoundingClientRect();
+    if(!r.width && !r.height){ hideMic(); return; }
+    mic.style.display = 'flex';
+    mic.style.left = Math.max(6, r.left - 40) + 'px';
+    mic.style.top  = (r.top + Math.min(r.height, 44)/2 - 17) + 'px';
+  }
+  function hideMic(){ mic.style.display = 'none'; hint.style.display = 'none'; }
+
+  document.addEventListener('focusin', e => {
+    if(eligible(e.target)){ clearTimeout(hideT); target = e.target; place(); }
+  });
+  document.addEventListener('focusout', () => {
+    hideT = setTimeout(() => { if(!recActive) hideMic(); }, 250);
+  });
+  window.addEventListener('scroll', () => { if(mic.style.display==='flex') place(); }, true);
+  window.addEventListener('resize', () => { if(mic.style.display==='flex') place(); });
+
+  // کلیک روی میکروفن نباید فوکوس فیلد رو بدزده
+  mic.addEventListener('mousedown', e => e.preventDefault());
+
+  function insert(text){
+    if(!target || !text) return;
+    const s  = target.selectionStart ?? target.value.length;
+    const en = target.selectionEnd ?? target.value.length;
+    const before = target.value.slice(0, s), after = target.value.slice(en);
+    const sep = before && !/\s$/.test(before) ? ' ' : '';
+    target.value = before + sep + text + after;
+    const pos = (before + sep + text).length;
+    try{ target.setSelectionRange(pos, pos); }catch(_){}
+    target.dispatchEvent(new Event('input', {bubbles:true}));
+  }
+
+  function showHint(t, isErr){
+    hint.textContent = t;
+    hint.style.display = 'block';
+    hint.style.borderColor = isErr ? 'rgba(239,68,68,.55)' : 'rgba(99,102,241,.4)';
+    const r = mic.getBoundingClientRect();
+    hint.style.left = Math.max(6, r.left - 130) + 'px';
+    hint.style.top  = Math.max(6, r.top - 40) + 'px';
+  }
+  function flashHint(t, isErr, ms){ showHint(t, isErr); setTimeout(() => hint.style.display='none', ms||2800); }
+
+  function startUI(){ recActive = true; mic.classList.add('rec'); mic.textContent = '🔴'; showHint('دارم گوش می‌دم… 🎙'); }
+  function stopUI(){
+    recActive = false; mic.classList.remove('rec'); mic.textContent = '🎤';
+    if(hint.textContent.startsWith('دارم') || hint.textContent.startsWith('…')) hint.style.display = 'none';
+  }
+
+  // ── مسیر ۱: Web Speech API ──
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null;
+
+  function startSR(){
+    rec = new SR();
+    rec.lang = 'fa-IR'; rec.interimResults = true; rec.continuous = true;
+    rec.onresult = ev => {
+      let interim = '';
+      for(let i = ev.resultIndex; i < ev.results.length; i++){
+        const r = ev.results[i];
+        if(r.isFinal) insert(r[0].transcript.trim());
+        else interim += r[0].transcript;
+      }
+      if(interim) showHint('… ' + interim);
+    };
+    rec.onerror = ev => {
+      stopUI();
+      if(ev.error === 'not-allowed')      flashHint('اجازه‌ی دسترسی به میکروفن رو بده 🎙', true);
+      else if(ev.error === 'no-speech')   flashHint('چیزی نشنیدم — دوباره امتحان کن', true);
+      else if(ev.error === 'network')     flashHint('تشخیص گفتار مرورگر به اینترنت نیاز داره', true);
+      else if(ev.error !== 'aborted')     flashHint('خطا: ' + ev.error, true);
+    };
+    rec.onend = stopUI;
+    try{ rec.start(); startUI(); }
+    catch(_){ flashHint('نشد شروع کنم — دوباره بزن', true); }
+  }
+  function stopSR(){ try{ rec && rec.stop(); }catch(_){} }
+
+  // ── مسیر ۲: ضبط + سرور (Whisper) ──
+  let mrec = null, chunks = [];
+  async function startMR(){
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      mrec = new MediaRecorder(stream);
+      chunks = [];
+      mrec.ondataavailable = e => chunks.push(e.data);
+      mrec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        stopUI();
+        const blob = new Blob(chunks, {type: mrec.mimeType || 'audio/webm'});
+        if(blob.size < 1500) return;   // ضبط خیلی کوتاه — هیچی
+        showHint('در حال تبدیل گفتار… ⏳');
+        const fd = new FormData();
+        fd.append('audio', blob, 'voice.webm');
+        try{
+          const r = await fetch('/api/stt/', {
+            method:'POST', headers:{'X-CSRFToken': getCookie('csrftoken')}, body: fd
+          });
+          const d = await r.json();
+          hint.style.display = 'none';
+          if(d.ok) insert((d.text || '').trim());
+          else flashHint(d.error || 'خطا در تبدیل', true, 4000);
+        }catch(_){ flashHint('خطا در ارتباط با سرور', true); }
+      };
+      mrec.start();
+      startUI();
+    }catch(_){ flashHint('اجازه‌ی دسترسی به میکروفن رو بده 🎙', true); }
+  }
+  function stopMR(){ try{ mrec && mrec.state !== 'inactive' && mrec.stop(); }catch(_){} }
+
+  const begin = () => SR ? startSR() : startMR();
+  const end   = () => SR ? stopSR()  : stopMR();
+
+  mic.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if(recActive){ end(); downAt = 0; return; }   // کلیک دوم = توقف
+    downAt = Date.now();
+    begin();
+  });
+  mic.addEventListener('pointerup', () => {
+    // نگه داشته بود (hold-to-talk) → ول کرد = پایان؛ کلیک کوتاه → روشن می‌مونه
+    if(recActive && downAt && Date.now() - downAt > 450) end();
+  });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape' && recActive) end(); });
+})();
 
 </script>
 {% block extra_js %}{% endblock %}

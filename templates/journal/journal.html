@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}دفترچه خاطرات — FamilyGraph{% endblock %}
-{% block page_title %}دفترچه خاطرات{% endblock %}
+{% block page_title %}📓 دفترچه خاطرات{% endblock %}
 {% block nav_journal %}active{% endblock %}
 
 {% block extra_css %}
@@ -361,6 +361,15 @@ animation:spin .7s linear infinite;vertical-align:middle;}
 
 <!-- ══ MAIN COLUMN ══════════════════════════════════ -->
 <div>
+
+  {# V5: میان‌بر چک-این برای روزهای بی‌حوصلگی #}
+  <a href="/checkin/" style="display:flex;align-items:center;gap:10px;padding:11px 16px;margin-bottom:14px;
+     border-radius:13px;text-decoration:none;font-size:13px;font-weight:700;color:#fbbf24;
+     background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(236,72,153,.08));
+     border:1px dashed rgba(245,158,11,.4);">
+    ⚡ حوصله‌ی نوشتن نداری؟ چک-این ۳۰ ثانیه‌ای بزن — فقط چند تا ضربه
+    <span style="margin-right:auto;font-size:15px;">←</span>
+  </a>
 
   <div class="no-root-warn" id="rootWarn" style="display:none;">
     ⚠ نود اصلی تنظیم نشده. <a href="/settings/" style="color:#fcd34d;font-weight:700;margin-right:auto;">تنظیم کن ←</a>

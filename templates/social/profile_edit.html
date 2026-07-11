@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}ویرایش اطلاعات - FamilyGraph{% endblock %}
+{% block page_title %}ویرایش اطلاعات{% endblock %}
+{% block nav_settings %}active{% endblock %}
+{% block extra_css %}
+<style>
+.edit{max-width:1120px;margin:0 auto;padding:22px}.grid{display:grid;grid-template-columns:1.35fr .9fr;gap:14px}.panel{border:1px solid var(--border);background:rgba(255,255,255,.028);border-radius:18px;padding:16px}.panel h3{margin:0 0 14px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{margin-bottom:10px}.field label{display:block;font-size:11px;color:var(--text-muted);font-weight:800;margin-bottom:6px}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;padding:10px 12px;font-family:'Vazirmatn',sans-serif}.field textarea{min-height:86px}.btn{height:42px;border:0;border-radius:12px;background:var(--grad-brand);color:#fff;font-family:'Vazirmatn',sans-serif;font-weight:900;padding:0 15px;cursor:pointer}.ghost{background:var(--surface);border:1px solid var(--border);color:var(--text-soft)}.preset-row{display:flex;gap:9px;flex-wrap:wrap}.preset{width:74px;height:42px;border-radius:12px;border:2px solid transparent}.media-list{display:grid;gap:8px}.media-item{display:flex;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:12px;padding:10px}.msg{margin-bottom:12px;border:1px solid rgba(16,185,129,.25);background:rgba(16,185,129,.08);color:#34d399;border-radius:12px;padding:10px}.hint{font-size:12px;color:var(--text-muted);line-height:1.8;margin-top:-4px;margin-bottom:12px}@media(max-width:900px){.grid,.fields{grid-template-columns:1fr}.edit{padding:12px}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="edit">
+  {% for message in messages %}<div class="msg">{{ message }}</div>{% endfor %}
+  <div class="grid">
+    <div class="panel">
+      <h3>ویرایش پروفایل من</h3>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="profile">
+        <div class="fields">
+          <div class="field"><label>نام</label><input name="first_name" value="{{ profile_user.first_name }}"></div>
+          <div class="field"><label>نام خانوادگی</label><input name="last_name" value="{{ profile_user.last_name }}"></div>
+          <div class="field"><label>شغل</label><input name="career" value="{{ profile_user.career }}"></div>
+          <div class="field"><label>شهر</label><input name="city" value="{{ profile_user.city }}"></div>
+          <div class="field"><label>کشور</label><input name="country" value="{{ profile_user.country }}"></div>
+          <div class="field"><label>تاریخ تولد</label><input type="date" name="birth_date" value="{{ profile_user.birth_date|date:'Y-m-d'|default:'' }}"></div>
+          <div class="field"><label>شماره تماس</label><input name="phone_number" value="{{ self_node.phone_number|default:'' }}"></div>
+          <div class="field"><label>لقب</label><input name="nickname" value="{{ self_node.nickname|default:'' }}"></div>
+        </div>
+        <div class="field"><label>بیو</label><textarea name="bio">{{ profile_user.bio }}</textarea></div>
+        <div class="field"><label>آواتار</label><input type="file" name="avatar"></div>
+        <label><input type="checkbox" name="is_public" {% if profile_user.is_public %}checked{% endif %}> حساب پابلیک</label><br><br>
+        <button class="btn">ذخیره پروفایل</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3>تنظیمات حساب</h3>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="root_node">
+        <div class="field"><label>نود اصلی</label><select name="root_node_id"><option value="">انتخاب نشده</option>{% for node in all_nodes %}<option value="{{ node.id }}" {% if node == profile_user.root_node %}selected{% endif %}>{{ node.username }}</option>{% endfor %}</select></div>
+        <button class="btn ghost">ذخیره نود</button>
+      </form>
+      <form method="post" style="margin-top:18px">{% csrf_token %}<input type="hidden" name="action" value="password">
+        <div class="field"><label>رمز فعلی</label><input type="password" name="old_password"></div>
+        <div class="field"><label>رمز جدید</label><input type="password" name="new_password"></div>
+        <div class="field"><label>تکرار رمز</label><input type="password" name="new_password2"></div>
+        <button class="btn ghost">تغییر رمز</button>
+      </form>
+      <hr style="border-color:var(--border);margin:18px 0"><h3>بک‌گراند</h3>
+      <div class="preset-row">{% for item in cover_presets %}<button class="preset" style="background:{{ item.css }}" onclick="setPreset('{{ item.id }}')"></button>{% endfor %}</div><br>
+      <input id="coverFile" type="file"><button class="btn ghost" onclick="uploadCover()">آپلود</button>
+
+      <hr style="border-color:var(--border);margin:18px 0"><h3>🌐 تنظیمات شبکه اجتماعی</h3>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="privacy">
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:13px;">
+          <input type="checkbox" name="discoverable" {% if profile_user.discoverable %}checked{% endif %}>
+          🔭 قابل کشف باشم <span style="font-size:10.5px;color:var(--text-muted);">(توی صفحه «کشف آدم‌ها» بیام)</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:13px;">
+          <input type="checkbox" name="auto_accept_follow" {% if profile_user.auto_accept_follow %}checked{% endif %}>
+          👁 فالوها خودکار قبول بشن <span style="font-size:10.5px;color:var(--text-muted);">(بدون نیاز به تایید من)</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:13px;">
+          <input type="checkbox" name="auto_accept_connection" {% if profile_user.auto_accept_connection %}checked{% endif %}>
+          🔗 کانکشن‌ها خودکار قبول بشن
+        </label>
+        <div class="field"><label>💬 کی می‌تونه بهم پیام بده؟</label>
+          <select name="chat_policy">
+            <option value="connections" {% if profile_user.chat_policy == 'connections' %}selected{% endif %}>فقط کانکشن‌ها</option>
+            <option value="nobody" {% if profile_user.chat_policy == 'nobody' %}selected{% endif %}>هیچ‌کس</option>
+          </select>
+        </div>
+        <button class="btn ghost">ذخیره تنظیمات شبکه</button>
+      </form>
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h3>آثار هنری</h3>
+      <div class="hint">هر کتاب، فیلم یا سریال یک اثر هنری مشترک در دیتابیس است. اگر قبلاً ثبت شده باشد از همان استفاده می‌شود؛ اگر نه، ساخته و تحلیل می‌شود.</div>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="media">
+        <div class="fields">
+          <div class="field"><label>نوع اثر</label><select name="kind" id="workKind"><option value="book">کتاب</option><option value="movie">فیلم</option><option value="series">سریال</option><option value="music">موسیقی</option></select></div>
+          <div class="field"><label>عنوان اثر</label><input name="title" id="workTitle" list="workSuggest" autocomplete="off" required><datalist id="workSuggest"></datalist></div>
+          <div class="field"><label>نویسنده/کارگردان</label><input name="creator" id="workCreator"></div>
+          <div class="field"><label>امتیاز ۰ تا ۵</label><input type="number" name="rating" min="0" max="5" step="0.5" value="3"></div>
+          <div class="field"><label>تاریخ اتمام/تماشا</label><input type="date" name="completed_on"></div>
+        </div>
+        <div class="field"><label>یادداشت شخصی</label><textarea name="notes"></textarea></div>
+        <button class="btn">اضافه کردن اثر</button>
+      </form>
+      <div class="media-list" style="margin-top:16px">{% for item in media_items %}<div class="media-item"><div><b>{% if item.work %}{{ item.work.title }}{% else %}{{ item.title }}{% endif %}</b> · {{ item.get_kind_display }} · {{ item.rating }}/5 · {{ item.get_source_display }}</div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete_media"><input type="hidden" name="media_id" value="{{ item.id }}"><button class="btn ghost">حذف</button></form></div>{% endfor %}</div>
+    </div>
+  </div>
+</div>
+<script>
+const csrftoken='{{ csrf_token }}';
+async function setPreset(preset){const fd=new FormData();fd.append('preset',preset);await fetch('/api/social/profile/cover/',{method:'POST',headers:{'X-CSRFToken':csrftoken},body:fd});location.reload()}
+async function uploadCover(){const f=document.getElementById('coverFile').files[0];if(!f)return;const fd=new FormData();fd.append('cover_image',f);await fetch('/api/social/profile/cover/',{method:'POST',headers:{'X-CSRFToken':csrftoken},body:fd});location.reload()}
+let workTimer=null;
+document.getElementById('workTitle')?.addEventListener('input',()=>{clearTimeout(workTimer);workTimer=setTimeout(loadWorkSuggest,180)});
+document.getElementById('workKind')?.addEventListener('change',loadWorkSuggest);
+async function loadWorkSuggest(){const q=document.getElementById('workTitle').value.trim();const kind=document.getElementById('workKind').value;if(!q)return;const r=await fetch(`/api/social/works/suggest/?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(q)}`);const d=await r.json();document.getElementById('workSuggest').innerHTML=(d.works||[]).map(w=>`<option value="${w.title}">${w.creator||''}${w.year?' - '+w.year:''}</option>`).join('')}
+</script>
+{% endblock %}

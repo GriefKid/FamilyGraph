@@ -1,0 +1,236 @@
+"""
+health.py — موتور «سلامت رابطه» (V4)
+
+برای هر آدمِ متصل به root، از سه منبع آخرین تعامل رو پیدا می‌کنه:
+  1. Interaction  (ثبت سریع تعامل — دقیق‌ترین)
+  2. Event        (رویدادهای گذشته که شخص شرکت داشته)
+  3. JournalEntry (ذکر شدن در یادداشت روزانه)
+
+بعد بر اساس «انتظار تماس» (دایره نزدیکی یا fallback از قدرت رابطه):
+  ratio = روزهای گذشته از آخرین تعامل / فاصله‌ی مورد انتظار
+  ratio ≤ 1        → سبز   (100..70)
+  1 < ratio ≤ 3    → زرد   (70..30)
+  ratio > 3        → قرمز  (30..5)
+  هیچ تعاملی ثبت نشده → unknown (خاکستری)
+
+همه‌چیز fail-safe است: اگه جدول Interaction هنوز migrate نشده،
+فقط از Event و Journal استفاده می‌شه.
+"""
+from django.db.utils import OperationalError, ProgrammingError
+from django.utils import timezone
+
+from .models import (
+    Node, Relationship, Event, JournalEntry,
+    CLOSENESS_EXPECTED_DAYS,
+)
+
+# fallback وقتی closeness تعیین نشده — از قدرت رابطه (۱..۵) حدس می‌زنیم
+STRENGTH_EXPECTED_DAYS = {5: 14, 4: 30, 3: 60, 2: 120, 1: 180}
+DEFAULT_EXPECTED_DAYS = 60
+
+HEALTH_COLORS = {
+    'green':   '#34d399',
+    'yellow':  '#fbbf24',
+    'red':     '#f87171',
+    'unknown': None,   # رنگ پیش‌فرض گراف
+}
+
+STATUS_LABELS = {
+    'green':   '🟢 سالم',
+    'yellow':  '🟡 نیاز به توجه',
+    'red':     '🔴 سرد شده',
+    'unknown': '⚪ بدون داده',
+}
+
+
+def _safe(fn, default):
+    """اجرای امن query — جدول/ستونِ migrate‌نشده کل صفحه رو نکُشه."""
+    try:
+        return fn()
+    except (OperationalError, ProgrammingError):
+        return default
+    except Exception:
+        return default
+
+
+def root_connected_ids(user):
+    """id همه‌ی نودهایی که با root یال مستقیم دارن."""
+    root = getattr(user, 'root_node', None)
+    if not root:
+        return set(), None
+    ids = set(
+        Relationship.objects.filter(owner=user, source=root).values_list('target_id', flat=True)
+    ) | set(
+        Relationship.objects.filter(owner=user, target=root).values_list('source_id', flat=True)
+    )
+    ids.discard(root.id)
+    return ids, root
+
+
+def last_contact_map(user):
+    """node_id → (آخرین تاریخ تعامل, منبع). از سه منبع، جدیدترین برنده‌ست."""
+    today = timezone.localdate()
+    result = {}
+
+    def bump(nid, d, src):
+        if nid is None or d is None:
+            return
+        if d > today:            # تعامل آینده (مثلاً event فردا) حساب نمی‌شه
+            return
+        cur = result.get(nid)
+        if cur is None or d > cur[0]:
+            result[nid] = (d, src)
+
+    # 1) Interaction — ممکنه جدولش هنوز نباشه
+    def _from_interactions():
+        from .models import Interaction
+        rows = Interaction.objects.filter(owner=user).values_list('node_id', 'date')
+        return list(rows)
+    for nid, d in _safe(_from_interactions, []):
+        bump(nid, d, 'interaction')
+
+    # 2) رویدادهای گذشته
+    def _from_events():
+        rows = Event.objects.filter(owner=user, date__lte=today) \
+                            .values_list('participants__id', 'date')
+        return list(rows)
+    for nid, d in _safe(_from_events, []):
+        bump(nid, d, 'event')
+
+    # 3) ذکر در یادداشت‌ها — entry_date اگه بود، وگرنه created_at
+    def _from_journal():
+        rows = JournalEntry.objects.filter(owner=user) \
+                                   .values_list('mentioned_nodes__id', 'entry_date', 'created_at')
+        return list(rows)
+    for nid, ed, ca in _safe(_from_journal, []):
+        d = ed or (ca.date() if ca else None)
+        bump(nid, d, 'journal')
+
+    return result
+
+
+def closeness_map(user):
+    """node_id → tier. جدول جداست تا نبودنش چیزی رو نشکنه."""
+    def _q():
+        from .models import NodeCloseness
+        return dict(NodeCloseness.objects.filter(owner=user)
+                    .values_list('node_id', 'tier'))
+    return _safe(_q, {})
+
+
+def expected_days_for(tier, rel_strength=None):
+    """فاصله‌ی مورد انتظار بین دو تعامل (روز) — None یعنی بدون انتظار."""
+    if tier:
+        return CLOSENESS_EXPECTED_DAYS.get(tier, DEFAULT_EXPECTED_DAYS)
+    if rel_strength:
+        return STRENGTH_EXPECTED_DAYS.get(rel_strength, DEFAULT_EXPECTED_DAYS)
+    return DEFAULT_EXPECTED_DAYS
+
+
+def _score(days_since, expected):
+    """امتیاز 0..100 + وضعیت."""
+    ratio = days_since / expected if expected else 0
+    if ratio <= 1:
+        score = 100 - 30 * ratio            # 100..70
+        status = 'green'
+    elif ratio <= 3:
+        score = 70 - 20 * (ratio - 1)       # 70..30
+        status = 'yellow'
+    else:
+        score = max(5, 30 - 5 * (ratio - 3))  # 30..5
+        status = 'red'
+    return round(score), status
+
+
+def compute_health(user):
+    """
+    خروجی: dict[node_id] = {
+        score, status, color, label,
+        days_since, expected, last_date, last_source, closeness
+    }
+    فقط برای نودهای متصل به root. کاملاً fail-safe.
+    """
+    try:
+        connected, root = root_connected_ids(user)
+    except Exception:
+        return {}
+    if not connected:
+        return {}
+
+    today = timezone.localdate()
+    contacts = last_contact_map(user)
+
+    # قوی‌ترین یال root↔node برای fallback قدرت
+    strength_map = {}
+    try:
+        for rel in Relationship.objects.filter(owner=user).only(
+                'source_id', 'target_id', 'strength'):
+            other = None
+            if rel.source_id == root.id:
+                other = rel.target_id
+            elif rel.target_id == root.id:
+                other = rel.source_id
+            if other is not None:
+                strength_map[other] = max(strength_map.get(other, 0), rel.strength or 3)
+    except Exception:
+        pass
+
+    def _nodes():
+        return list(Node.objects.filter(owner=user, id__in=connected)
+                    .only('id', 'username', 'first_name', 'last_name', 'nickname', 'name'))
+    try:
+        nodes = _nodes()
+    except (OperationalError, ProgrammingError):
+        return {}
+
+    tiers = closeness_map(user)
+
+    result = {}
+    for n in nodes:
+        closeness = tiers.get(n.id, '')
+        expected = expected_days_for(closeness, strength_map.get(n.id))
+        entry = {
+            'node_id':    n.id,
+            'name':       n.display_name(),
+            'closeness':  closeness,
+            'expected':   expected,
+            'last_date':  None,
+            'last_source': None,
+            'days_since': None,
+            'score':      None,
+            'status':     'unknown',
+            'color':      HEALTH_COLORS['unknown'],
+            'label':      STATUS_LABELS['unknown'],
+        }
+        contact = contacts.get(n.id)
+        if expected is None:
+            # tier «دور» — انتظاری نیست، همیشه خنثی
+            if contact:
+                entry['last_date'] = contact[0]
+                entry['last_source'] = contact[1]
+                entry['days_since'] = (today - contact[0]).days
+            result[n.id] = entry
+            continue
+        if contact:
+            d, src = contact
+            days_since = (today - d).days
+            score, status = _score(days_since, expected)
+            entry.update({
+                'last_date':   d,
+                'last_source': src,
+                'days_since':  days_since,
+                'score':       score,
+                'status':      status,
+                'color':       HEALTH_COLORS[status],
+                'label':       STATUS_LABELS[status],
+            })
+        result[n.id] = entry
+    return result
+
+
+def health_summary(health_map):
+    """شمارش وضعیت‌ها — برای HUD گراف و صفحه هشدارها."""
+    counts = {'green': 0, 'yellow': 0, 'red': 0, 'unknown': 0}
+    for h in health_map.values():
+        counts[h['status']] = counts.get(h['status'], 0) + 1
+    return counts
