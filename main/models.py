@@ -992,6 +992,54 @@ class SyncNotification(models.Model):
 
 
 # ─────────────────────────────────────────────────────────────────
+# GiftBox  (V13 — جعبه‌ی هدیه مکعبی با امتیاز اعتماد)
+# ─────────────────────────────────────────────────────────────────
+
+class GiftBox(models.Model):
+    SHARE_TYPES = [
+        ('node', '👤 راس'),
+        ('edge', '🔗 یال'),
+        ('data', '📊 دیتا'),
+    ]
+    REACTION_CHOICES = [
+        ('true',   '✅ راسته'),
+        ('false',  '❌ دروغه'),
+        ('accept', '🤐 قبولم'),
+        ('reject', '\U0001f6ab رد میکنم'),
+    ]
+
+    sender        = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                       related_name='giftboxes_sent')
+    recipient     = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                       related_name='giftboxes_received')
+    share_type    = models.CharField(max_length=8, choices=SHARE_TYPES, default='node')
+    payload       = models.JSONField(default=dict, blank=True)
+    cube_faces    = models.JSONField(default=list, blank=True,
+                                      verbose_name='پیکربندی ۶ وجه مکعب')
+    reactions     = models.JSONField(default=dict, blank=True)
+    my_reaction   = models.CharField(max_length=8, choices=REACTION_CHOICES,
+                                      null=True, blank=True,
+                                      verbose_name='واکنش گیرنده')
+    opened        = models.BooleanField(default=False)
+    content_added = models.BooleanField(default=False, verbose_name='اضافه شده به گراف')
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'اشتراک‌گذاری'
+        verbose_name_plural = 'اشتراک‌گذاری‌ها'
+
+    def __str__(self):
+        return f'{self.sender} -> {self.recipient}: {self.share_type}'
+
+    def reactions_dict(self):
+        base = {'true': 0, 'false': 0, 'accept': 0, 'reject': 0}
+        if isinstance(self.reactions, dict):
+            base.update(self.reactions)
+        return base
+
+
+# ─────────────────────────────────────────────────────────────────
 # Signals
 # ─────────────────────────────────────────────────────────────────
 

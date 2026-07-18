@@ -1,0 +1,942 @@
+{% extends "base.html" %}
+{% load gifbox_tags %}
+{% block title %}اشتراک‌گذاری · FamilyGraph{% endblock %}
+{% block page_title %}📤 اشتراک‌گذاری{% endblock %}
+{% block nav_social %}active{% endblock %}
+
+{% block extra_css %}
+.gb-wrap { max-width:780px; margin:0 auto; }
+
+.gb-tabs { display:flex; gap:8px; margin-bottom:20px; padding:4px;
+  background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:16px; }
+.gb-tab { flex:1; padding:10px 8px; border-radius:12px; border:none;
+  font-family:'Vazirmatn',sans-serif; font-size:13px; font-weight:700; cursor:pointer;
+  background:transparent; color:var(--text-soft); transition:.18s;
+  display:flex; align-items:center; justify-content:center; gap:6px; }
+.gb-tab:hover { color:var(--text); background:rgba(255,255,255,.04); }
+.gb-tab.on { background:var(--grad-brand); color:#fff; box-shadow:0 4px 18px rgba(99,102,241,.35); }
+.gb-badge { background:var(--danger); color:#fff; border-radius:8px; padding:1px 6px; font-size:9px; font-weight:800; }
+.gb-screen { display:none; } .gb-screen.on { display:block; }
+
+.cube-cards { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+.cube-card { width:128px; background:var(--card); border:2px solid var(--border);
+  border-radius:18px; padding:14px 10px 12px; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  position:relative; transition:border-color .2s,transform .15s; }
+.cube-card:hover { border-color:rgba(99,102,241,.4); transform:translateY(-2px); }
+.cube-card:active { transform:scale(.95); }
+.cube-card.unread { border-color:rgba(99,102,241,.45); }
+.cube-card.unread::before { content:'جدید'; position:absolute; top:-8px; right:10px;
+  background:var(--primary); color:#fff; font-size:9px; font-weight:700; padding:2px 8px; border-radius:8px; }
+.cc-name { font-size:11px; font-weight:700; color:var(--text); text-align:center; }
+.cc-trust { font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px; }
+.cc-time  { font-size:9px; color:var(--text-muted); }
+.cc-react { font-size:13px; }
+.sec-lbl { font-size:11px; font-weight:700; color:var(--text-muted); letter-spacing:.5px;
+  margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+.sec-lbl::after { content:''; flex:1; height:1px; background:var(--border); }
+.gb-section { margin-bottom:28px; }
+.empty-box { text-align:center; padding:30px; color:var(--text-muted); font-size:13px; }
+.empty-box .eg { font-size:40px; margin-bottom:10px; }
+
+.mc-wrap { perspective:210px; flex-shrink:0; }
+.mc { transform-style:preserve-3d; animation:mc-spin 8s linear infinite; position:relative; }
+@keyframes mc-spin { from{transform:rotateX(-22deg) rotateY(0)} to{transform:rotateX(-22deg) rotateY(360deg)} }
+.mf { position:absolute; border-radius:9px; border:1px solid rgba(255,255,255,.18);
+  display:flex; align-items:center; justify-content:center; backface-visibility:hidden; font-size:20px; }
+
+.gb-card { background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
+.gc-lbl { font-size:10px; font-weight:700; color:var(--text-muted); letter-spacing:.5px; margin-bottom:10px; }
+#recip-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.rb { background:rgba(255,255,255,.04); border:2px solid var(--border); border-radius:13px;
+  padding:11px 5px; display:flex; flex-direction:column; align-items:center; gap:4px;
+  cursor:pointer; transition:border-color .18s,background .18s,transform .14s; }
+.rb:active { transform:scale(.93); }
+.rb.sel { border-color:var(--primary); background:rgba(99,102,241,.1); }
+.rb .re { font-size:20px; } .rb .rn { font-size:10px; font-weight:600; color:var(--text); }
+.rb .rt { font-size:9px; font-weight:700; }
+#type-row { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:10px; }
+.type-chip { padding:7px 13px; border-radius:20px; border:2px solid var(--border);
+  background:rgba(255,255,255,.04); font-size:12px; font-weight:600; cursor:pointer;
+  transition:all .15s; font-family:'Vazirmatn',sans-serif; }
+.type-chip.sel { border-color:var(--primary); background:rgba(99,102,241,.12); color:var(--primary-light); }
+#content-txt { width:100%; background:rgba(255,255,255,.04); border:1px solid var(--border);
+  border-radius:14px; padding:12px 14px; color:var(--text); font-family:'Vazirmatn',sans-serif;
+  font-size:14px; resize:none; outline:none; transition:border-color .2s; }
+#content-txt:focus { border-color:rgba(99,102,241,.4); }
+#content-txt::placeholder { color:var(--text-muted); }
+.face-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-bottom:10px; }
+.face-slot { border-radius:10px; height:46px; display:flex; align-items:center;
+  justify-content:center; font-size:16px; cursor:pointer; border:2px solid transparent;
+  transition:border-color .15s,transform .13s; }
+.face-slot:hover { border-color:rgba(255,255,255,.3); transform:scale(1.06); }
+.face-slot.active-face { border-color:#fff; }
+#face-editor { background:rgba(255,255,255,.04); border:1px solid var(--border);
+  border-radius:14px; padding:12px; margin-bottom:10px; display:none; }
+#face-editor.open { display:block; }
+.fe-row { display:flex; gap:6px; flex-wrap:wrap; }
+.fe-lbl { font-size:10px; color:var(--text-muted); width:100%; margin-bottom:4px; }
+.csw { width:28px; height:28px; border-radius:7px; cursor:pointer; border:2px solid transparent; transition:transform .14s,border-color .14s; }
+.csw:hover { transform:scale(1.15); }
+.csw.sel { border-color:#fff; }
+.emb { width:32px; height:32px; border-radius:8px; background:rgba(255,255,255,.06);
+  border:2px solid transparent; font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:border-color .14s,transform .14s; }
+.emb:hover { transform:scale(1.1); }
+.emb.sel { border-color:var(--primary); }
+.preview-row { display:flex; align-items:center; gap:14px; background:rgba(255,255,255,.04);
+  border:1px solid var(--border); border-radius:16px; padding:14px 15px; margin-bottom:14px; }
+.pm { flex:1; }
+.pm .pm-to  { font-size:14px; font-weight:700; }
+.pm .pm-sub { font-size:11px; color:var(--text-muted); margin-top:3px; }
+.send-btn { width:100%; padding:14px; border:none; border-radius:16px; background:var(--grad-brand);
+  color:#fff; font-family:'Vazirmatn',sans-serif; font-size:15px; font-weight:800; cursor:pointer;
+  box-shadow:0 4px 20px rgba(99,102,241,.4); transition:opacity .2s,transform .15s; }
+.send-btn:hover { opacity:.9; }
+.send-btn:active { transform:scale(.97); }
+.send-btn:disabled { opacity:.38; cursor:not-allowed; }
+@keyframes fly-away { 0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.3) translateY(-80px) rotate(-12deg)} }
+.fly { animation:fly-away .65s ease-in forwards; }
+
+/* trust tab */
+.my-trust-big { background:var(--card); border:1px solid var(--border);
+  border-radius:20px; padding:18px 20px; margin-bottom:16px; display:flex; align-items:center; gap:16px; }
+.trust-row { display:flex; align-items:center; gap:12px; background:var(--card);
+  border:1px solid var(--border); border-radius:14px; padding:13px 14px; margin-bottom:8px; }
+.trust-row.me-row { border-color:rgba(99,102,241,.3); }
+.tr-emo { font-size:22px; flex-shrink:0; }
+.tr-name { font-size:13px; font-weight:700; flex:1; }
+.tr-right { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+.tr-score { font-size:17px; font-weight:800; }
+.tr-bar-wrap { width:90px; height:5px; background:rgba(255,255,255,.08); border-radius:3px; overflow:hidden; }
+.tr-bar { height:100%; border-radius:3px; transition:width .6s; }
+.tr-quota { font-size:9px; color:var(--text-muted); }
+.tr-delta { font-size:11px; font-weight:700; padding:2px 7px; border-radius:8px; transition:all .4s; opacity:0; }
+.tr-delta.show { opacity:1; }
+
+/* full-screen viewer */
+#gb-viewer { position:fixed; inset:0; z-index:900; background:#000;
+  opacity:0; pointer-events:none; transition:opacity .25s; }
+#gb-viewer.open { opacity:1; pointer-events:all; }
+#vcv { position:absolute; inset:0; display:block; cursor:grab; z-index:1; }
+#vcv.drag { cursor:grabbing; }
+#v-header { position:absolute; top:0; left:0; right:0; z-index:10; padding:14px 16px;
+  display:flex; align-items:center; gap:11px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.88) 60%,transparent); }
+#v-title { flex:1; }
+.vt-name { font-size:14px; font-weight:700; color:#fff; }
+.vt-sub  { font-size:11px; color:rgba(255,255,255,.4); margin-top:2px; }
+.back-btn { padding:7px 14px; border-radius:18px; background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.15); color:#fff; font-family:'Vazirmatn',sans-serif;
+  font-size:12px; font-weight:700; cursor:pointer; }
+.back-btn:hover { background:rgba(255,255,255,.18); }
+#v-hint { position:absolute; bottom:24px; left:50%; transform:translateX(-50%);
+  z-index:10; pointer-events:none; background:rgba(0,0,0,.6); backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.08); border-radius:20px; padding:7px 16px;
+  font-size:12px; color:rgba(255,255,255,.4); white-space:nowrap; transition:opacity .5s; }
+#v-hint.gone { opacity:0; }
+#rpanel { position:absolute; bottom:0; left:0; right:0; z-index:20;
+  background:rgba(5,5,20,.97); backdrop-filter:blur(30px);
+  border-top:1px solid rgba(255,255,255,.08); border-radius:28px 28px 0 0;
+  padding:20px 16px 32px; transform:translateY(100%);
+  transition:transform .55s cubic-bezier(.34,1.56,.64,1); }
+#rpanel.up { transform:translateY(0); }
+#r-content { margin-bottom:16px; opacity:0; transform:translateY(8px);
+  transition:opacity .3s .15s,transform .3s .15s; }
+#rpanel.up #r-content { opacity:1; transform:translateY(0); }
+.rc-type { display:inline-flex; align-items:center; gap:5px; background:rgba(255,255,255,.08);
+  border-radius:10px; padding:4px 10px; font-size:11px; font-weight:600; color:rgba(255,255,255,.5); margin-bottom:10px; }
+.rc-text { font-size:16px; font-weight:600; color:#fff; line-height:1.55; margin-bottom:12px; }
+.rc-sender { display:flex; align-items:center; justify-content:space-between;
+  padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,.07); }
+.rs-left { display:flex; align-items:center; gap:9px; }
+.rs-emo { font-size:22px; }
+.rs-name { font-size:13px; font-weight:700; color:#fff; }
+.rs-from { font-size:10px; color:rgba(255,255,255,.4); }
+.rs-trust .rst-num { font-size:18px; font-weight:800; transition:color .5s; }
+.rs-trust .rst-lbl { font-size:9px; color:rgba(255,255,255,.4); }
+#r-stats { display:flex; gap:6px; margin:12px 0; opacity:0; transition:opacity .3s .3s; }
+#rpanel.up #r-stats { opacity:1; }
+.rsi { flex:1; background:rgba(255,255,255,.05); border-radius:10px; padding:7px 4px; text-align:center; }
+.rsi-n { font-size:14px; font-weight:700; }
+.rsi-l { font-size:9px; color:rgba(255,255,255,.4); margin-top:1px; }
+#r-btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.rbtn { width:100%; padding:13px 8px; border-radius:14px; border:2px solid;
+  background:transparent; font-family:'Vazirmatn',sans-serif; font-size:14px; font-weight:700;
+  cursor:pointer; display:flex; align-items:center; justify-content:center; gap:7px;
+  opacity:0; transform:translateY(16px) scale(.93);
+  transition:all .38s cubic-bezier(.34,1.56,.64,1); }
+.rbtn.in { opacity:1; transform:translateY(0) scale(1); }
+.rbtn.tb  { border-color:#43e97b; color:#43e97b; }
+.rbtn.fb  { border-color:#ff4757; color:#ff4757; }
+.rbtn.ab  { border-color:#74b9ff; color:#74b9ff; }
+.rbtn.rjb { border-color:#fd9644; color:#fd9644; }
+.rbtn.picked.tb  { background:#43e97b; color:#000; box-shadow:0 4px 20px rgba(67,233,123,.5); }
+.rbtn.picked.fb  { background:#ff4757; color:#fff; box-shadow:0 4px 20px rgba(255,71,87,.5); }
+.rbtn.picked.ab  { background:#74b9ff; color:#000; box-shadow:0 4px 20px rgba(116,185,255,.5); }
+.rbtn.picked.rjb { background:#fd9644; color:#000; box-shadow:0 4px 20px rgba(253,150,68,.5); }
+#v-close { position:absolute; top:14px; left:14px; z-index:30;
+  background:rgba(99,102,241,.14); border:1px solid rgba(99,102,241,.28);
+  color:#a5b4fc; font-family:'Vazirmatn',sans-serif; font-size:12px; font-weight:700;
+  padding:7px 16px; border-radius:18px; cursor:pointer;
+  opacity:0; pointer-events:none; transition:opacity .3s,transform .3s; transform:translateY(-8px); }
+#v-close.show { opacity:1; pointer-events:all; transform:translateY(0); }
+
+.ptcl { position:fixed; border-radius:50%; pointer-events:none; z-index:9999;
+  animation:ptcl-go .75s ease-out forwards; }
+@keyframes ptcl-go { 0%{opacity:1;transform:translate(0,0)}100%{opacity:0;transform:translate(var(--tx),var(--ty))} }
+.score-pop { position:fixed; font-size:22px; font-weight:800; pointer-events:none; z-index:9999;
+  animation:sc-rise 1.4s ease-out forwards; transform:translate(-50%,-50%); }
+@keyframes sc-rise { 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}
+  25%{opacity:1;transform:translate(-50%,-70%) scale(1.15)}
+  80%{opacity:1;transform:translate(-50%,-115%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-135%) scale(.9)} }
+#gb-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(60px);
+  background:var(--card); border:1px solid rgba(255,255,255,.1); border-radius:20px;
+  padding:9px 20px; font-size:13px; font-weight:600; z-index:9998; opacity:0;
+  transition:transform .42s cubic-bezier(.34,1.56,.64,1),opacity .42s;
+  white-space:nowrap; pointer-events:none; }
+#gb-toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+
+/* share type buttons */
+.share-type-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.stype-btn { background:rgba(255,255,255,.04); border:2px solid var(--border); border-radius:16px;
+  padding:14px 8px; display:flex; flex-direction:column; align-items:center; gap:5px;
+  cursor:pointer; transition:all .18s; font-family:'Vazirmatn',sans-serif; }
+.stype-btn:hover { border-color:rgba(99,102,241,.4); background:rgba(99,102,241,.07); }
+.stype-btn.sel { border-color:var(--primary); background:rgba(99,102,241,.12); }
+.stype-ico { font-size:28px; }
+.stype-lbl { font-size:13px; font-weight:800; color:var(--text); }
+.stype-sub { font-size:10px; color:var(--text-muted); text-align:center; }
+
+/* item picker */
+.item-search { width:100%; background:rgba(255,255,255,.05); border:1.5px solid var(--border);
+  border-radius:12px; padding:10px 14px; color:var(--text); font-family:'Vazirmatn',sans-serif;
+  font-size:13px; outline:none; margin-bottom:10px; transition:border-color .2s; box-sizing:border-box; }
+.item-search:focus { border-color:rgba(99,102,241,.45); }
+.item-list { max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; }
+.item-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px;
+  border:1.5px solid var(--border); cursor:pointer; transition:all .15s; background:rgba(255,255,255,.03); }
+.item-row:hover { border-color:rgba(99,102,241,.35); background:rgba(99,102,241,.07); }
+.item-row.sel { border-color:var(--primary); background:rgba(99,102,241,.12); }
+.item-row-ico { font-size:20px; flex-shrink:0; }
+.item-row-info { flex:1; min-width:0; }
+.item-row-title { font-size:13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.item-row-sub { font-size:10px; color:var(--text-muted); margin-top:2px; }
+.item-empty { text-align:center; color:var(--text-muted); font-size:12px; padding:16px; }
+
+/* viewer added badge */
+.added-badge { display:inline-flex; align-items:center; gap:5px; background:rgba(67,233,123,.12);
+  border:1px solid rgba(67,233,123,.3); color:#43e97b; border-radius:10px; padding:4px 10px;
+  font-size:11px; font-weight:700; margin-top:8px; }
+{% endblock %}
+
+{% block content %}
+<div class="gb-wrap">
+
+  <div class="gb-tabs">
+    <button class="gb-tab on" onclick="gbTab('inbox',this)">
+      📬 دریافتی{% if unread_count > 0 %} <span class="gb-badge">{{ unread_count }}</span>{% endif %}
+    </button>
+    <button class="gb-tab" onclick="gbTab('compose',this)">📤 اشتراک‌گذاری</button>
+    <button class="gb-tab" onclick="gbTab('trust',this)">⭐ اعتماد</button>
+  </div>
+
+  <!-- ══ INBOX ══ -->
+  <div id="gb-inbox" class="gb-screen on">
+    <div class="gb-section">
+      <div class="sec-lbl">📥 مکعب‌های دریافتی
+        {% if unread_count > 0 %}<span style="background:var(--primary);color:#fff;border-radius:8px;padding:1px 7px;font-size:9px;font-weight:700">{{ unread_count }} جدید</span>{% endif %}
+      </div>
+      <div id="inbox-cards" class="cube-cards"></div>
+    </div>
+    <div class="gb-section">
+      <div class="sec-lbl">📤 ارسال‌شده‌های من</div>
+      <div id="sent-cards" class="cube-cards"></div>
+    </div>
+  </div>
+
+  <!-- ══ COMPOSE ══ -->
+  <div id="gb-compose" class="gb-screen">
+
+    <!-- ① گیرنده -->
+    <div class="gb-card">
+      <div class="gc-lbl">① گیرنده رو انتخاب کن</div>
+      <div id="recip-grid"></div>
+    </div>
+
+    <!-- ② نوع شیر -->
+    <div class="gb-card">
+      <div class="gc-lbl">② چی می‌خوای شیر کنی؟</div>
+      <div class="share-type-row">
+        <button class="stype-btn" data-t="node" onclick="setShareType('node',this)">
+          <span class="stype-ico">👤</span>
+          <span class="stype-lbl">راس</span>
+          <span class="stype-sub">یه نفر از شبکه‌ات</span>
+        </button>
+        <button class="stype-btn" data-t="edge" onclick="setShareType('edge',this)">
+          <span class="stype-ico">🔗</span>
+          <span class="stype-lbl">یال</span>
+          <span class="stype-sub">یه رابطه بین دو نفر</span>
+        </button>
+        <button class="stype-btn" data-t="data" onclick="setShareType('data',this)">
+          <span class="stype-ico">📊</span>
+          <span class="stype-lbl">دیتا</span>
+          <span class="stype-sub">اطلاعات درباره یکی</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ③ انتخاب آیتم -->
+    <div class="gb-card" id="item-picker-card" style="display:none">
+      <div class="gc-lbl" id="item-picker-lbl">③ کدوم رو شیر می‌کنی؟</div>
+      <input class="item-search" id="item-search" placeholder="🔍 جستجو…" oninput="filterItems(this.value)">
+      <div id="item-list" class="item-list"></div>
+    </div>
+
+    <!-- ④ طراحی مکعب -->
+    <div class="gb-card">
+      <div class="gc-lbl">④ طراحی مکعب (اختیاری)</div>
+      <div class="face-grid" id="face-grid"></div>
+      <div id="face-editor"></div>
+    </div>
+
+    <!-- ⑤ پیش‌نمایش + ارسال -->
+    <div class="gb-card">
+      <div class="gc-lbl">⑤ پیش‌نمایش</div>
+      <div class="preview-row">
+        <div id="prev-cube"></div>
+        <div class="pm">
+          <div class="pm-to" id="prev-to">گیرنده انتخاب نشده</div>
+          <div class="pm-sub" id="prev-type">نوع: —</div>
+          <div class="pm-sub" id="prev-item" style="color:var(--text-muted)">آیتم انتخاب نشده</div>
+        </div>
+      </div>
+      <button class="send-btn" id="send-btn" onclick="sendBox()" disabled>📤 اشتراک‌گذاری</button>
+    </div>
+  </div>
+
+  <!-- ══ TRUST ══ -->
+  <div id="gb-trust" class="gb-screen">
+    <div class="my-trust-big">
+      <div style="font-size:36px">👤</div>
+      <div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:3px">امتیاز اعتماد من</div>
+        <div style="font-size:36px;font-weight:800;color:{{ me.trust_score|trust_color }}">{{ me.trust_score }}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px">سهمیه: {{ trust_quota }}</div>
+      </div>
+      <div style="flex:1"></div>
+      <div class="tr-bar-wrap" style="width:80px;height:8px">
+        <div class="tr-bar" style="width:{{ me.trust_score }}%;background:{{ me.trust_score|trust_color }}"></div>
+      </div>
+    </div>
+    <div class="sec-lbl" style="margin-bottom:12px">🏆 رتبه‌بندی اعتماد</div>
+    {% for u in trust_users %}
+    <div class="trust-row {% if u.id == me.id %}me-row{% endif %}" id="tr-{{ u.id }}">
+      <div class="tr-emo">{% if u.id == me.id %}👤{% else %}{{ u.first_name|slice:":1"|default:"👤" }}{% endif %}</div>
+      <div>
+        <div class="tr-name">{{ u.get_full_name|default:u.username }}{% if u.id == me.id %} (من){% endif %}</div>
+        <div class="tr-quota" style="color:{{ u.trust_score|trust_color }}">سهمیه: {{ u.trust_score|quota }}</div>
+      </div>
+      <div class="tr-right">
+        <div class="tr-score" id="trs-{{ u.id }}" style="color:{{ u.trust_score|trust_color }}">{{ u.trust_score }}</div>
+        <div class="tr-bar-wrap"><div class="tr-bar" id="trb-{{ u.id }}" style="width:{{ u.trust_score }}%;background:{{ u.trust_score|trust_color }}"></div></div>
+        <div class="tr-delta" id="trd-{{ u.id }}"></div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="empty-box"><div class="eg">👥</div>کسی رو فالو نکردی هنوز</div>
+    {% endfor %}
+  </div>
+
+</div>
+
+<!-- viewer — خارج از gb-wrap -->
+<div id="gb-viewer" style="display:none">
+  <canvas id="vcv"></canvas>
+  <div id="v-header">
+    <button class="back-btn" onclick="exitViewer()">← برگشت</button>
+    <div id="v-title">
+      <div class="vt-name" id="vt-name"></div>
+      <div class="vt-sub"  id="vt-sub"></div>
+    </div>
+  </div>
+  <div id="v-hint">🖱 بکش بچرخون &nbsp;·&nbsp; دابل‌کلیک برای باز کردن</div>
+  <div id="rpanel">
+    <div id="r-content">
+      <div class="rc-type" id="rc-type"></div>
+      <div class="rc-text" id="rc-text"></div>
+      <div class="rc-sender">
+        <div class="rs-left">
+          <div class="rs-emo" id="rs-emo"></div>
+          <div><div class="rs-name" id="rs-name"></div><div class="rs-from">به اشتراک گذاشته</div></div>
+        </div>
+        <div class="rs-trust">
+          <div class="rst-num" id="rst-num"></div>
+          <div class="rst-lbl">امتیاز اعتماد</div>
+        </div>
+      </div>
+    </div>
+    <div id="r-stats">
+      <div class="rsi" style="color:#43e97b"><div class="rsi-n" id="rs-true">0</div><div class="rsi-l">راسته</div></div>
+      <div class="rsi" style="color:#ff4757"><div class="rsi-n" id="rs-false">0</div><div class="rsi-l">دروغه</div></div>
+      <div class="rsi" style="color:#74b9ff"><div class="rsi-n" id="rs-acc">0</div><div class="rsi-l">قبولم</div></div>
+      <div class="rsi" style="color:#fd9644"><div class="rsi-n" id="rs-rej">0</div><div class="rsi-l">رد</div></div>
+    </div>
+    <div id="r-btns">
+      <button class="rbtn tb"  data-t="true"   onclick="doReact('true',this)">✅ راسته</button>
+      <button class="rbtn fb"  data-t="false"  onclick="doReact('false',this)">❌ دروغه</button>
+      <button class="rbtn ab"  data-t="accept" onclick="doReact('accept',this)">🤐 قبولم</button>
+      <button class="rbtn rjb" data-t="reject" onclick="doReact('reject',this)">🚫 رد میکنم</button>
+    </div>
+  </div>
+  <button id="v-close" onclick="vCollapseBox()">✕ بستن</button>
+</div>
+<div id="gb-toast"></div>
+
+<!-- Three.js + all scripts go HERE (after DOM, not inside <style>) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const INBOX_DATA = {{ inbox_json|safe }};
+const SENT_DATA  = {{ sent_json|safe }};
+const RECIPIENTS = {{ recipients_json|safe }};
+const MY_NODES   = {{ nodes_json|safe }};
+const MY_EDGES   = {{ edges_json|safe }};
+const MY_INFOS   = {{ infos_json|safe }};
+const ME_ID      = {{ me.id }};
+const CSRF       = '{{ csrf_token }}';
+const REACTION_DELTA_JS = {true:2.5, accept:0.63, reject:-0.63, false:-2.5};
+
+const COLOR_PAIRS = [
+  ['#8b7fff','#4c3fcf'],['#ff6eb4','#b02565'],['#43e97b','#179b43'],
+  ['#feca57','#b08a00'],['#74b9ff','#1a6fd4'],['#fd9644','#a04800'],
+  ['#f093fb','#b03fcf'],['#fc5c7d','#6a3093'],
+];
+const EMOJI_OPTS = ['📦','🎁','⭐','🔗','📅','💌','🔐','📊','🌿','💎','🔮','🎯','👤','🏷️','🧠','❤️'];
+
+function defFaces(){
+  return [
+    {emo:'📦',lbl:'فرستنده',ci:0},{emo:'👤',lbl:'گیرنده',ci:1},
+    {emo:'📊',lbl:'داده',ci:2},{emo:'🔗',lbl:'یال',ci:3},
+    {emo:'⭐',lbl:'اعتماد',ci:4},{emo:'📅',lbl:'زمان',ci:5},
+  ];
+}
+function tColor(t){
+  if(t>=80)return'#43e97b';if(t>=60)return'#feca57';if(t>=40)return'#fd9644';return'#ff4757';
+}
+
+/* ── tabs ── */
+function gbTab(id,btn){
+  document.querySelectorAll('.gb-screen').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.gb-tab').forEach(b=>b.classList.remove('on'));
+  document.getElementById('gb-'+id).classList.add('on');
+  btn.classList.add('on');
+  if(id==='compose') initCompose();
+}
+
+/* ── CSS mini cube ── */
+function miniCubeEl(faces,sz){
+  if(!faces||faces.length!==6) faces=defFaces();
+  const h=sz/2;
+  const trs={
+    fr:`translateZ(${h}px)`,bk:`rotateY(180deg) translateZ(${h}px)`,
+    rt:`rotateY(90deg) translateZ(${h}px)`,lt:`rotateY(-90deg) translateZ(${h}px)`,
+    tp:`rotateX(90deg) translateZ(${h}px)`,bt:`rotateX(-90deg) translateZ(${h}px)`,
+  };
+  const ids=['fr','bk','rt','lt','tp','bt'];
+  const wrap=document.createElement('div');
+  wrap.className='mc-wrap';
+  wrap.style.cssText=`width:${sz}px;height:${sz}px;perspective:${sz*3}px`;
+  const mc=document.createElement('div');
+  mc.className='mc';
+  mc.style.cssText=`width:${sz}px;height:${sz}px;position:relative`;
+  faces.forEach((f,i)=>{
+    const[c1,c2]=COLOR_PAIRS[f.ci]||COLOR_PAIRS[0];
+    const d=document.createElement('div');d.className='mf';
+    d.style.cssText=`width:${sz}px;height:${sz}px;transform:${trs[ids[i]]};background:linear-gradient(135deg,${c1},${c2})`;
+    d.textContent=f.emo; mc.appendChild(d);
+  });
+  wrap.appendChild(mc); return wrap;
+}
+
+/* ── render inbox/sent ── */
+function renderCards(){
+  const rMap={'true':'✅','false':'❌','accept':'🤐','reject':'🚫'};
+  const ic=document.getElementById('inbox-cards');
+  ic.innerHTML='';
+  if(!INBOX_DATA.length){
+    ic.innerHTML='<div class="empty-box"><div class="eg">📭</div>هنوز چیزی دریافت نکردی</div>';
+  } else {
+    INBOX_DATA.forEach(box=>{
+      const card=document.createElement('div');
+      card.className='cube-card'+(box.opened?'':' unread');
+      card.onclick=()=>openBox(box.id);
+      card.appendChild(miniCubeEl(box.cube_faces,58));
+      const tc=tColor(box.sender_trust);
+      card.insertAdjacentHTML('beforeend',`
+        <div class="cc-name">${box.sender_name}</div>
+        <div class="cc-time" style="color:var(--text-muted)">${box.type_label||''}</div>
+        <div class="cc-trust" style="color:${tc};background:${tc}22">${box.sender_trust}</div>
+        <div class="cc-time">${box.time_ago}</div>
+        ${box.my_reaction?`<div class="cc-react">${rMap[box.my_reaction]||''}</div>`:''}
+        ${box.content_added?'<div style="font-size:9px;color:#43e97b">✅ اضافه شده</div>':''}
+      `);
+      ic.appendChild(card);
+    });
+  }
+  const sc=document.getElementById('sent-cards');
+  sc.innerHTML='';
+  if(!SENT_DATA.length){
+    sc.innerHTML='<div class="empty-box"><div class="eg">📤</div>هنوز چیزی به اشتراک نگذاشتی</div>';
+  } else {
+    SENT_DATA.forEach(box=>{
+      const card=document.createElement('div');
+      card.className='cube-card';
+      card.onclick=()=>openSentBox(box.id);
+      card.appendChild(miniCubeEl(box.cube_faces,58));
+      card.insertAdjacentHTML('beforeend',`
+        <div class="cc-name">به: ${box.recipient_name}</div>
+        <div class="cc-time" style="color:var(--text-muted)">${box.type_label||''}</div>
+        <div class="cc-time">${box.time_ago}</div>
+      `);
+      sc.appendChild(card);
+    });
+  }
+}
+
+/* ── open viewer ── */
+let currentBox=null, viewerReacted=false;
+
+function openBox(id){
+  const box=INBOX_DATA.find(b=>b.id===id); if(!box) return;
+  currentBox=box; viewerReacted=!!box.my_reaction;
+  _openViewer(box,false);
+  fetch(`/api/social/gifbox/${id}/open/`,{method:'POST',headers:{'X-CSRFToken':CSRF}});
+}
+function openSentBox(id){
+  const box=SENT_DATA.find(b=>b.id===id); if(!box) return;
+  currentBox=box; viewerReacted=true; _openViewer(box,true);
+}
+function _openViewer(box,isSent){
+  document.getElementById('vt-name').textContent=isSent?`به: ${box.recipient_name}`:`از: ${box.sender_name}`;
+  document.getElementById('vt-sub').textContent=box.time_ago;
+  const vEl=document.getElementById('gb-viewer');
+  vEl.style.display='block';
+  requestAnimationFrame(()=>vEl.classList.add('open'));
+  document.getElementById('v-hint').classList.remove('gone');
+  document.getElementById('rpanel').classList.remove('up');
+  document.getElementById('v-close').classList.remove('show');
+  document.querySelectorAll('.rbtn').forEach(b=>{b.classList.remove('in','picked');b.style.cursor='';b.onclick=null;});
+  initThreeViewer(box);
+}
+function exitViewer(){
+  const vEl=document.getElementById('gb-viewer');
+  vEl.classList.remove('open');
+  stopThreeViewer();
+  setTimeout(()=>{vEl.style.display='none';},280);
+}
+
+/* ── react ── */
+function doReact(type,btnEl){
+  if(viewerReacted||!currentBox) return;
+  viewerReacted=true;
+  fetch(`/api/social/gifbox/${currentBox.id}/react/`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+    body:JSON.stringify({reaction:type})
+  }).then(r=>r.json()).then(data=>{
+    if(!data.ok){showToast(data.error||'خطا');return;}
+    const rm={true:'true',false:'false',accept:'acc',reject:'rej'};
+    document.getElementById('rs-'+rm[type]).textContent=data.reactions[type];
+    btnEl.classList.add('picked');
+    const rect=btnEl.getBoundingClientRect();
+    spawnParticles(type,rect.left+rect.width/2,rect.top+rect.height/2);
+    const delta=REACTION_DELTA_JS[type]||0;
+    const sign=delta>=0?'+':'';
+    showScorePop(`${sign}${delta.toFixed(1)}`,delta>=0?'#43e97b':'#ff4757',
+      rect.left+rect.width/2,rect.top);
+    if(data.new_trust!==undefined){
+      setTimeout(()=>{
+        const el=document.getElementById('rst-num');
+        animNum(el,currentBox.sender_trust,data.new_trust,700);
+        el.style.color=tColor(data.new_trust);
+        currentBox.sender_trust=data.new_trust;
+      },250);
+      setTimeout(()=>{
+        showToast(`اعتماد ${currentBox.sender_name}: ${sign}${delta.toFixed(1)}`);
+        updateTrustRow(currentBox.sender_id,currentBox.sender_trust,data.new_trust,delta);
+      },500);
+    }
+    // اگه قبولم و اضافه شد
+    if(type==='accept'&&data.added&&data.added.length){
+      setTimeout(()=>{
+        showToast('✅ '+data.added.join(' · ')+' به گرافت اضافه شد');
+        let badge=document.getElementById('rc-added');
+        if(!badge){badge=document.createElement('div');badge.id='rc-added';badge.className='added-badge';badge.textContent='✅ به گرافت اضافه شده';document.getElementById('r-content').appendChild(badge);}
+      },800);
+    }
+    currentBox.my_reaction=type; currentBox.reactions=data.reactions;
+    if(data.content_added) currentBox.content_added=true;
+    setTimeout(exitViewer,2200);
+  });
+}
+function updateTrustRow(uid,oldS,newS,delta){
+  const n=document.getElementById('trs-'+uid),b=document.getElementById('trb-'+uid),d=document.getElementById('trd-'+uid);
+  if(n){animNum(n,Math.round(oldS),Math.round(newS),700);n.style.color=tColor(newS);}
+  if(b){b.style.width=newS+'%';b.style.background=tColor(newS);}
+  if(d){const s=delta>=0?'+':'';d.textContent=s+delta.toFixed(1);
+    d.style.background=delta>=0?'rgba(67,233,123,.15)':'rgba(255,71,87,.15)';
+    d.style.color=delta>=0?'#43e97b':'#ff4757';
+    d.classList.add('show');setTimeout(()=>d.classList.remove('show'),3000);}
+}
+
+/* ── compose ── */
+let cmp={recipient:null,share_type:null,source_id:null,faces:[],activeFace:null};
+let composeInited=false;
+let allItems=[];
+
+function initCompose(){
+  if(!cmp.faces.length) cmp.faces=defFaces();
+  if(!composeInited){
+    // گیرنده‌ها
+    const rg=document.getElementById('recip-grid');
+    if(rg){
+      if(!RECIPIENTS.length){
+        rg.innerHTML='<div style="grid-column:1/-1;color:var(--text-muted);font-size:12px;text-align:center;padding:16px">ابتدا کسی رو فالو کن یا کانکشن بزن</div>';
+      } else {
+        RECIPIENTS.forEach(u=>{
+          const el=document.createElement('div');el.className='rb';
+          el.onclick=function(){cmpSetRecip(u.id,this);};
+          el.innerHTML=`<span class="re">${u.avatar||'👤'}</span><span class="rn">${u.name}</span><span class="rt" style="color:${tColor(u.trust)}">${u.trust}</span>`;
+          rg.appendChild(el);
+        });
+      }
+    }
+    composeInited=true;
+  }
+  renderFaceGrid(); cmpUpdate();
+}
+
+function setShareType(type,btn){
+  cmp.share_type=type; cmp.source_id=null;
+  document.querySelectorAll('.stype-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  // نمایش item picker
+  const card=document.getElementById('item-picker-card');
+  const lbl =document.getElementById('item-picker-lbl');
+  card.style.display='block';
+  const labels={'node':'③ کدوم نفر رو شیر می‌کنی؟','edge':'③ کدوم رابطه رو شیر می‌کنی؟','data':'③ کدوم اطلاعاتی رو شیر می‌کنی؟'};
+  lbl.textContent=labels[type];
+  // build items list
+  if(type==='node') allItems=MY_NODES.map(n=>({id:n.id,ico:'👤',title:n.display_name,sub:n.career||n.username}));
+  else if(type==='edge') allItems=MY_EDGES.map(e=>({id:e.id,ico:'🔗',title:e.label,sub:e.rel}));
+  else allItems=MY_INFOS.map(i=>({id:i.id,ico:'📊',title:`درباره ${i.about}`,sub:(i.keys||[]).join(' · ')}));
+  document.getElementById('item-search').value='';
+  renderItemList(allItems);
+  // face پیش‌فرض بر اساس نوع
+  const faceMap={'node':[{emo:'👤',lbl:'نفر',ci:0},{emo:'📦',lbl:'دریافت',ci:1},{emo:'🔗',lbl:'شبکه',ci:2},{emo:'⭐',lbl:'اعتماد',ci:4},{emo:'📅',lbl:'زمان',ci:5},{emo:'🏠',lbl:'گراف',ci:3}],
+    'edge':[{emo:'🔗',lbl:'رابطه',ci:3},{emo:'👤',lbl:'نفر۱',ci:0},{emo:'👤',lbl:'نفر۲',ci:1},{emo:'⭐',lbl:'قدرت',ci:4},{emo:'📅',lbl:'زمان',ci:5},{emo:'💞',lbl:'یال',ci:2}],
+    'data':[{emo:'📊',lbl:'دیتا',ci:2},{emo:'👤',lbl:'درباره',ci:0},{emo:'🔍',lbl:'شناخت',ci:3},{emo:'⭐',lbl:'اعتماد',ci:4},{emo:'📅',lbl:'زمان',ci:5},{emo:'💡',lbl:'نکته',ci:1}]};
+  cmp.faces=faceMap[type]||defFaces();
+  renderFaceGrid(); cmpUpdate();
+}
+
+function renderItemList(items){
+  const el=document.getElementById('item-list');
+  if(!items.length){el.innerHTML='<div class="item-empty">چیزی پیدا نشد</div>';return;}
+  el.innerHTML='';
+  items.forEach(item=>{
+    const row=document.createElement('div');
+    row.className='item-row'+(cmp.source_id===item.id?' sel':'');
+    row.onclick=()=>selectItem(item.id,row);
+    row.innerHTML=`<span class="item-row-ico">${item.ico}</span><div class="item-row-info"><div class="item-row-title">${item.title}</div>${item.sub?`<div class="item-row-sub">${item.sub}</div>`:''}</div>`;
+    el.appendChild(row);
+  });
+}
+
+function filterItems(q){
+  const filtered=allItems.filter(i=>i.title.includes(q)||i.sub.includes(q));
+  renderItemList(filtered);
+}
+
+function selectItem(id,row){
+  cmp.source_id=id;
+  document.querySelectorAll('.item-row').forEach(r=>r.classList.remove('sel'));
+  row.classList.add('sel');
+  cmpUpdate();
+}
+
+function cmpSetRecip(id,el){
+  cmp.recipient=id;document.querySelectorAll('.rb').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');cmpUpdate();
+}
+function renderFaceGrid(){
+  const grid=document.getElementById('face-grid');if(!grid)return;
+  grid.innerHTML=cmp.faces.map((f,i)=>{
+    const[c1,c2]=COLOR_PAIRS[f.ci];
+    return `<div class="face-slot${cmp.activeFace===i?' active-face':''}" style="background:linear-gradient(135deg,${c1},${c2})" onclick="editFace(${i})">${f.emo}</div>`;
+  }).join('');
+}
+function editFace(idx){
+  cmp.activeFace=idx;renderFaceGrid();
+  const ed=document.getElementById('face-editor');const f=cmp.faces[idx];
+  ed.innerHTML=`<div class="fe-lbl">رنگ وجه ${idx+1}</div>
+    <div class="fe-row">${COLOR_PAIRS.map(([c1,c2],ci)=>`<div class="csw${f.ci===ci?' sel':''}" style="background:linear-gradient(135deg,${c1},${c2})" onclick="setFC(${idx},${ci})"></div>`).join('')}</div>
+    <div class="fe-lbl" style="margin-top:10px">آیکون</div>
+    <div class="fe-row">${EMOJI_OPTS.map(e=>`<div class="emb${f.emo===e?' sel':''}" onclick="setFE(${idx},'${e}')">${e}</div>`).join('')}</div>`;
+  ed.classList.add('open');
+}
+function setFC(idx,ci){cmp.faces[idx].ci=ci;renderFaceGrid();editFace(idx);cmpUpdate();}
+function setFE(idx,emo){cmp.faces[idx].emo=emo;renderFaceGrid();editFace(idx);cmpUpdate();}
+function cmpUpdate(){
+  const pc=document.getElementById('prev-cube');
+  if(pc){pc.innerHTML='';pc.appendChild(miniCubeEl(cmp.faces,70));}
+  const toEl   =document.getElementById('prev-to');
+  const typeEl =document.getElementById('prev-type');
+  const itemEl =document.getElementById('prev-item');
+  if(toEl){const u=RECIPIENTS.find(r=>r.id==cmp.recipient);toEl.textContent=u?`به: ${u.name}`:'گیرنده انتخاب نشده';}
+  const typeLabels={'node':'👤 راس','edge':'🔗 یال','data':'📊 دیتا'};
+  if(typeEl) typeEl.textContent=cmp.share_type?`نوع: ${typeLabels[cmp.share_type]}`:'نوع: —';
+  if(itemEl){
+    if(cmp.source_id&&cmp.share_type){
+      const item=allItems.find(i=>i.id==cmp.source_id);
+      itemEl.textContent=item?item.title:'—';
+    } else { itemEl.textContent='آیتم انتخاب نشده'; }
+  }
+  const btn=document.getElementById('send-btn');
+  if(btn) btn.disabled=!(cmp.recipient&&cmp.share_type&&cmp.source_id);
+}
+function sendBox(){
+  if(!cmp.recipient||!cmp.share_type||!cmp.source_id) return;
+  const prevWrap=document.querySelector('#prev-cube .mc-wrap');
+  if(prevWrap) prevWrap.classList.add('fly');
+  setTimeout(()=>{
+    fetch('/api/social/gifbox/send/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({
+        recipient_id:cmp.recipient,
+        share_type:cmp.share_type,
+        source_id:cmp.source_id,
+        cube_faces:cmp.faces
+      })
+    }).then(r=>r.json()).then(d=>{
+      if(d.ok){
+        showToast('📤 شیر شد!');
+        cmp={recipient:null,share_type:null,source_id:null,faces:defFaces(),activeFace:null};
+        composeInited=false; allItems=[];
+        document.querySelectorAll('.rb').forEach(b=>b.classList.remove('sel'));
+        document.querySelectorAll('.stype-btn').forEach(b=>b.classList.remove('sel'));
+        document.getElementById('item-picker-card').style.display='none';
+        gbTab('inbox',document.querySelector('.gb-tab'));
+      } else showToast(d.error||'خطا در ارسال');
+    });
+  },700);
+}
+
+/* ── reaction panel ── */
+function _boxSummary(box){
+  const p=box.payload||{};
+  const t=box.share_type;
+  if(t==='node') return `👤 ${p.display_name||p.username||'?'}${p.career?` · ${p.career}`:''}`;
+  if(t==='edge'){const s=(p.source||{}).display_name||'?',tg=(p.target||{}).display_name||'?';return `🔗 ${s} ↔ ${tg}${p.rel?` (${p.rel})`:''}`;};
+  if(t==='data'){const keys=Object.keys(p.info_data||{}).filter(k=>!k.startsWith('_')).slice(0,4);return `📊 درباره ${(p.about||{}).display_name||'?'}${keys.length?` · ${keys.join(', ')}`:''}`;};
+  return '📦';
+}
+function vShowReactionPanel(){
+  const box=currentBox;
+  const typeL={'node':'👤 راس','edge':'🔗 یال','data':'📊 دیتا'};
+  document.getElementById('rc-type').textContent=typeL[box.share_type]||'📦';
+  document.getElementById('rc-text').textContent=_boxSummary(box);
+  if(box.content_added){
+    let el=document.getElementById('rc-added');
+    if(!el){el=document.createElement('div');el.id='rc-added';el.className='added-badge';el.textContent='✅ به گرافت اضافه شده';document.getElementById('r-content').appendChild(el);}
+  }
+  document.getElementById('rs-emo').textContent=box.sender_avatar||'👤';
+  document.getElementById('rs-name').textContent=box.sender_name;
+  const el=document.getElementById('rst-num');el.textContent=box.sender_trust;el.style.color=tColor(box.sender_trust);
+  const r=box.reactions||{};
+  document.getElementById('rs-true').textContent=r.true||0;
+  document.getElementById('rs-false').textContent=r.false||0;
+  document.getElementById('rs-acc').textContent=r.accept||0;
+  document.getElementById('rs-rej').textContent=r.reject||0;
+  document.getElementById('rpanel').classList.add('up');
+  document.getElementById('v-close').classList.add('show');
+  if(viewerReacted){
+    document.querySelectorAll('.rbtn').forEach(b=>{
+      b.classList.add('in');
+      if(box.my_reaction&&b.dataset.t===box.my_reaction)b.classList.add('picked');
+      b.style.cursor='not-allowed';b.onclick=null;
+    });
+  } else {
+    document.querySelectorAll('.rbtn').forEach((b,i)=>{
+      b.onclick=()=>doReact(b.dataset.t,b);
+      setTimeout(()=>b.classList.add('in'),280+i*90);
+    });
+  }
+}
+function vCollapseBox(){
+  document.getElementById('rpanel').classList.remove('up');
+  document.getElementById('v-close').classList.remove('show');
+  document.querySelectorAll('.rbtn').forEach(b=>b.classList.remove('in','picked'));
+  vCZT=5.5;setTimeout(()=>vSt='collapsing',250);
+}
+
+/* ── Three.js viewer ── */
+const HALF=1;
+const FP=[
+  {pos:[0,0,HALF],rx:0,ry:0,ex:[0,0,3.8],erx:.28,ery:0},
+  {pos:[0,0,-HALF],rx:0,ry:Math.PI,ex:[0,0,-3.8],erx:-.28,ery:Math.PI},
+  {pos:[HALF,0,0],rx:0,ry:Math.PI/2,ex:[3.8,0,0],erx:0,ery:Math.PI/2+.28},
+  {pos:[-HALF,0,0],rx:0,ry:-Math.PI/2,ex:[-3.8,0,0],erx:0,ery:-Math.PI/2-.28},
+  {pos:[0,HALF,0],rx:-Math.PI/2,ry:0,ex:[0,3.8,0],erx:-Math.PI/2-.22,ery:.2},
+  {pos:[0,-HALF,0],rx:Math.PI/2,ry:0,ex:[0,-3.8,0],erx:Math.PI/2+.22,ery:-.2},
+];
+let vR,vS,vC,vPiv,vFOs,vWire,vGI,vGO;
+let vRX=.25,vRY=.4,vVX=0,vVY=.004,vDrg=false,vLMX=0,vLMY=0;
+let vCZ=5.5,vCZT=5.5,vSt='idle',vET=0,vGP=0,vLC=0,vAID=null,vReady=false,vPN=performance.now();
+
+function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.arcTo(x+w,y,x+w,y+r,r);c.lineTo(x+w,y+h-r);c.arcTo(x+w,y+h,x+w-r,y+h,r);c.lineTo(x+r,y+h);c.arcTo(x,y+h,x,y+h-r,r);c.lineTo(x,y+r);c.arcTo(x,y,x+r,y,r);c.closePath();}
+function mkTex(face){
+  const S=512,cv2=document.createElement('canvas');cv2.width=cv2.height=S;
+  const c=cv2.getContext('2d');
+  const[c1,c2]=COLOR_PAIRS[face.ci]||COLOR_PAIRS[0];
+  const g=c.createLinearGradient(0,0,S,S);g.addColorStop(0,c1);g.addColorStop(1,c2);
+  c.fillStyle=g;rrect(c,10,10,S-20,S-20,48);c.fill();
+  c.strokeStyle='rgba(255,255,255,.2)';c.lineWidth=5;rrect(c,15,15,S-30,S-30,44);c.stroke();
+  c.font='130px serif';c.textAlign='center';c.textBaseline='middle';c.fillText(face.emo,S/2,S*.375);
+  c.font='bold 50px Tahoma,Arial,sans-serif';c.fillStyle='rgba(255,255,255,.9)';c.fillText(face.lbl,S/2,S*.67);
+  return new THREE.CanvasTexture(cv2);
+}
+function eOC(t){return 1-Math.pow(1-t,3);}
+function eOB(t){const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2);}
+function eOEl(t){if(t===0||t===1)return t;return Math.pow(2,-9*t)*Math.sin((t*9-.9)*(2*Math.PI/2.8))+1;}
+
+function initThreeViewer(box){
+  const cv=document.getElementById('vcv');
+  if(!vReady){
+    vR=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    vR.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    vS=new THREE.Scene();vC=new THREE.PerspectiveCamera(50,1,.1,100);vC.position.z=5.5;
+    vS.add(new THREE.AmbientLight(0xffffff,.5));
+    const sun=new THREE.DirectionalLight(0xffffff,.9);sun.position.set(4,8,6);vS.add(sun);
+    const pl1=new THREE.PointLight(0x6366f1,3,30);pl1.position.set(-7,6,4);vS.add(pl1);
+    const pl2=new THREE.PointLight(0x8b5cf6,2,30);pl2.position.set(7,-6,-4);vS.add(pl2);
+    vGI=new THREE.Mesh(new THREE.SphereGeometry(.42,32,32),new THREE.MeshBasicMaterial({color:0x8888ff,transparent:true,opacity:0}));vS.add(vGI);
+    vGO=new THREE.Mesh(new THREE.SphereGeometry(.9,16,16),new THREE.MeshBasicMaterial({color:0x6366f1,transparent:true,opacity:0,side:THREE.BackSide}));vS.add(vGO);
+    const W=window.innerWidth,H=window.innerHeight;vR.setSize(W,H);vC.aspect=W/H;vC.updateProjectionMatrix();
+    window.addEventListener('resize',()=>{vR.setSize(window.innerWidth,window.innerHeight);vC.aspect=window.innerWidth/window.innerHeight;vC.updateProjectionMatrix();});
+    cv.addEventListener('mousedown',e=>{if(vSt!=='idle')return;vDrg=true;vLMX=e.clientX;vLMY=e.clientY;vVX=0;vVY=0;cv.classList.add('drag');});
+    window.addEventListener('mousemove',e=>{if(!vDrg||vSt!=='idle')return;vVX=(e.clientY-vLMY)*.013;vVY=(e.clientX-vLMX)*.013;vRX+=vVX;vRY+=vVY;vLMX=e.clientX;vLMY=e.clientY;});
+    window.addEventListener('mouseup',()=>{vDrg=false;cv.classList.remove('drag');});
+    cv.addEventListener('touchstart',e=>{e.preventDefault();if(vSt!=='idle')return;vDrg=true;vLMX=e.touches[0].clientX;vLMY=e.touches[0].clientY;},{passive:false});
+    cv.addEventListener('touchmove',e=>{e.preventDefault();if(!vDrg||vSt!=='idle')return;vVX=(e.touches[0].clientY-vLMY)*.013;vVY=(e.touches[0].clientX-vLMX)*.013;vRX+=vVX;vRY+=vVY;vLMX=e.touches[0].clientX;vLMY=e.touches[0].clientY;},{passive:false});
+    cv.addEventListener('touchend',()=>vDrg=false);
+    cv.addEventListener('click',()=>{const n=Date.now();if(n-vLC<290)onVDbl();vLC=n;});
+    cv.addEventListener('dblclick',onVDbl);
+    vReady=true;
+  }
+  if(vPiv) vS.remove(vPiv);
+  vPiv=new THREE.Group();vS.add(vPiv);
+  const faces=box.cube_faces&&box.cube_faces.length===6?box.cube_faces:defFaces();
+  vFOs=faces.map((face,i)=>{
+    const cfg=FP[i];
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2,2),
+      new THREE.MeshStandardMaterial({map:mkTex(face),roughness:.22,metalness:.18,side:THREE.DoubleSide}));
+    mesh.position.set(...cfg.pos);mesh.rotation.set(cfg.rx,cfg.ry,0);
+    vPiv.add(mesh);return{cfg,mesh};
+  });
+  vWire=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2,2,2)),
+    new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.12}));
+  vPiv.add(vWire);
+  vSt='idle';vET=0;vGP=0;vRX=.25;vRY=.4;vVX=0;vVY=.004;vCZ=5.5;vCZT=5.5;
+  vGI.material.opacity=0;vGO.material.opacity=0;
+  if(!vAID) vAID=requestAnimationFrame(vAnimate);
+}
+function stopThreeViewer(){cancelAnimationFrame(vAID);vAID=null;}
+function onVDbl(){if(vSt==='idle')vExplode();else if(vSt==='exploded')vCollapseBox();}
+function vExplode(){
+  if(vSt!=='idle')return;vSt='resetting';
+  const fX=vRX,fY=vRY,t0=Date.now(),dur=420;
+  (function rl(){const p=Math.min(1,(Date.now()-t0)/dur),e=eOC(p);
+    vRX=fX*(1-e);vRY=fY*(1-e);vPiv.rotation.x=vRX;vPiv.rotation.y=vRY;
+    if(p<1){requestAnimationFrame(rl);}else{vPiv.rotation.set(0,0,0);vRX=0;vRY=0;vSt='exploding';vET=0;}})();
+  document.getElementById('v-hint').classList.add('gone');
+}
+function applyFPos(t){
+  vFOs.forEach(({cfg,mesh})=>{const ip=cfg.pos,ep=cfg.ex;
+    mesh.position.set(ip[0]+(ep[0]-ip[0])*t,ip[1]+(ep[1]-ip[1])*t,ip[2]+(ep[2]-ip[2])*t);
+    mesh.rotation.x=cfg.rx+(cfg.erx-cfg.rx)*t;mesh.rotation.y=cfg.ry+(cfg.ery-cfg.ry)*t;});
+}
+function vBurst(){
+  const cols=[0x6366f1,0x8b5cf6,0x43e97b,0xfeca57,0x74b9ff,0xfd9644];
+  for(let i=0;i<18;i++){
+    const geo=new THREE.SphereGeometry(.04,5,5),mat=new THREE.MeshBasicMaterial({color:cols[i%6],transparent:true,opacity:1});
+    const p=new THREE.Mesh(geo,mat);vS.add(p);
+    const th=Math.random()*Math.PI*2,ph=Math.acos(2*Math.random()-1),sp=.04+Math.random()*.07;
+    const vx=Math.sin(ph)*Math.cos(th)*sp,vy=Math.sin(ph)*Math.sin(th)*sp,vz=Math.cos(ph)*sp;
+    let life=60;(function tick(){if(--life<0){vS.remove(p);geo.dispose();mat.dispose();return;}
+      p.position.x+=vx;p.position.y+=vy;p.position.z+=vz;mat.opacity=(life/60)**2;requestAnimationFrame(tick);})();
+  }
+}
+const ESPD=.018;
+function vAnimate(now){
+  vAID=requestAnimationFrame(vAnimate);
+  if(!vReady||!vPiv)return;
+  const dt=Math.min((now-vPN)/1000,.05);vPN=now;
+  vCZ+=(vCZT-vCZ)*.055;vC.position.z=vCZ;
+  if(vSt==='idle'){
+    if(!vDrg){if(Math.abs(vVY)<.003)vVY+=.001;vVX*=.91;vVY*=.91;vRX+=vVX;vRY+=vVY;}
+    vPiv.rotation.x=vRX;vPiv.rotation.y=vRY;vWire.material.opacity=.12;vGI.material.opacity=0;vGO.material.opacity=0;
+  }
+  if(vSt==='exploding'){
+    vET=Math.min(1,vET+ESPD);const t=eOEl(vET);applyFPos(Math.max(0,t));
+    vWire.material.opacity=Math.max(0,.12*(1-vET*2));vCZT=8.2;
+    const g=Math.min(1,vET*2.2);vGI.material.opacity=g*.8;vGO.material.opacity=g*.13;
+    vGI.scale.setScalar(Math.max(.01,g));vGO.scale.setScalar(Math.max(.01,g));
+    if(vET>=1){vSt='exploded';vBurst();vShowReactionPanel();}
+  }
+  if(vSt==='exploded'){
+    vGP+=dt*1.8;const p=.88+.12*Math.sin(vGP);vGI.scale.setScalar(p);vGO.scale.setScalar(p*1.15);
+    vFOs.forEach(({cfg,mesh},i)=>{
+      mesh.position.x=cfg.ex[0]+Math.sin(now*.0005+i*1.05)*.06;
+      mesh.position.y=cfg.ex[1]+Math.cos(now*.0006+i*.85)*.06;});
+  }
+  if(vSt==='collapsing'){
+    vET=Math.max(0,vET-ESPD*1.7);const t=eOB(1-vET);applyFPos(Math.max(0,1-t));
+    vWire.material.opacity=.12*(1-vET);const g=vET;vGI.material.opacity=g*.8;vGO.material.opacity=g*.13;
+    vGI.scale.setScalar(Math.max(.01,g));vGO.scale.setScalar(Math.max(.01,g));
+    if(vET<=0){vSt='idle';vVY=.003;vWire.material.opacity=.12;vGI.material.opacity=0;vGO.material.opacity=0;applyFPos(0);document.getElementById('v-hint').classList.remove('gone');}
+  }
+  vR.render(vS,vC);
+}
+
+/* ── helpers ── */
+function spawnParticles(type,cx,cy){
+  const cols={true:'#43e97b',false:'#ff4757',accept:'#74b9ff',reject:'#fd9644'};
+  for(let i=0;i<14;i++){
+    const p=document.createElement('div');p.className='ptcl';
+    p.style.cssText=`left:${cx}px;top:${cy}px;width:7px;height:7px;background:${cols[type]}`;
+    const a=(i/14)*Math.PI*2,d=45+Math.random()*65;
+    p.style.setProperty('--tx',`${Math.cos(a)*d}px`);p.style.setProperty('--ty',`${Math.sin(a)*d}px`);
+    p.style.animationDuration=(.45+Math.random()*.35)+'s';
+    document.body.appendChild(p);setTimeout(()=>p.remove(),900);
+  }
+}
+function showScorePop(txt,col,x,y){
+  const el=document.createElement('div');el.className='score-pop';
+  el.textContent=txt;el.style.color=col;el.style.left=x+'px';el.style.top=y+'px';
+  document.body.appendChild(el);setTimeout(()=>el.remove(),1500);
+}
+function showToast(msg){
+  const t=document.getElementById('gb-toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3200);
+}
+function animNum(el,from,to,ms){
+  const t0=Date.now();
+  (function tick(){const p=Math.min(1,(Date.now()-t0)/ms),e=1-Math.pow(1-p,3);
+    el.textContent=Math.round(from+(to-from)*e);if(p<1)requestAnimationFrame(tick);})();
+}
+
+renderCards();
+</script>
+{% endblock %}

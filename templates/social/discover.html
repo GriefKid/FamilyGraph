@@ -4,52 +4,57 @@
 {% block nav_social %}active{% endblock %}
 
 {% block extra_css %}
-<style>
-.dv-wrap{ max-width:880px; margin:0 auto; }
-.dv-hero{
-  background:linear-gradient(135deg, rgba(6,182,212,.12), rgba(99,102,241,.12), rgba(168,85,247,.08));
-  border:1px solid rgba(6,182,212,.3); border-radius:20px;
-  padding:22px 24px; margin-bottom:16px; text-align:center;
+.dv-wrap { max-width:880px; margin:0 auto; }
+.dv-hero {
+  background:linear-gradient(135deg,rgba(6,182,212,.1),rgba(99,102,241,.1),rgba(168,85,247,.07));
+  border:1px solid rgba(99,102,241,.25); border-radius:22px;
+  padding:24px 26px; margin-bottom:18px; text-align:center;
 }
-.dv-hero h2{ margin:0 0 6px; font-size:19px; font-weight:800; }
-.dv-hero p{ margin:0 0 14px; font-size:12px; color:var(--text-soft); }
-.dv-search{
-  width:min(480px, 100%); background:rgba(255,255,255,.06);
-  border:1px solid var(--border-strong); border-radius:14px;
+.dv-hero h2 { margin:0 0 6px; font-size:20px; font-weight:800; }
+.dv-hero p  { margin:0 0 16px; font-size:12px; color:var(--text-muted); }
+.dv-search {
+  width:min(480px,100%); background:rgba(255,255,255,.05);
+  border:1.5px solid var(--border); border-radius:14px;
   padding:12px 18px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:14px;
+  outline:none; transition:border-color .2s;
 }
-.dv-search:focus{ border-color:#06b6d4; }
-.dv-title{ font-size:13.5px; font-weight:800; margin:18px 0 12px; display:flex; align-items:center; gap:8px; }
-.dv-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
-.dv-card{
-  background:var(--card); border:1px solid var(--border); border-radius:18px; padding:18px;
-  text-align:center; transition:transform .2s ease, box-shadow .22s, border-color .2s;
+.dv-search:focus { border-color:rgba(99,102,241,.5); }
+.dv-title {
+  font-size:12px; font-weight:700; letter-spacing:.5px; color:var(--text-muted);
+  margin:18px 0 12px; display:flex; align-items:center; gap:8px;
 }
-.dv-card:hover{ transform:translateY(-3px); border-color:rgba(6,182,212,.4);
-  box-shadow:0 12px 32px rgba(0,0,0,.4); }
-.dv-av{
-  width:62px; height:62px; border-radius:50%; margin:0 auto 10px;
-  background:linear-gradient(135deg,#06b6d4,#6366f1); display:flex; align-items:center;
-  justify-content:center; font-size:23px; font-weight:800; color:#fff;
+.dv-title::after { content:''; flex:1; height:1px; background:var(--border); }
+.dv-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+.dv-card {
+  background:var(--card); border:1.5px solid var(--border); border-radius:20px; padding:20px;
+  text-align:center; transition:transform .2s,box-shadow .2s,border-color .2s;
 }
-.dv-name{ font-size:14px; font-weight:800; }
-.dv-name a{ color:var(--text); text-decoration:none; }
-.dv-name a:hover{ color:#67e8f9; }
-.dv-meta{ font-size:11px; color:var(--text-muted); margin-top:3px; min-height:16px; }
-.dv-reasons{ display:flex; gap:4px; flex-wrap:wrap; justify-content:center; margin:8px 0; min-height:20px; }
-.dv-reason{ font-size:9.5px; padding:2px 9px; border-radius:999px;
-  background:rgba(6,182,212,.1); border:1px solid rgba(6,182,212,.3); color:#67e8f9; }
-.dv-stats{ font-size:10px; color:var(--text-muted); margin-bottom:10px; }
-.dv-acts{ display:flex; gap:7px; justify-content:center; }
-.dv-btn{ flex:1; max-width:110px; padding:8px 0; border-radius:10px; font-size:11.5px; font-weight:800;
-  cursor:pointer; font-family:'Vazirmatn',sans-serif; transition:.15s; border:none; }
-.dv-btn.follow{ background:rgba(6,182,212,.14); border:1px solid rgba(6,182,212,.4); color:#67e8f9; }
-.dv-btn.follow:hover{ background:rgba(6,182,212,.28); }
-.dv-btn.connect{ background:linear-gradient(135deg,#6366f1,#a855f7); color:#fff; }
-.dv-btn.connect:hover{ box-shadow:0 4px 16px rgba(139,92,246,.4); }
-.dv-btn:disabled{ opacity:.55; cursor:default; }
-.dv-empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:30px; grid-column:1/-1; }
-</style>
+.dv-card:hover { transform:translateY(-3px); border-color:rgba(99,102,241,.4);
+  box-shadow:0 12px 32px rgba(0,0,0,.45); }
+.dv-av {
+  width:64px; height:64px; border-radius:50%; margin:0 auto 12px;
+  background:linear-gradient(135deg,#6366f1,#06b6d4); display:flex; align-items:center;
+  justify-content:center; font-size:24px; font-weight:800; color:#fff;
+  box-shadow:0 6px 20px rgba(99,102,241,.3);
+}
+.dv-name { font-size:14px; font-weight:800; }
+.dv-name a { color:var(--text); text-decoration:none; }
+.dv-name a:hover { color:#a5b4fc; }
+.dv-meta { font-size:11px; color:var(--text-muted); margin-top:3px; min-height:16px; }
+.dv-reasons { display:flex; gap:4px; flex-wrap:wrap; justify-content:center; margin:8px 0; min-height:20px; }
+.dv-reason { font-size:9.5px; padding:2px 9px; border-radius:999px;
+  background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.3); color:#a5b4fc; }
+.dv-stats { font-size:10px; color:var(--text-muted); margin-bottom:12px; }
+.dv-acts { display:flex; gap:7px; justify-content:center; }
+.dv-btn { flex:1; max-width:120px; padding:9px 0; border-radius:12px; font-size:11.5px; font-weight:800;
+  cursor:pointer; font-family:'Vazirmatn',sans-serif; transition:all .15s; border:none; }
+.dv-btn.follow { background:rgba(99,102,241,.12); border:1.5px solid rgba(99,102,241,.35); color:#a5b4fc; }
+.dv-btn.follow:hover { background:rgba(99,102,241,.22); }
+.dv-btn.connect { background:var(--grad-brand); color:#fff; box-shadow:0 4px 16px rgba(99,102,241,.35); }
+.dv-btn.connect:hover { box-shadow:0 6px 22px rgba(99,102,241,.5); }
+.dv-btn:disabled { opacity:.45; cursor:default; box-shadow:none; }
+.dv-empty { text-align:center; color:var(--text-muted); font-size:13px; padding:36px; grid-column:1/-1; }
+.dv-empty-icon { font-size:42px; margin-bottom:10px; }
 {% endblock %}
 
 {% block content %}
@@ -64,7 +69,7 @@
 
   <div class="dv-title" id="dvListTitle">✨ پیشنهاد برای تو — شبیه تو و به دردبخور</div>
   <div class="dv-grid" id="dvGrid">
-    <div class="dv-empty">⏳ در حال پیدا کردن آدم‌های مناسب…</div>
+    <div class="dv-empty"><div class="dv-empty-icon">⏳</div>در حال پیدا کردن آدم‌های مناسب…</div>
   </div>
 
 </div>

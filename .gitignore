@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+db.backup-*.sqlite3
+django_cache/
+*.log
+
+# آپلودهای کاربر (عکس‌ها، استوری‌ها، ژورنال...)
+media/
+avatars/
+profile_covers/
+stories/
+journal/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.env

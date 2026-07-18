@@ -16,7 +16,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import (Follow, FriendRequest, Friendship, Information,
+from .models import (Follow, FriendRequest, Friendship, GiftBox, Information,
                      Node, ProfileMediaItem, Relationship)
 
 User = get_user_model()
@@ -286,3 +286,360 @@ def share_send_api(request):
     return JsonResponse({'ok': True, 'recipients': len(recipients),
                          'applied': applied_count,
                          'skipped': len(recipients) - applied_count})
+
+
+# ═══════════════════════════════════════════════════════════════
+#  GiftBox — اشتراک‌گذاری گراف‌محور با مکعب سه‌بعدی
+# ═══════════════════════════════════════════════════════════════
+
+SHARE_TYPE_LABELS = {'node': '👤 راس', 'edge': '🔗 یال', 'data': '📊 دیتا'}
+
+REACTION_DELTA = {
+    'true':   +2.5,
+    'accept':  0,
+    'reject':  0,
+    'false':  -2.5,
+}
+
+DEFAULT_FACES = [
+    {'emo': '📦', 'lbl': 'فرستنده', 'ci': 0},
+    {'emo': '👤', 'lbl': 'گیرنده',  'ci': 1},
+    {'emo': '📊', 'lbl': 'داده',    'ci': 2},
+    {'emo': '🔗', 'lbl': 'یال',     'ci': 3},
+    {'emo': '⭐', 'lbl': 'اعتماد',  'ci': 4},
+    {'emo': '📅', 'lbl': 'زمان',    'ci': 5},
+]
+
+
+def _node_snapshot(node):
+    return {
+        'username':     node.username,
+        'first_name':   node.first_name,
+        'last_name':    node.last_name,
+        'nickname':     node.nickname,
+        'career':       node.career,
+        'display_name': node.display_name(),
+    }
+
+
+def _find_or_create_node(owner, snap):
+    uname = (snap.get('username') or snap.get('display_name') or 'unknown').strip()
+    node, created = Node.objects.get_or_create(
+        owner=owner,
+        username=uname,
+        defaults={
+            'first_name': snap.get('first_name', ''),
+            'last_name':  snap.get('last_name', ''),
+            'nickname':   snap.get('nickname', ''),
+            'career':     snap.get('career', ''),
+        }
+    )
+    return node, created
+
+
+def _apply_graph_content(box, recipient):
+    p     = box.payload or {}
+    stype = box.share_type
+    added = []
+
+    if stype == 'node':
+        node, created = _find_or_create_node(recipient, p)
+        if created:
+            added.append(f'راس: {node.display_name()}')
+
+    elif stype == 'edge':
+        src, sc = _find_or_create_node(recipient, p.get('source', {}))
+        tgt, tc = _find_or_create_node(recipient, p.get('target', {}))
+        if sc:
+            added.append(f'راس: {src.display_name()}')
+        if tc:
+            added.append(f'راس: {tgt.display_name()}')
+        exists = Relationship.objects.filter(owner=recipient, source=src, target=tgt).exists()
+        if not exists:
+            Relationship.objects.create(
+                owner=recipient,
+                source=src, target=tgt,
+                rel=p.get('rel', ''),
+                strength=p.get('strength', 3),
+            )
+            added.append(f'یال: {src.display_name()} ↔ {tgt.display_name()}')
+
+    elif stype == 'data':
+        node, created = _find_or_create_node(recipient, p.get('about', {}))
+        if created:
+            added.append(f'راس: {node.display_name()}')
+        info_data = p.get('info_data') or {}
+        if info_data:
+            existing = Information.objects.filter(node=node).first()
+            if existing and isinstance(existing.data, dict):
+                merged = dict(existing.data)
+                for k, v in info_data.items():
+                    if k not in merged:
+                        merged[k] = v
+                existing.data = merged
+                existing.save()
+            else:
+                Information.objects.create(node=node, visibility='private', data=info_data)
+            added.append(f'دیتا درباره {node.display_name()}')
+
+    return added
+
+
+def _time_ago(dt):
+    from django.utils import timezone
+    diff = timezone.now() - dt
+    s = int(diff.total_seconds())
+    if s < 60:    return 'همین الان'
+    if s < 3600:  return f'{s//60} دقیقه پیش'
+    if s < 86400: return f'{s//3600} ساعت پیش'
+    return f'{s//86400} روز پیش'
+
+
+def _box_to_dict(box, me_id):
+    rd    = box.reactions_dict()
+    p     = box.payload or {}
+    stype = box.share_type
+
+    if stype == 'node':
+        title    = p.get('display_name') or p.get('username', '?')
+        subtitle = p.get('career', '')
+    elif stype == 'edge':
+        src   = (p.get('source') or {}).get('display_name', '?')
+        tgt   = (p.get('target') or {}).get('display_name', '?')
+        title    = f'{src} ↔ {tgt}'
+        subtitle = p.get('rel', '')
+    elif stype == 'data':
+        about    = (p.get('about') or {}).get('display_name', '?')
+        title    = f'دیتا درباره {about}'
+        keys     = [k for k in (p.get('info_data') or {}) if not k.startswith('_')]
+        subtitle = ' · '.join(keys[:4])
+    else:
+        title = subtitle = '?'
+
+    return {
+        'id':            box.id,
+        'share_type':    stype,
+        'type_label':    SHARE_TYPE_LABELS.get(stype, stype),
+        'title':         title,
+        'subtitle':      subtitle,
+        'payload':       p,
+        'cube_faces':    box.cube_faces or DEFAULT_FACES,
+        'reactions':     rd,
+        'my_reaction':   box.my_reaction,
+        'content_added': box.content_added,
+        'opened':        box.opened,
+        'time_ago':      _time_ago(box.created_at),
+        'sender_id':     box.sender_id,
+        'sender_name':   box.sender.get_full_name() or box.sender.username,
+        'sender_avatar': (box.sender.username or '?')[0].upper(),
+        'sender_trust':  getattr(box.sender, 'trust_score', 80),
+        'recipient_id':  box.recipient_id,
+        'recipient_name': box.recipient.get_full_name() or box.recipient.username,
+    }
+
+
+@login_required
+def gifbox_view(request):
+    me = request.user
+
+    inbox = GiftBox.objects.filter(recipient=me).select_related('sender', 'recipient')
+    sent  = GiftBox.objects.filter(sender=me).select_related('sender', 'recipient')
+
+    inbox_json = json.dumps([_box_to_dict(b, me.id) for b in inbox], ensure_ascii=False)
+    sent_json  = json.dumps([_box_to_dict(b, me.id) for b in sent],  ensure_ascii=False)
+
+    follower_ids = set(Follow.objects.filter(target=me).values_list('follower_id', flat=True))
+    friend_ids   = set(Friendship.objects.filter(user=me).values_list('friend_id', flat=True))
+    recip_ids    = follower_ids | friend_ids
+    recip_users  = User.objects.filter(id__in=recip_ids).exclude(id=me.id)
+    recipients_json = json.dumps([
+        {'id': u.id, 'name': u.get_full_name() or u.username,
+         'avatar': (u.username or '?')[0].upper(),
+         'trust': getattr(u, 'trust_score', 80)}
+        for u in recip_users
+    ], ensure_ascii=False)
+
+    my_nodes = Node.objects.filter(owner=me).order_by('username')
+    nodes_json = json.dumps([
+        {'id': n.id, 'display_name': n.display_name(),
+         'career': n.career or '', 'username': n.username}
+        for n in my_nodes
+    ], ensure_ascii=False)
+
+    my_rels = Relationship.objects.filter(owner=me).select_related('source', 'target')
+    edges_json = json.dumps([
+        {'id': r.id,
+         'label': f'{r.source.display_name()} {r.emoji()} {r.target.display_name()}',
+         'rel': r.rel or '', 'strength': r.strength,
+         'source_name': r.source.display_name(),
+         'target_name': r.target.display_name()}
+        for r in my_rels
+    ], ensure_ascii=False)
+
+    my_infos = Information.objects.filter(node__owner=me).select_related('node')
+    infos_json = json.dumps([
+        {'id': i.id,
+         'about': i.node.display_name(),
+         'about_username': i.node.username,
+         'keys': [k for k in (i.data or {}) if not k.startswith('_')][:5]}
+        for i in my_infos if i.data
+    ], ensure_ascii=False)
+
+    unread_count = inbox.filter(opened=False).count()
+    all_user_ids = recip_ids | {me.id}
+    trust_users  = list(User.objects.filter(id__in=all_user_ids).order_by('-trust_score'))
+
+    from .templatetags.gifbox_tags import quota as trust_quota_fn
+    trust_quota = trust_quota_fn(me.trust_score)
+
+    return render(request, 'social/gifbox.html', {
+        'inbox_json':      inbox_json,
+        'sent_json':       sent_json,
+        'recipients_json': recipients_json,
+        'nodes_json':      nodes_json,
+        'edges_json':      edges_json,
+        'infos_json':      infos_json,
+        'unread_count':    unread_count,
+        'me':              me,
+        'trust_quota':     trust_quota,
+        'trust_users':     trust_users,
+    })
+
+
+@login_required
+@csrf_exempt
+def gifbox_send_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    me           = request.user
+    recipient_id = data.get('recipient_id')
+    share_type   = data.get('share_type')
+    source_id    = data.get('source_id')
+    cube_faces   = data.get('cube_faces') or DEFAULT_FACES
+
+    if share_type not in ('node', 'edge', 'data'):
+        return JsonResponse({'error': 'نوع شیر نامعتبره'}, status=400)
+
+    ts = getattr(me, 'trust_score', 80)
+    if ts < 30:
+        return JsonResponse({'error': 'امتیاز اعتماد شما مسدود شده'}, status=403)
+
+    import datetime
+    today_count = GiftBox.objects.filter(
+        sender=me, created_at__date=datetime.date.today()
+    ).count()
+    limits = {30: 1, 45: 2, 60: 3, 75: 5}
+    limit  = None if ts >= 90 else next(
+        (v for thr, v in sorted(limits.items(), reverse=True) if ts >= thr), 1
+    )
+    if limit and today_count >= limit:
+        return JsonResponse({'error': f'سهمیه امروز تموم شد ({limit}/روز)'}, status=403)
+
+    try:
+        if share_type == 'node':
+            node    = Node.objects.get(pk=source_id, owner=me)
+            payload = _node_snapshot(node)
+        elif share_type == 'edge':
+            rel     = Relationship.objects.select_related('source', 'target').get(pk=source_id, owner=me)
+            payload = {
+                'source':   _node_snapshot(rel.source),
+                'target':   _node_snapshot(rel.target),
+                'rel':      rel.rel or '',
+                'strength': rel.strength,
+            }
+        else:
+            info    = Information.objects.select_related('node').get(pk=source_id, node__owner=me)
+            payload = {
+                'about':     _node_snapshot(info.node),
+                'info_data': info.data if isinstance(info.data, dict) else {},
+            }
+    except (Node.DoesNotExist, Relationship.DoesNotExist, Information.DoesNotExist):
+        return JsonResponse({'error': 'آیتم پیدا نشد'}, status=404)
+
+    try:
+        recipient = User.objects.get(pk=recipient_id)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'گیرنده پیدا نشد'}, status=404)
+
+    box = GiftBox.objects.create(
+        sender=me,
+        recipient=recipient,
+        share_type=share_type,
+        payload=payload,
+        cube_faces=cube_faces,
+    )
+    return JsonResponse({'ok': True, 'id': box.id})
+
+
+@login_required
+@csrf_exempt
+def gifbox_react_api(request, box_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+
+    reaction = data.get('reaction')
+    if reaction not in ('true', 'false', 'accept', 'reject'):
+        return JsonResponse({'error': 'واکنش نامعتبر'}, status=400)
+
+    try:
+        box = GiftBox.objects.select_related('sender', 'recipient').get(
+            pk=box_id, recipient=request.user
+        )
+    except GiftBox.DoesNotExist:
+        return JsonResponse({'error': 'پیدا نشد'}, status=404)
+
+    if box.my_reaction:
+        return JsonResponse({'error': 'قبلاً واکنش دادی'}, status=400)
+
+    box.my_reaction = reaction
+    rd = box.reactions_dict()
+    rd[reaction] = rd.get(reaction, 0) + 1
+    box.reactions = rd
+
+    added_items = []
+    if reaction in ('true', 'accept') and not box.content_added:
+        try:
+            added_items = _apply_graph_content(box, request.user)
+            box.content_added = True
+        except Exception:
+            pass
+
+    box.save(update_fields=['my_reaction', 'reactions', 'content_added'])
+
+    sender = box.sender
+    delta  = REACTION_DELTA.get(reaction, 0)
+    new_ts = max(0, min(100, int(round(getattr(sender, 'trust_score', 80) + delta))))
+    sender.trust_score = new_ts
+    sender.save(update_fields=['trust_score'])
+
+    return JsonResponse({
+        'ok':            True,
+        'reactions':     rd,
+        'new_trust':     new_ts,
+        'added':         added_items,
+        'content_added': box.content_added,
+    })
+
+
+@login_required
+@csrf_exempt
+def gifbox_open_api(request, box_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    try:
+        box = GiftBox.objects.get(pk=box_id, recipient=request.user)
+        if not box.opened:
+            box.opened = True
+            box.save(update_fields=['opened'])
+    except GiftBox.DoesNotExist:
+        pass
+    return JsonResponse({'ok': True})

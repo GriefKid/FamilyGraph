@@ -4,35 +4,40 @@
 {% block nav_social %}active{% endblock %}
 
 {% block extra_css %}
-<style>
-.rq-wrap{ max-width:680px; margin:0 auto; }
-.rq-card{ background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px 22px; margin-bottom:16px; }
-.rq-title{ font-size:14px; font-weight:800; margin-bottom:12px; }
-.rq-row{ display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px dashed var(--border); }
-.rq-row:last-child{ border-bottom:none; }
-.rq-av{ width:44px; height:44px; border-radius:50%; flex-shrink:0; display:flex; align-items:center;
-  justify-content:center; font-size:17px; font-weight:800; color:#fff;
-  background:linear-gradient(135deg,#6366f1,#ec4899); }
-.rq-info{ flex:1; min-width:0; }
-.rq-name{ font-size:13.5px; font-weight:800; }
-.rq-name a{ color:var(--text); text-decoration:none; }
-.rq-type{ font-size:10.5px; padding:1px 9px; border-radius:999px; margin-right:6px; }
-.rq-type.follow{ background:rgba(6,182,212,.12); color:#67e8f9; border:1px solid rgba(6,182,212,.3); }
-.rq-type.connection{ background:rgba(168,85,247,.12); color:#c4b5fd; border:1px solid rgba(168,85,247,.35); }
-.rq-msg{ font-size:11px; color:var(--text-muted); margin-top:2px; }
-.rq-btn{ padding:7px 16px; border-radius:10px; font-size:11.5px; font-weight:800; cursor:pointer;
-  font-family:'Vazirmatn',sans-serif; border:none; transition:.15s; }
-.rq-accept{ background:linear-gradient(135deg,#10b981,#06b6d4); color:#fff; }
-.rq-reject{ background:none; border:1px solid var(--border-strong); color:var(--text-muted); }
-.rq-empty{ text-align:center; color:var(--text-muted); font-size:13px; padding:22px; }
-</style>
+.rq-wrap { max-width:680px; margin:0 auto; }
+.rq-card { background:var(--card); border:1.5px solid var(--border); border-radius:20px; padding:20px 22px; margin-bottom:14px; }
+.rq-title { font-size:12px; font-weight:700; letter-spacing:.5px; color:var(--text-muted);
+  margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.rq-title::after { content:''; flex:1; height:1px; background:var(--border); }
+.rq-row { display:flex; align-items:center; gap:12px; padding:13px 0; border-bottom:1px solid var(--border); transition:background .15s; }
+.rq-row:last-child { border-bottom:none; }
+.rq-av { width:46px; height:46px; border-radius:14px; flex-shrink:0; display:flex; align-items:center;
+  justify-content:center; font-size:18px; font-weight:800; color:#fff;
+  background:linear-gradient(135deg,#6366f1,#ec4899); box-shadow:0 4px 14px rgba(99,102,241,.3); }
+.rq-info { flex:1; min-width:0; }
+.rq-name { font-size:13.5px; font-weight:800; }
+.rq-name a { color:var(--text); text-decoration:none; }
+.rq-name a:hover { color:#a5b4fc; }
+.rq-type { font-size:10px; padding:2px 9px; border-radius:999px; margin-right:5px; font-weight:700; }
+.rq-type.follow { background:rgba(6,182,212,.1); color:#67e8f9; border:1px solid rgba(6,182,212,.3); }
+.rq-type.connection { background:rgba(168,85,247,.1); color:#c4b5fd; border:1px solid rgba(168,85,247,.3); }
+.rq-msg { font-size:11px; color:var(--text-muted); margin-top:3px; }
+.rq-btns { display:flex; gap:6px; flex-shrink:0; }
+.rq-btn { padding:8px 16px; border-radius:12px; font-size:12px; font-weight:800; cursor:pointer;
+  font-family:'Vazirmatn',sans-serif; border:none; transition:all .15s; }
+.rq-accept { background:linear-gradient(135deg,#10b981,#06b6d4); color:#fff; box-shadow:0 3px 12px rgba(16,185,129,.3); }
+.rq-accept:hover { box-shadow:0 5px 18px rgba(16,185,129,.5); }
+.rq-reject { background:rgba(255,255,255,.05); border:1.5px solid var(--border); color:var(--text-muted); }
+.rq-reject:hover { border-color:rgba(239,68,68,.4); color:#fca5a5; }
+.rq-empty { text-align:center; color:var(--text-muted); font-size:13px; padding:24px; }
+.rq-av-sent { background:linear-gradient(135deg,#475569,#334155); box-shadow:none; }
 {% endblock %}
 
 {% block content %}
 <div class="rq-wrap">
 
   <div class="rq-card">
-    <div class="rq-title">📥 درخواست‌های رسیده <span class="chip chip-indigo">{{ incoming|length }}</span></div>
+    <div class="rq-title">📥 درخواست‌های رسیده</div>
     {% for r in incoming %}
     <div class="rq-row" id="rq{{ r.id }}">
       <div class="rq-av">{{ r.sender.username|first|upper }}</div>
@@ -43,8 +48,10 @@
         </div>
         <div class="rq-msg">@{{ r.sender.username }}{% if r.message %} · {{ r.message }}{% endif %} · {{ r.created_at|date:"Y/m/d" }}</div>
       </div>
-      <button class="rq-btn rq-accept" onclick="rqRespond(this, {{ r.id }}, 'accept')">✓ قبول</button>
-      <button class="rq-btn rq-reject" onclick="rqRespond(this, {{ r.id }}, 'reject')">رد</button>
+      <div class="rq-btns">
+        <button class="rq-btn rq-accept" onclick="rqRespond(this, {{ r.id }}, 'accept')">✓ قبول</button>
+        <button class="rq-btn rq-reject" onclick="rqRespond(this, {{ r.id }}, 'reject')">رد</button>
+      </div>
     </div>
     {% empty %}
     <div class="rq-empty">📭 درخواست جدیدی نداری</div>
@@ -52,10 +59,10 @@
   </div>
 
   <div class="rq-card">
-    <div class="rq-title">📤 درخواست‌های فرستاده <span class="chip chip-gray">{{ outgoing|length }}</span></div>
+    <div class="rq-title">📤 درخواست‌های فرستاده</div>
     {% for r in outgoing %}
     <div class="rq-row">
-      <div class="rq-av" style="background:linear-gradient(135deg,#64748b,#334155);">{{ r.receiver.username|first|upper }}</div>
+      <div class="rq-av rq-av-sent">{{ r.receiver.username|first|upper }}</div>
       <div class="rq-info">
         <div class="rq-name">
           <a href="/u/{{ r.receiver.username }}/">{{ r.receiver.get_full_name|default:r.receiver.username }}</a>

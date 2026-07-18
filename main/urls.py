@@ -40,6 +40,10 @@ from .views_social_pages import (
     share_view,
     suggest_users_api,
     share_send_api,
+    gifbox_view,
+    gifbox_send_api,
+    gifbox_react_api,
+    gifbox_open_api,
 )
 from .views_persona import (
     persona_get_api,
@@ -254,6 +258,10 @@ urlpatterns = [
     # ======================
     # SOCIAL GRAPH
     # ======================
+    path('social/gifbox/',               gifbox_view,                name='social_gifbox'),
+    path('api/social/gifbox/send/',      gifbox_send_api,            name='gifbox_send'),
+    path('api/social/gifbox/<int:box_id>/react/', gifbox_react_api,  name='gifbox_react'),
+    path('api/social/gifbox/<int:box_id>/open/',  gifbox_open_api,   name='gifbox_open'),
     path('social/',                      social_view,                name='social'),
     path('social/discover/',             discover_view,              name='social_discover_page'),
     path('social/requests/',             requests_view,              name='social_requests_page'),
