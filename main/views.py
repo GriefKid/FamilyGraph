@@ -479,6 +479,30 @@ def node_detail(request, pk):
     except Exception:
         pass
 
+    memory_facts = []
+    try:
+        from .models import MemoryFact
+        memory_facts = list(MemoryFact.objects.filter(owner=request.user, node=node, active=True)
+                            .select_related('suggestion')[:80])
+    except Exception:
+        pass
+
+    commitments = gifts = meeting_reflections = []
+    try:
+        from .models import Commitment, GiftIdea, MeetingReflection
+        commitments = list(Commitment.objects.filter(owner=request.user, node=node)[:30])
+        gifts = list(GiftIdea.objects.filter(owner=request.user, node=node)[:30])
+        meeting_reflections = list(MeetingReflection.objects.filter(owner=request.user, node=node)[:20])
+        for item in meeting_reflections:
+            relationship_timeline.append({'date': item.happened_at.date(), 'icon': '🤝',
+                                          'title': 'بازتاب ملاقات', 'detail': item.summary[:180]})
+        for item in commitments:
+            relationship_timeline.append({'date': item.created_at.date(), 'icon': '📌',
+                                          'title': 'قول و تعهد', 'detail': item.text})
+        relationship_timeline.sort(key=lambda row: str(row['date'] or ''), reverse=True)
+    except Exception:
+        pass
+
     from .models import CLOSENESS_CHOICES, LifeEvent as _LE
     life_event_kinds = _LE.KIND_CHOICES
     is_root_node = bool(request.user.root_node_id and node.id == request.user.root_node_id)
@@ -515,6 +539,10 @@ def node_detail(request, pk):
         'social_username':   social_username,
         'relationship_timeline': relationship_timeline[:30],
         'insight_sources': insight_sources[:10],
+        'memory_facts': memory_facts,
+        'commitments': commitments,
+        'gift_ideas': gifts,
+        'meeting_reflections': meeting_reflections,
     }
     return render(request, 'nodes/node_detail.html', context)
 

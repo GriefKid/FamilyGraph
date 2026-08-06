@@ -260,6 +260,21 @@ def weekly_view(request):
     except Exception:
         pass
 
+    narrative = []
+    if this_week > last_week:
+        narrative.append(f'این هفته تعامل‌هایت از {last_week} به {this_week} رسید و شبکه‌ات فعال‌تر بود.')
+    elif this_week < last_week:
+        narrative.append(f'این هفته {this_week} تعامل ثبت شد؛ کمی آرام‌تر از هفتهٔ قبل با {last_week} تعامل.')
+    else:
+        narrative.append(f'ریتم ارتباط‌ها با {this_week} تعامل نسبت به هفتهٔ قبل ثابت ماند.')
+    if warmer:
+        narrative.append(f'رابطه با {warmer[0]["name"]} بیشترین رشد ثبت‌شده را داشت.')
+    if colder:
+        narrative.append(f'{colder[0]["name"]} نسبت به هفتهٔ قبل کمتر در جریان روزهایت بود.')
+    if fu_done or debts_settled:
+        narrative.append(f'{fu_done} پیگیری و {debts_settled} حساب مالی بسته شد.')
+    next_steps = [f'یک ارتباط کوتاه با {item["name"]}' for item in plan[:3]]
+
     return render(request, 'daily/weekly.html', {
         'jalali_today':   jalali_str(today),
         'week_start_fa':  jalali_str(week_ago + timedelta(days=1)),
@@ -276,4 +291,6 @@ def weekly_view(request):
         'checkins':       checkins,
         'plan':           plan,
         'goals':          goals,
+        'narrative':      narrative,
+        'next_steps':     next_steps,
     })

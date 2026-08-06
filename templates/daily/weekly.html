@@ -56,6 +56,8 @@
     <div class="wk-s"><div class="n">{{ debts_settled }}</div><div class="l">💰 حساب تسویه‌شده</div></div>
   </div>
 
+  <div class="wk-card"><div class="wk-title">📖 داستان این هفته</div>{% for line in narrative %}<p style="font-size:13px;line-height:1.9;margin:5px 0">{{ line }}</p>{% endfor %}{% if next_steps %}<div class="wk-best" style="margin-top:12px"><b>سه قدم کوچک هفتهٔ بعد</b>{% for step in next_steps %}<div style="margin-top:6px">{{ forloop.counter }}. {{ step }}</div>{% endfor %}</div>{% endif %}</div>
+
   {% if warmer or colder %}
   <div class="wk-card">
     <div class="wk-title">🌡 دماسنج روابط</div>

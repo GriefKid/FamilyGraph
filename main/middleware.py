@@ -15,6 +15,7 @@ class LoginRequiredMiddleware:
         '/media/',
         '/admin/',
         '/favicon.ico',
+        '/service-worker.js',
     )
 
     def __init__(self, get_response):

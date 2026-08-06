@@ -2,9 +2,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 import json
-from datetime import date
+import io
+from datetime import date, timedelta
 
-from .models import Debt, ExtractionSuggestion, Follow, Friendship, Information, JournalEntry, Node, ProfileMediaItem, SocialCircle, SocialPost
+from .models import Commitment, Debt, Event, ExtractionSuggestion, Follow, Friendship, GiftIdea, Information, Interaction, JournalEntry, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
 from .templatetags.jalali_tags import jalali_date
 
 
@@ -208,3 +209,277 @@ class ExtractionWorkflowTests(TestCase):
                                   data=json.dumps({'action': 'undo'}), content_type='application/json')
         self.assertEqual(undone.status_code, 200)
         self.assertFalse(Debt.objects.filter(owner=self.user, amount=300000).exists())
+
+    def test_alias_resolves_a_role_to_an_existing_person(self):
+        from .extraction import extract_text
+        node = Node.objects.create(owner=self.user, username='ali', name='علی')
+        NodeAlias.objects.create(owner=self.user, node=node, alias='داداشم')
+        rows = extract_text(self.user, 'داداشم ازم ۲۰۰ هزار تومن قرض گرفت', 'journal', 20)
+        debt = next(item for item in rows if item.kind == 'debt')
+        self.assertEqual(debt.payload['node_id'], node.id)
+        self.assertFalse(any(item.kind == 'person' for item in rows))
+
+    def test_relationship_change_is_applied_only_after_confirmation(self):
+        from .extraction import extract_text
+        root = Node.objects.create(owner=self.user, username='me', name='من')
+        sara = Node.objects.create(owner=self.user, username='sara', name='سارا')
+        self.user.root_node = root
+        self.user.save(update_fields=['root_node'])
+        suggestion = next(item for item in extract_text(
+            self.user, 'سارا همکار جدیدمه', 'journal', 21) if item.kind == 'relationship')
+        self.assertFalse(Relationship.objects.exists())
+        self.client.force_login(self.user)
+        response = self.client.post(f'/api/extractions/{suggestion.id}/',
+                                    data=json.dumps({'action': 'approve', 'node_id': sara.id}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        relationship = Relationship.objects.get(owner=self.user)
+        self.assertEqual(relationship.rel, 'همکار')
+
+    def test_confirmed_person_fact_becomes_traceable_memory(self):
+        from .extraction import extract_text
+        sara = Node.objects.create(owner=self.user, username='sara', name='سارا')
+        suggestion = next(item for item in extract_text(
+            self.user, 'سارا عاشق کتاب‌های تاریخی است.', 'journal', 22) if item.kind == 'memory')
+        self.client.force_login(self.user)
+        response = self.client.post(f'/api/extractions/{suggestion.id}/',
+                                    data=json.dumps({'action': 'approve', 'node_id': sara.id}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        fact = MemoryFact.objects.get(owner=self.user, node=sara)
+        self.assertEqual(fact.category, 'interest')
+        self.assertEqual(fact.source_id, 22)
+        self.assertEqual(fact.confidence, 80)
+
+
+class PersianDateExtractionTests(TestCase):
+    def test_relative_date_and_tehran_clock_are_parsed(self):
+        from .persian_datetime import parse_persian_datetime
+        parsed = parse_persian_datetime('فردا ساعت ۸ قرار داریم', base_date=date(2026, 8, 7))
+        self.assertEqual(parsed['date'], date(2026, 8, 8))
+        self.assertEqual((parsed['time'].hour, parsed['time'].minute), (8, 0))
+
+    def test_persian_week_offset_is_parsed(self):
+        from .persian_datetime import parse_persian_datetime
+        parsed = parse_persian_datetime('سه هفته دیگه', base_date=date(2026, 8, 7))
+        numeric = parse_persian_datetime('۳ هفته دیگه', base_date=date(2026, 8, 7))
+        self.assertEqual(parsed['date'], date(2026, 8, 28))
+        self.assertEqual(numeric['date'], date(2026, 8, 28))
+
+    def test_named_jalali_date_is_converted(self):
+        import jdatetime
+        from .persian_datetime import parse_persian_datetime
+        parsed = parse_persian_datetime('قرار ۲۵ شهریور ۱۴۰۵ ساعت ۲۰:۳۰')
+        self.assertEqual(parsed['date'], jdatetime.date(1405, 6, 25).togregorian())
+        self.assertEqual((parsed['time'].hour, parsed['time'].minute), (20, 30))
+
+    def test_event_suggestion_exposes_understood_date_for_review(self):
+        from .extraction import extract_text
+        user = get_user_model().objects.create_user(username='date-owner', password='SecurePass1')
+        suggestion = next(item for item in extract_text(
+            user, 'فردا ساعت ۸ با سارا قرار داریم', 'journal', 30) if item.kind == 'event')
+        self.assertEqual(suggestion.payload['date'], (timezone.localdate() + timedelta(days=1)).isoformat())
+        self.assertEqual(suggestion.payload['time'], '08:00')
+
+
+class PersianExtractionScenarioTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='scenario-owner', password='SecurePass1')
+
+    def test_relationship_colloquialisms(self):
+        from .extraction import extract_text
+        cases = [
+            ('سارا همکار جدیدمه', 'همکار', 'active'),
+            ('رضا دوست جدیدمه', 'دوست', 'active'),
+            ('با علی قهر کردم', '', 'distant'),
+            ('دیگه با مریم در ارتباط نیستم', '', 'inactive'),
+            ('رابطه‌مون با نیما بهتر شده', '', 'active'),
+        ]
+        for index, (text, rel_type, status) in enumerate(cases, 40):
+            with self.subTest(text=text):
+                rows = extract_text(self.user, text, 'journal', index)
+                relationship = next(item for item in rows if item.kind == 'relationship')
+                self.assertEqual(relationship.payload['relationship_type'], rel_type)
+                self.assertEqual(relationship.payload['status'], status)
+
+    def test_person_knowledge_categories(self):
+        from .extraction import extract_text
+        cases = [
+            ('سارا عاشق کتاب‌های تاریخی است', 'interest'),
+            ('علی از شلوغی بدش میاد', 'sensitivity'),
+            ('برای مریم صداقت مهمه', 'value'),
+            ('رضا ترجیح میده تلفنی حرف بزنیم', 'preference'),
+        ]
+        for index, (text, category) in enumerate(cases, 50):
+            with self.subTest(text=text):
+                rows = extract_text(self.user, text, 'checkin', index)
+                fact = next(item for item in rows if item.kind == 'memory')
+                self.assertEqual(fact.payload['category'], category)
+                self.assertTrue(fact.payload['value'])
+
+
+class MemoryIntelligenceTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='memory-owner', password='SecurePass1')
+        self.other = get_user_model().objects.create_user(username='memory-other', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='me', name='من')
+        self.ali = Node.objects.create(owner=self.user, username='ali', name='علی')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.client.force_login(self.user)
+
+    def test_manual_memory_can_be_searched_and_disabled_for_ai(self):
+        created = self.client.post('/api/memory/facts/', data=json.dumps({
+            'action': 'create', 'node_id': self.ali.id, 'category': 'interest',
+            'value': 'کتاب‌های تاریخی', 'confidence': 95,
+        }), content_type='application/json')
+        self.assertEqual(created.status_code, 200)
+        fact = MemoryFact.objects.get(owner=self.user)
+        search = self.client.get('/api/memory/search/?q=تاریخی').json()['results']
+        self.assertEqual(search[0]['source'], 'manual #—')
+        updated = self.client.post(f'/api/memory/facts/{fact.id}/', data=json.dumps({
+            'action': 'update', 'ai_usable': False,
+        }), content_type='application/json')
+        self.assertEqual(updated.status_code, 200)
+        fact.refresh_from_db()
+        self.assertFalse(fact.ai_usable)
+
+    def test_assistant_uses_only_confirmed_ai_usable_memory_and_accepts_feedback(self):
+        MemoryFact.objects.create(owner=self.user, node=self.ali, category='interest',
+                                  value='پیاده‌روی', confidence=90, source='manual')
+        MemoryFact.objects.create(owner=self.user, node=self.ali, category='sensitivity',
+                                  value='شلوغی', confidence=90, source='manual', ai_usable=False)
+        data = self.client.get(f'/api/memory/assistant/{self.ali.id}/').json()
+        self.assertEqual(data['topic'], 'پیاده‌روی')
+        self.assertNotIn('شلوغی', data['avoid'])
+        response = self.client.post(f'/api/memory/recommendations/{data["recommendation_id"]}/',
+                                    data=json.dumps({'action': 'outcome', 'outcome': 'better', 'helpful': True}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(RelationshipRecommendation.objects.get().outcome, 'better')
+
+    def test_merge_preview_apply_and_undo_preserve_existing_primary_links(self):
+        duplicate = Node.objects.create(owner=self.user, username='ali2', name='علی رضایی')
+        friend = Node.objects.create(owner=self.user, username='friend', name='دوست')
+        relationship = Relationship.objects.create(owner=self.user, source=duplicate, target=friend,
+                                                   rel='دوست', strength=3)
+        interaction = Interaction.objects.create(owner=self.user, node=duplicate, kind='call',
+                                                 date=timezone.localdate())
+        journal = JournalEntry.objects.create(owner=self.user, text='هر دو علی اینجا هستند')
+        journal.mentioned_nodes.add(self.ali, duplicate)
+        preview = self.client.get(f'/api/memory/merge/preview/?primary={self.ali.id}&duplicate={duplicate.id}')
+        self.assertEqual(preview.json()['moves']['interactions'], 1)
+        applied = self.client.post('/api/memory/merge/', data=json.dumps({
+            'primary_id': self.ali.id, 'duplicate_id': duplicate.id,
+        }), content_type='application/json')
+        self.assertEqual(applied.status_code, 200)
+        interaction.refresh_from_db(); duplicate.refresh_from_db()
+        self.assertEqual(interaction.node, self.ali)
+        self.assertEqual(duplicate.merged_into, self.ali)
+        relationship.refresh_from_db()
+        self.assertEqual(relationship.source, self.ali)
+        undone = self.client.post(f'/api/memory/merge/{applied.json()["operation_id"]}/undo/',
+                                  data='{}', content_type='application/json')
+        self.assertEqual(undone.status_code, 200)
+        interaction.refresh_from_db(); duplicate.refresh_from_db(); journal.refresh_from_db()
+        self.assertEqual(interaction.node, duplicate)
+        self.assertIsNone(duplicate.merged_into)
+        relationship.refresh_from_db()
+        self.assertEqual(relationship.source, duplicate)
+        self.assertSetEqual(set(journal.mentioned_nodes.values_list('id', flat=True)), {self.ali.id, duplicate.id})
+
+    def test_natural_language_memory_question_finds_a_sourced_answer(self):
+        MemoryFact.objects.create(owner=self.user, node=self.ali, category='sensitivity',
+                                  value='شلوغی', source='journal', source_id=77)
+        response = self.client.get('/api/memory/search/?q=کی از شلوغی بدش میاد؟')
+        self.assertEqual(response.status_code, 200)
+        result = next(row for row in response.json()['results'] if row['kind'] == 'memory')
+        self.assertEqual(result['title'], 'علی')
+        self.assertEqual(result['source'], 'journal #77')
+
+    def test_memory_endpoints_do_not_cross_tenant_boundary(self):
+        fact = MemoryFact.objects.create(owner=self.user, node=self.ali, category='value',
+                                         value='صداقت', source='manual')
+        self.client.force_login(self.other)
+        response = self.client.post(f'/api/memory/facts/{fact.id}/',
+                                    data=json.dumps({'action': 'delete'}), content_type='application/json')
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(MemoryFact.objects.filter(pk=fact.id).exists())
+
+    def test_memory_hub_and_weekly_story_render(self):
+        self.assertEqual(self.client.get('/memory/').status_code, 200)
+        weekly = self.client.get('/weekly/')
+        self.assertEqual(weekly.status_code, 200)
+        self.assertContains(weekly, 'داستان این هفته')
+
+
+class RelationshipLifeCycleTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='life-owner', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='me-life', name='من')
+        self.sara = Node.objects.create(owner=self.user, username='sara-life', name='سارا')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.client.force_login(self.user)
+
+    def test_quick_capture_creates_commitment_and_gift(self):
+        commitment = self.client.post('/api/relationship-life/capture/', data=json.dumps({
+            'kind': 'commitment', 'node_id': self.sara.id, 'text': 'کتاب را پس بدهم', 'responsible': 'me',
+        }), content_type='application/json')
+        gift = self.client.post('/api/relationship-life/capture/', data=json.dumps({
+            'kind': 'gift', 'node_id': self.sara.id, 'text': 'کتاب تاریخ ایران', 'occasion': 'تولد',
+        }), content_type='application/json')
+        self.assertEqual(commitment.status_code, 200)
+        self.assertEqual(gift.status_code, 200)
+        self.assertTrue(Commitment.objects.filter(owner=self.user, node=self.sara).exists())
+        self.assertTrue(GiftIdea.objects.filter(owner=self.user, node=self.sara).exists())
+
+    def test_post_meeting_creates_private_timeline_and_extraction(self):
+        response = self.client.post('/api/relationship-life/reflection/', data=json.dumps({
+            'node_id': self.sara.id, 'summary': 'سارا عاشق کتاب‌های تاریخی است',
+            'relationship_change': 'better', 'feeling': 1,
+        }), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(MeetingReflection.objects.filter(owner=self.user).exists())
+        self.assertTrue(Interaction.objects.filter(owner=self.user, node=self.sara, kind='meet').exists())
+        self.assertTrue(ExtractionSuggestion.objects.filter(owner=self.user, kind='memory').exists())
+
+    def test_briefing_hides_no_ai_memory_and_exposes_sources(self):
+        MemoryFact.objects.create(owner=self.user, node=self.sara, category='interest', value='موسیقی',
+                                  source='manual', confidentiality='personal')
+        MemoryFact.objects.create(owner=self.user, node=self.sara, category='sensitivity', value='محرمانه',
+                                  source='manual', confidentiality='no_ai', ai_usable=True)
+        data = self.client.get(f'/api/relationship-life/briefing/{self.sara.id}/').json()
+        self.assertIn('موسیقی', [row['value'] for row in data['facts']])
+        self.assertNotIn('محرمانه', [row['value'] for row in data['facts']])
+        self.assertIn('source', data['facts'][0])
+
+    def test_sensitive_mode_blocks_introduction(self):
+        ali = Node.objects.create(owner=self.user, username='ali-life', name='علی')
+        NodeSafetySetting.objects.create(owner=self.user, node=self.sara,
+                                         pause_contact_suggestions=True, boundaries='عدم تماس')
+        response = self.client.get(f'/api/relationship-life/introduction/?left={self.sara.id}&right={ali.id}')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['safe_to_suggest'])
+        assistant = self.client.get(f'/api/memory/assistant/{self.sara.id}/').json()
+        self.assertEqual(assistant['topic'], 'حالت محافظتی فعال است')
+        self.assertEqual(assistant['draft'], '')
+
+    def test_csv_has_preview_before_apply_and_person_export_is_owned(self):
+        upload = io.BytesIO('username,name,phone\nreza,رضا,09120000000\n'.encode('utf-8'))
+        upload.name = 'people.csv'
+        preview = self.client.post('/api/relationship-life/import/csv/preview/', {'file': upload})
+        self.assertEqual(preview.status_code, 200)
+        self.assertFalse(Node.objects.filter(owner=self.user, username='reza').exists())
+        applied = self.client.post('/api/relationship-life/import/csv/apply/',
+            data=json.dumps({'rows': preview.json()['rows']}), content_type='application/json')
+        self.assertEqual(applied.json()['created'], 1)
+        exported = self.client.get(f'/api/relationship-life/person/{self.sara.id}/export/')
+        self.assertEqual(exported.status_code, 200)
+        self.assertEqual(exported['Content-Type'], 'application/json')
+
+    def test_pwa_assets_and_hub_render(self):
+        self.assertEqual(self.client.get('/relationship-life/').status_code, 200)
+        sw = self.client.get('/service-worker.js')
+        self.assertEqual(sw.status_code, 200)
+        self.assertIn('application/javascript', sw['Content-Type'])

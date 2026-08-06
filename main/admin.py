@@ -3,19 +3,61 @@ from django.contrib.admin import display
 from .models import (
     ArtisticWork,
     ChatAnalysis,
+    Commitment,
     Debt,
     DirectMessage,
     Follow,
     FollowUp,
+    GiftIdea,
     FriendRequest,
     Friendship,
     Information,
     Interaction,
+    MemoryFact,
+    MeetingReflection,
     Node,
+    NodeAlias,
+    NodeMergeOperation,
+    NodeSafetySetting,
     NodeCloseness,
     ProfileMediaItem,
     Relationship,
+    RelationshipRecommendation,
 )
+
+admin.site.register(Commitment)
+admin.site.register(GiftIdea)
+admin.site.register(MeetingReflection)
+admin.site.register(NodeSafetySetting)
+
+
+@admin.register(MemoryFact)
+class MemoryFactAdmin(admin.ModelAdmin):
+    list_display = ['node', 'category', 'value', 'confidence', 'active', 'ai_usable']
+    list_filter = ['category', 'active', 'ai_usable', 'source']
+    search_fields = ['node__username', 'value']
+    raw_id_fields = ['owner', 'node', 'suggestion', 'superseded_by']
+
+
+@admin.register(NodeAlias)
+class NodeAliasAdmin(admin.ModelAdmin):
+    list_display = ['alias', 'node', 'owner']
+    search_fields = ['alias', 'node__username']
+    raw_id_fields = ['owner', 'node']
+
+
+@admin.register(NodeMergeOperation)
+class NodeMergeOperationAdmin(admin.ModelAdmin):
+    list_display = ['primary_node', 'duplicate_node', 'status', 'created_at']
+    list_filter = ['status']
+    raw_id_fields = ['owner', 'primary_node', 'duplicate_node']
+
+
+@admin.register(RelationshipRecommendation)
+class RelationshipRecommendationAdmin(admin.ModelAdmin):
+    list_display = ['node', 'title', 'status', 'outcome', 'helpful', 'created_at']
+    list_filter = ['status', 'outcome', 'helpful']
+    raw_id_fields = ['owner', 'node']
 
 
 @admin.register(ArtisticWork)

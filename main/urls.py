@@ -52,6 +52,13 @@ from .views_persona import (
     rel_persona_synthesize_api,
 )
 from .views_psychology import relationship_pulse_create_api, extraction_inbox, extraction_suggestions_api, extraction_suggestion_decide_api
+from .views_memory import (memory_hub, memory_fact_api, memory_search_api,
+    relationship_assistant_api, recommendation_feedback_api, node_merge_preview_api,
+    node_merge_apply_api, node_merge_undo_api, clear_psychology_inferences_api)
+from .views_relationship_life import (relationship_life_hub, meeting_briefing_api,
+    quick_capture_api, meeting_reflection_api, commitment_action_api,
+    safety_setting_api, person_export, csv_import_preview, csv_import_apply, service_worker,
+    introduction_brief_api, person_delete_complete)
 from .views_life import (
     life_event_create_api,
     life_event_delete_api,
@@ -120,6 +127,7 @@ from .views_social_circles import (
 )
 
 urlpatterns = [
+    path('service-worker.js', service_worker, name='service_worker'),
 
     # ======================
     # AUTH
@@ -263,6 +271,27 @@ urlpatterns = [
     path('api/psychology/analyze/',      psychology_ai_api,          name='psychology_ai_api'),
     path('api/psychology/pulse/',        relationship_pulse_create_api, name='relationship_pulse_create'),
     path('extractions/',                 extraction_inbox, name='extraction_inbox'),
+    path('memory/',                      memory_hub, name='memory_hub'),
+    path('api/memory/facts/',            memory_fact_api, name='memory_fact_create'),
+    path('api/memory/facts/<int:pk>/',   memory_fact_api, name='memory_fact_update'),
+    path('api/memory/search/',           memory_search_api, name='memory_search'),
+    path('api/memory/assistant/<int:pk>/', relationship_assistant_api, name='relationship_assistant'),
+    path('api/memory/recommendations/<int:pk>/', recommendation_feedback_api, name='recommendation_feedback'),
+    path('api/memory/merge/preview/',    node_merge_preview_api, name='node_merge_preview'),
+    path('api/memory/merge/',            node_merge_apply_api, name='node_merge_apply'),
+    path('api/memory/merge/<int:pk>/undo/', node_merge_undo_api, name='node_merge_undo'),
+    path('api/memory/psychology/clear/', clear_psychology_inferences_api, name='clear_psychology_inferences'),
+    path('relationship-life/',           relationship_life_hub, name='relationship_life_hub'),
+    path('api/relationship-life/briefing/<int:pk>/', meeting_briefing_api, name='meeting_briefing'),
+    path('api/relationship-life/capture/', quick_capture_api, name='quick_capture'),
+    path('api/relationship-life/reflection/', meeting_reflection_api, name='meeting_reflection'),
+    path('api/relationship-life/commitments/<int:pk>/', commitment_action_api, name='commitment_action'),
+    path('api/relationship-life/safety/<int:pk>/', safety_setting_api, name='safety_setting'),
+    path('api/relationship-life/person/<int:pk>/export/', person_export, name='person_export'),
+    path('api/relationship-life/person/<int:pk>/delete/', person_delete_complete, name='person_delete_complete'),
+    path('api/relationship-life/introduction/', introduction_brief_api, name='introduction_brief'),
+    path('api/relationship-life/import/csv/preview/', csv_import_preview, name='csv_import_preview'),
+    path('api/relationship-life/import/csv/apply/', csv_import_apply, name='csv_import_apply'),
     path('api/extractions/',             extraction_suggestions_api, name='extraction_suggestions'),
     path('api/extractions/<int:pk>/',    extraction_suggestion_decide_api, name='extraction_suggestion_decide'),
     path('api/daily/tips/',              daily_tips_api,             name='daily_tips_api'),

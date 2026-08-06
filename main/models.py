@@ -160,6 +160,8 @@ class Node(models.Model):
         null=True, blank=True, related_name='exported_nodes',
         verbose_name='وارد شده از'
     )
+    merged_into = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='merged_duplicates')
 
     def display_name(self):
         if self.nickname:
@@ -684,6 +686,165 @@ class ExtractionSuggestion(models.Model):
                 name='unique_extraction_per_source',
             ),
         ]
+
+
+class NodeAlias(models.Model):
+    """A user-confirmed way of referring to a person (name, nickname or role)."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='node_aliases')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='aliases')
+    alias = models.CharField(max_length=100)
+    normalized_alias = models.CharField(max_length=100, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['owner', 'normalized_alias'],
+                                                name='unique_node_alias_per_owner')]
+
+    def save(self, *args, **kwargs):
+        if self.owner_id and self.node_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Alias and node must belong to the same owner.')
+        self.normalized_alias = ' '.join(self.alias.replace('ي', 'ی').replace('ك', 'ک').lower().split())
+        super().save(*args, **kwargs)
+
+
+class MemoryFact(models.Model):
+    CATEGORY_CHOICES = [
+        ('interest', 'علاقه'), ('value', 'ارزش'), ('communication', 'سبک ارتباطی'),
+        ('boundary', 'مرز'), ('sensitivity', 'حساسیت'), ('preference', 'ترجیح'),
+        ('life_topic', 'موضوع زندگی'), ('emotion', 'محرک احساسی'), ('other', 'سایر'),
+    ]
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='memory_facts')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='memory_facts')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
+    value = models.CharField(max_length=300)
+    confidence = models.PositiveSmallIntegerField(default=70)
+    source = models.CharField(max_length=20)
+    source_id = models.PositiveIntegerField(null=True, blank=True)
+    suggestion = models.ForeignKey(ExtractionSuggestion, null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='memory_facts')
+    observed_at = models.DateTimeField(default=models.functions.Now)
+    active = models.BooleanField(default=True)
+    ai_usable = models.BooleanField(default=True)
+    confidentiality = models.CharField(max_length=15, default='personal', choices=[
+        ('normal', 'معمولی'), ('personal', 'شخصی'), ('sensitive', 'بسیار حساس'),
+        ('financial', 'مالی'), ('health', 'سلامت'), ('no_ai', 'ممنوع برای AI')])
+    superseded_by = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
+                                      related_name='superseded_facts')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['category', '-confidence', '-observed_at']
+        constraints = [models.UniqueConstraint(fields=['owner', 'node', 'category', 'value'],
+                                                name='unique_memory_fact_per_node')]
+
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Memory fact and node must belong to the same owner.')
+        if not 0 <= self.confidence <= 100:
+            raise ValidationError({'confidence': 'Confidence must be between 0 and 100.'})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def effective_confidence(self):
+        """Confidence slowly decays, while direct/manual knowledge stays stronger."""
+        from django.utils import timezone
+        age_days = max(0, (timezone.now() - self.observed_at).days)
+        decay = min(30, age_days // 90 * 3)
+        source_bonus = 8 if self.source == 'manual' else 0
+        conflict_penalty = 12 if self.superseded_by_id else 0
+        return min(100, max(0, self.confidence + source_bonus - decay - conflict_penalty))
+
+
+class RelationshipRecommendation(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='relationship_recommendations')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='recommendations')
+    kind = models.CharField(max_length=30, default='connect')
+    title = models.CharField(max_length=200)
+    suggestion = models.TextField()
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=15, default='active')
+    snoozed_until = models.DateField(null=True, blank=True)
+    outcome = models.CharField(max_length=20, blank=True)
+    outcome_note = models.CharField(max_length=300, blank=True)
+    helpful = models.BooleanField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    acted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class NodeMergeOperation(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='node_merge_operations')
+    primary_node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='merge_operations_primary')
+    duplicate_node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='merge_operations_duplicate')
+    snapshot = models.JSONField(default=dict)
+    status = models.CharField(max_length=12, default='applied')
+    created_at = models.DateTimeField(auto_now_add=True)
+    undone_at = models.DateTimeField(null=True, blank=True)
+
+
+class Commitment(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='commitments')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='commitments')
+    responsible = models.CharField(max_length=10, choices=[('me', 'من'), ('them', 'طرف مقابل')])
+    text = models.CharField(max_length=300)
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=12, default='open')
+    source = models.CharField(max_length=20, default='manual')
+    source_id = models.PositiveIntegerField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['status', 'due_date', '-created_at']
+
+
+class GiftIdea(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='gift_ideas')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='gift_ideas')
+    title = models.CharField(max_length=200)
+    occasion = models.CharField(max_length=100, blank=True)
+    budget = models.PositiveBigIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=15, default='idea')
+    notes = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['status', '-created_at']
+
+
+class MeetingReflection(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='meeting_reflections')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='meeting_reflections')
+    event = models.ForeignKey(Event, null=True, blank=True, on_delete=models.SET_NULL,
+                              related_name='reflections')
+    happened_at = models.DateTimeField(default=models.functions.Now)
+    summary = models.TextField()
+    feeling = models.SmallIntegerField(default=0)
+    relationship_change = models.CharField(max_length=10, default='same')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class NodeSafetySetting(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='node_safety_settings')
+    node = models.OneToOneField(Node, on_delete=models.CASCADE, related_name='safety_setting')
+    pause_contact_suggestions = models.BooleanField(default=False)
+    no_contact_until = models.DateField(null=True, blank=True)
+    hide_emotional_reminders = models.BooleanField(default=False)
+    boundaries = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 # ─────────────────────────────────────────────────────────────────

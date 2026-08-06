@@ -6,7 +6,8 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Debt, Event, ExtractionSuggestion, Node, RelationshipPulse
+from .models import (Debt, Event, ExtractionSuggestion, MemoryFact, Node, NodeAlias,
+                     Relationship, RelationshipPulse)
 
 
 @login_required
@@ -52,7 +53,8 @@ def extraction_suggestions_api(request):
         rows = rows.filter(status=status)
     rows = rows[:100]
     return JsonResponse({'nodes': [
-        {'id': node.id, 'name': node.display_name()} for node in Node.objects.filter(owner=request.user).order_by('username')[:120]
+        {'id': node.id, 'name': node.display_name(), 'username': node.username}
+        for node in Node.objects.filter(owner=request.user).order_by('username')[:120]
     ], 'suggestions': [
         {'id': row.id, 'kind': row.kind, 'payload': row.payload, 'source': row.source,
          'source_id': row.source_id, 'status': row.status,
@@ -75,7 +77,21 @@ def extraction_suggestion_decide_api(request, pk):
     if action == 'undo':
         if suggestion.status != 'approved' or not suggestion.applied_model or not suggestion.applied_object_id:
             return JsonResponse({'error': 'این پیشنهاد قابل بازگردانی نیست.'}, status=400)
-        model_map = {'event': Event, 'debt': Debt, 'node': Node}
+        if suggestion.applied_model == 'relationship':
+            relationship = Relationship.objects.filter(pk=suggestion.applied_object_id, owner=request.user).first()
+            previous = suggestion.payload.get('_previous_relationship')
+            if relationship and previous:
+                relationship.rel = previous.get('rel')
+                relationship.status = previous.get('status', 'active')
+                relationship.strength = previous.get('strength', 3)
+                relationship.save()
+            elif relationship:
+                relationship.delete()
+            suggestion.status, suggestion.applied_model, suggestion.applied_object_id = 'pending', '', None
+            suggestion.save(update_fields=['status', 'applied_model', 'applied_object_id', 'updated_at'])
+            return JsonResponse({'ok': True})
+        model_map = {'event': Event, 'debt': Debt, 'node': Node, 'alias': NodeAlias,
+                     'memory': MemoryFact}
         model = model_map.get(suggestion.applied_model)
         obj = model.objects.filter(pk=suggestion.applied_object_id, owner=request.user).first() if model else None
         if obj:
@@ -109,13 +125,17 @@ def extraction_suggestion_decide_api(request, pk):
         return JsonResponse({'error': 'عمل نامعتبر است.'}, status=400)
     if suggestion.kind == 'event':
         event_date = timezone.localdate()
-        if data.get('date'):
+        chosen_date = data.get('date') or suggestion.payload.get('date')
+        if chosen_date:
             try:
                 from datetime import date
-                event_date = date.fromisoformat(data['date'])
+                event_date = date.fromisoformat(chosen_date)
             except (TypeError, ValueError):
                 return JsonResponse({'error': 'تاریخ رویداد معتبر نیست.'}, status=400)
-        event = Event.objects.create(owner=request.user, title=(data.get('title') or suggestion.payload.get('title') or suggestion.payload.get('snippet') or 'رویداد')[:200], date=event_date)
+        event = Event.objects.create(owner=request.user, title=(data.get('title') or suggestion.payload.get('title') or suggestion.payload.get('snippet') or 'رویداد')[:200], date=event_date, event_time=data.get('time') or suggestion.payload.get('time') or None)
+        participant = Node.objects.filter(owner=request.user, pk=data.get('node_id')).first()
+        if participant:
+            event.participants.add(participant)
         suggestion.applied_model, suggestion.applied_object_id = 'event', event.id
     elif suggestion.kind == 'debt':
         node = Node.objects.filter(owner=request.user, pk=data.get('node_id')).first()
@@ -131,9 +151,50 @@ def extraction_suggestion_decide_api(request, pk):
         name = (data.get('name') or suggestion.payload.get('name_raw') or '').strip()[:100]
         if not name:
             return JsonResponse({'error': 'نام شخص لازم است.'}, status=400)
-        username = (data.get('username') or name).strip()[:100]
-        node, created = Node.objects.get_or_create(owner=request.user, username=username, defaults={'name': name})
+        selected = Node.objects.filter(owner=request.user, pk=data.get('node_id')).first()
+        if selected:
+            normalized = ' '.join(name.replace('ي', 'ی').replace('ك', 'ک').lower().split())
+            alias, _ = NodeAlias.objects.update_or_create(
+                owner=request.user, normalized_alias=normalized,
+                defaults={'node': selected, 'alias': name})
+            suggestion.applied_model, suggestion.applied_object_id = 'alias', alias.id
+        else:
+            username = (data.get('username') or name).strip()[:100]
+            node, created = Node.objects.get_or_create(owner=request.user, username=username, defaults={'name': name})
+            if created:
+                suggestion.applied_model, suggestion.applied_object_id = 'node', node.id
+    elif suggestion.kind == 'memory':
+        node = Node.objects.filter(owner=request.user, pk=data.get('node_id')).first()
+        category = data.get('category') or suggestion.payload.get('category')
+        value = (data.get('value') or suggestion.payload.get('value') or '').strip()[:300]
+        if not node or category not in dict(MemoryFact.CATEGORY_CHOICES) or not value:
+            return JsonResponse({'error': 'شخص، دسته و مقدار شناختی معتبر لازم است.'}, status=400)
+        fact, created = MemoryFact.objects.get_or_create(
+            owner=request.user, node=node, category=category, value=value,
+            defaults={'confidence': min(100, max(0, int(data.get('confidence') or suggestion.payload.get('confidence') or 70))),
+                      'source': suggestion.source, 'source_id': suggestion.source_id,
+                      'suggestion': suggestion, 'active': True},
+        )
         if created:
-            suggestion.applied_model, suggestion.applied_object_id = 'node', node.id
-    suggestion.status = 'approved'; suggestion.save(update_fields=['status', 'applied_model', 'applied_object_id', 'updated_at'])
+            suggestion.applied_model, suggestion.applied_object_id = 'memory', fact.id
+    elif suggestion.kind == 'relationship':
+        node = Node.objects.filter(owner=request.user, pk=data.get('node_id')).first()
+        root = request.user.root_node
+        if not node or not root or node.id == root.id:
+            return JsonResponse({'error': 'ابتدا شخص و نود اصلی خودت را مشخص کن.'}, status=400)
+        relationship = Relationship.objects.filter(owner=request.user).filter(
+            source=root, target=node).first() or Relationship.objects.filter(
+            owner=request.user, source=node, target=root).first()
+        if relationship:
+            suggestion.payload['_previous_relationship'] = {
+                'rel': relationship.rel, 'status': relationship.status, 'strength': relationship.strength}
+        else:
+            relationship = Relationship(owner=request.user, source=root, target=node)
+        relationship.rel = (data.get('relationship_type') or suggestion.payload.get('relationship_type') or relationship.rel or 'آشنا')[:100]
+        new_status = data.get('status') or suggestion.payload.get('status') or 'active'
+        relationship.status = new_status if new_status in dict(Relationship.STATUS_CHOICES) else 'active'
+        relationship.strength = min(5, max(1, int(data.get('strength') or suggestion.payload.get('strength') or 3)))
+        relationship.save()
+        suggestion.applied_model, suggestion.applied_object_id = 'relationship', relationship.id
+    suggestion.status = 'approved'; suggestion.save(update_fields=['status', 'payload', 'applied_model', 'applied_object_id', 'updated_at'])
     return JsonResponse({'ok': True})

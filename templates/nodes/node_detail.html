@@ -483,6 +483,7 @@
         {% if node.birth_day %}<span class="hero-tag">🎂 <strong>{{ node.birth_day|jalali_date:"long" }}</strong></span>{% endif %}
         {% if node.phone_number %}<span class="hero-tag" dir="ltr">📞 <strong>{{ node.phone_number }}</strong></span>{% endif %}
         {% if node.nickname and node.nickname != node.display_name %}<span class="hero-tag">✦ <strong>{{ node.nickname }}</strong></span>{% endif %}
+        {% for alias in node.aliases.all %}<span class="hero-tag">🏷 <strong>{{ alias.alias }}</strong></span>{% endfor %}
       </div>
       {% if not is_root_node %}
       <div class="hero-quick-actions">
@@ -554,6 +555,15 @@
   <div style="padding:14px 18px;font-size:12px;line-height:1.9"><p style="color:var(--text-muted)">این موارد فقط پیشنهادهای تأییدشدهٔ خودت هستند. برای اصلاح یا بازگردانی وارد مرکز پیشنهادها شو.</p>{% for source in insight_sources %}<div class="ix-item"><span class="chip chip-indigo">{{ source.kind }}</span><span style="flex:1">{{ source.payload.explanation|default:source.payload.snippet }}</span><small>{{ source.source }} #{{ source.source_id }}</small></div>{% endfor %}<a class="btn btn-sm" href="{% url 'extraction_inbox' %}" style="margin-top:10px">مدیریت منابع و تاریخچه</a></div>
 </div>
 {% endif %}
+
+{% if memory_facts %}
+<div class="section">
+  <div class="section-hd"><span class="section-hd-title">🧠 حافظهٔ شناختی تأییدشده</span><span class="chip chip-gray">{{ memory_facts|length }}</span></div>
+  <div style="padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px">{% for fact in memory_facts %}<div style="padding:11px;border:1px solid var(--border);border-radius:12px;background:var(--surface)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="font-size:11px;color:var(--primary-light)">{{ fact.get_category_display }}</b><small style="color:var(--text-muted)">{{ fact.confidence }}٪ اطمینان</small></div><div style="font-size:13px;margin-top:7px;line-height:1.8">{{ fact.value }}</div><div style="font-size:10px;color:var(--text-muted);margin-top:6px">{{ fact.source }} #{{ fact.source_id }} · {{ fact.observed_at|jalali_date:"long" }}</div></div>{% endfor %}</div>
+</div>
+{% endif %}
+
+{% if not is_root_node %}<div class="section"><div class="section-hd"><span class="section-hd-title">💬 دستیار ارتباط با {{ node.display_name }}</span><button class="btn btn-sm" onclick="loadRelationAssistant()">پیشنهاد امروز</button></div><div id="relationAssistant" style="padding:15px 18px;color:var(--text-muted);font-size:12px">پیشنهادها فقط از حافظهٔ تأییدشده ساخته می‌شوند و هیچ پیامی خودکار ارسال نمی‌شود.</div></div>{% endif %}
 
 <!-- ══ INTERACTIONS (V4) ══ -->
 {% if not is_root_node %}
@@ -1067,6 +1077,7 @@
 {% endif %}
 
 <script>
+async function loadRelationAssistant(){const box=document.getElementById('relationAssistant');if(!box)return;box.textContent='در حال آماده‌سازی…';const r=await fetch('/api/memory/assistant/{{ node.id }}/'),d=await r.json();if(!r.ok){box.textContent=d.error||'خطا';return}box.innerHTML=`<div style="line-height:2"><b>موضوع پیشنهادی:</b> ${escIns(d.topic)}<br><b>پیش‌نویس پیام:</b> ${escIns(d.draft)}<br>${d.open_topics.length?'<b>موضوعات باز:</b> '+d.open_topics.map(escIns).join('، ')+'<br>':''}${d.avoid.length?'<b>مرزها و حساسیت‌ها:</b> '+d.avoid.map(escIns).join('، ')+'<br>':''}<small>${escIns(d.reason)} · ${escIns(d.safety)}</small><div style="margin-top:9px"><button class="btn btn-sm" onclick="relationOutcome(${d.recommendation_id},'better')">انجام شد، بهتر شد</button> <button class="btn btn-sm" onclick="relationOutcome(${d.recommendation_id},'same')">تغییری نکرد</button> <button class="btn btn-sm" onclick="relationSnooze(${d.recommendation_id})">یک هفته بعد</button></div></div>`}async function relationOutcome(id,outcome){await fetch('/api/memory/recommendations/'+id+'/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({action:'outcome',outcome,helpful:outcome==='better'})});document.getElementById('relationAssistant').textContent='بازخوردت ثبت شد و برای پیشنهادهای بعدی استفاده می‌شود.'}async function relationSnooze(id){await fetch('/api/memory/recommendations/'+id+'/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({action:'snooze',days:7})});document.getElementById('relationAssistant').textContent='پیشنهاد برای یک هفته عقب افتاد.'}
 // ═══ V4: Interactions ═══
 let ixKind = 'call', ixFeel = 0;
 

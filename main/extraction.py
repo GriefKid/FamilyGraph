@@ -5,7 +5,8 @@ import re
 
 from django.db import models
 
-from .models import ExtractionSuggestion, Node
+from .models import ExtractionSuggestion, Node, NodeAlias
+from .persian_datetime import parse_persian_datetime
 
 
 PERSIAN_DIGITS = str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789')
@@ -42,11 +43,18 @@ def _candidate_person(owner, raw):
     stop = {'من', 'امروز', 'دیروز', 'فردا', 'اون', 'او', 'ایشون'}
     if not raw or raw in stop:
         return None
-    existing = Node.objects.filter(owner=owner).filter(
+    exact = Node.objects.filter(owner=owner).filter(
         models.Q(username__iexact=raw) | models.Q(name__iexact=raw) |
         models.Q(first_name__iexact=raw) | models.Q(nickname__iexact=raw)
     ).first()
-    return {'name_raw': raw, 'existing_node_id': existing.id if existing else None}
+    alias_node = NodeAlias.objects.filter(owner=owner, normalized_alias=_normalise(raw).lower()).select_related('node').first()
+    exact = exact or (alias_node.node if alias_node else None)
+    candidates = list(Node.objects.filter(owner=owner).filter(
+        models.Q(username__icontains=raw) | models.Q(name__icontains=raw) |
+        models.Q(first_name__icontains=raw) | models.Q(nickname__icontains=raw)
+    ).values('id', 'username', 'name', 'first_name', 'nickname')[:5])
+    return {'name_raw': raw, 'existing_node_id': exact.id if exact else None,
+            'candidate_node_ids': [row['id'] for row in candidates]}
 
 
 def _collect(owner, text):
@@ -74,8 +82,12 @@ def _collect(owner, text):
                 'explanation': 'عبارت مالی، نام شخص و جهت قرض در متن دیده شد.',
             }))
 
-    for match in re.finditer(r'(?:قرار|جلسه|تولد|عروسی|امتحان|سفر|مهمانی)\s+[^.!؟\n]{0,90}', normalized):
+    for match in re.finditer(r'[^.!؟\n]{0,35}(?:قرار|جلسه|تولد|عروسی|امتحان|سفر|مهمانی)[^.!؟\n]{0,90}', normalized):
+        parsed = parse_persian_datetime(match.group(0))
         found.append(('event', {'snippet': match.group(0), 'title': match.group(0)[:100],
+                                'date': parsed['date'].isoformat() if parsed['date'] else '',
+                                'time': parsed['time'].isoformat(timespec='minutes') if parsed['time'] else '',
+                                'date_expression': parsed['matched'],
                                 'explanation': 'یک عبارت زمان‌مند یا رویداد در متن دیده شد.'}))
     for match in re.finditer(r'@([\w.-]{2,30})', normalized):
         names.setdefault(match.group(1), {'name_raw': match.group(1), 'username': match.group(1), 'existing_node_id': None})
@@ -87,6 +99,42 @@ def _collect(owner, text):
         if word in normalized:
             found.append(('signal', {'signal': label, 'snippet': word,
                                      'explanation': f'واژهٔ «{word}» در متن ثبت‌شده وجود داشت.'}))
+
+    # Identity and relationship changes. The user chooses the target person before apply.
+    relation_patterns = [
+        (r'(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+(?:همکار جدیدم(?:ه| است)|همکارمه)', 'همکار', 'active', 3),
+        (r'(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+(?:دوست جدیدم(?:ه| است)|دوستمه)', 'دوست', 'active', 3),
+        (r'با\s+(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+قهر', '', 'distant', 1),
+        (r'(?:دیگه|دیگر)\s+با\s+(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+(?:در ارتباط نیستم|حرف نمی.?زنم)', '', 'inactive', 1),
+        (r'(?:رابطه(?:مون|‌مون)\s+با\s+)?(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+بهتر شده', '', 'active', 4),
+    ]
+    for pattern, rel_type, status, strength in relation_patterns:
+        for match in re.finditer(pattern, normalized):
+            person = _candidate_person(owner, match.group('person'))
+            if not person:
+                continue
+            names[person['name_raw']] = person
+            found.append(('relationship', {**person, 'relationship_type': rel_type,
+                          'status': status, 'strength': strength, 'snippet': match.group(0),
+                          'explanation': 'عبارت متن، نوع یا وضعیت رابطه را توصیف می‌کند.'}))
+
+    # Useful personal facts with explicit subjects; conservative by design.
+    fact_patterns = [
+        (r'(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+(?:عاشق|خیلی دوست داره)\s+(?P<value>[^.!؟]{2,60})', 'interest'),
+        (r'(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+از\s+(?P<value>[^.!؟]{2,60})\s+(?:بدش میاد|متنفره)', 'sensitivity'),
+        (r'برای\s+(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+(?P<value>صداقت|احترام|خانواده|آزادی|رشد)\s+مهمه', 'value'),
+        (r'(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{1,30})\s+ترجیح میده\s+(?P<value>[^.!؟]{2,80})', 'preference'),
+    ]
+    for pattern, category in fact_patterns:
+        for match in re.finditer(pattern, normalized):
+            person = _candidate_person(owner, match.group('person'))
+            if not person:
+                continue
+            names[person['name_raw']] = person
+            found.append(('memory', {**person, 'category': category,
+                          'value': match.group('value').strip(), 'confidence': 80,
+                          'snippet': match.group(0),
+                          'explanation': 'یک گزارهٔ مستقیم دربارهٔ این فرد در متن دیده شد.'}))
     for person in names.values():
         if not person.get('existing_node_id'):
             found.append(('person', {**person, 'explanation': 'این نام در متن آمده اما هنوز در گراف پیدا نشد.'}))

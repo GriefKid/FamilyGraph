@@ -1,0 +1,11 @@
+{
+  "name": "FamilyGraph",
+  "short_name": "FamilyGraph",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070712",
+  "theme_color": "#6366f1",
+  "icons": [{"src": "/static/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+}
