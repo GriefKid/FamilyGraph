@@ -633,6 +633,44 @@ class JournalEntry(models.Model):
         ordering = ['-created_at']
 
 
+class RelationshipPulse(models.Model):
+    """Optional, private self-report used by relationship theory monitors."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='relationship_pulses')
+    node = models.ForeignKey('Node', null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name='relationship_pulses')
+    support = models.PositiveSmallIntegerField(default=3)      # felt support
+    autonomy = models.PositiveSmallIntegerField(default=3)     # ability to be oneself
+    belonging = models.PositiveSmallIntegerField(default=3)    # felt connection
+    trust = models.PositiveSmallIntegerField(default=3)        # safety / trust
+    voice = models.PositiveSmallIntegerField(default=3)        # can disagree respectfully
+    note = models.CharField(max_length=280, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        for field in ('support', 'autonomy', 'belonging', 'trust', 'voice'):
+            if not 1 <= getattr(self, field) <= 5:
+                raise ValidationError({field: 'امتیاز باید بین ۱ تا ۵ باشد.'})
+
+
+class ExtractionSuggestion(models.Model):
+    """Private, user-approved facts extracted from any text entry point."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='extraction_suggestions')
+    source = models.CharField(max_length=20)  # journal, checkin, chat
+    source_id = models.PositiveIntegerField(null=True, blank=True)
+    kind = models.CharField(max_length=20)    # event, debt, person, relationship, signal
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=12, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 # ─────────────────────────────────────────────────────────────────
 # 8a. NodeCloseness  (V4 — دایره نزدیکی)
 # ─────────────────────────────────────────────────────────────────

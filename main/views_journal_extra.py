@@ -112,6 +112,8 @@ def journal_save_api(request):
         JournalImage.objects.filter(id__in=image_ids, entry__isnull=True).update(entry=entry)
 
     _extract_profile_media_from_journal(entry)
+    from .extraction import extract_text
+    extract_text(request.user, entry.text, 'journal', entry.id)
 
     return JsonResponse({'id': entry.id, 'message': 'ذخیره شد', 'occurred_at': entry.occurred_at.isoformat()})
 

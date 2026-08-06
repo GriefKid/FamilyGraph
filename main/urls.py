@@ -51,6 +51,7 @@ from .views_persona import (
     rel_persona_get_api,
     rel_persona_synthesize_api,
 )
+from .views_psychology import relationship_pulse_create_api, extraction_suggestions_api, extraction_suggestion_decide_api
 from .views_life import (
     life_event_create_api,
     life_event_delete_api,
@@ -260,6 +261,9 @@ urlpatterns = [
     path('api/groups/delete/',           delete_group_api,           name='delete_group_api'),
     path('groups/',                      groups_view,                name='groups'),
     path('api/psychology/analyze/',      psychology_ai_api,          name='psychology_ai_api'),
+    path('api/psychology/pulse/',        relationship_pulse_create_api, name='relationship_pulse_create'),
+    path('api/extractions/',             extraction_suggestions_api, name='extraction_suggestions'),
+    path('api/extractions/<int:pk>/',    extraction_suggestion_decide_api, name='extraction_suggestion_decide'),
     path('api/daily/tips/',              daily_tips_api,             name='daily_tips_api'),
 
     # ======================

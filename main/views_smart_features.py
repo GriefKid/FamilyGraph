@@ -1799,6 +1799,8 @@ def psychology_view(request):
         context['extra_theories'] = extra_theories(user)
     except Exception:
         context['extra_theories'] = []
+    from .theory_catalog import THEORY_CATALOG
+    context['theory_catalog'] = THEORY_CATALOG
 
     return render(request, 'psychology/psychology.html', context)
 

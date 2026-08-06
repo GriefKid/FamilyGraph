@@ -57,6 +57,7 @@
   gap:16px;
   margin-bottom:8px;
 }
+.theory-library{margin:0 0 24px;padding:16px 18px;border:1px solid var(--primary-border);border-radius:18px;background:linear-gradient(135deg,var(--card),rgba(99,102,241,.08));}.theory-library-head{display:flex;align-items:center;gap:12px;justify-content:space-between}.theory-library h2{font-size:15px;margin:0}.theory-library-toggle{border:1px solid var(--primary-border);border-radius:10px;background:var(--primary-glow);color:var(--primary-light);padding:8px 11px;font:800 11px var(--font-sans);cursor:pointer;white-space:nowrap}.theory-library-body{display:none;margin-top:14px}.theory-library.open .theory-library-body{display:block}.theory-library p{font-size:12px;color:var(--text-soft);line-height:1.9;margin:0 0 12px}.theory-library details{border-top:1px solid var(--border);padding:10px 0}.theory-library summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--text);list-style:none}.theory-library summary::-webkit-details-marker{display:none}.theory-library summary::before{content:'＋';color:var(--primary-light);margin-left:8px}.theory-library details[open] summary::before{content:'−'}.theory-library dl{margin:10px 0 0;font-size:11.5px;color:var(--text-soft);line-height:1.9}.theory-library dt{display:inline;font-weight:800;color:var(--primary-light)}.theory-library dd{display:inline;margin:0 4px 0 14px}.theory-library .safety{padding:10px 12px;border-radius:10px;background:rgba(245,158,11,.1);color:#fde68a;font-size:11px;line-height:1.9}
 
 /* ── Metric Card ── */
 .metric-card {
@@ -274,6 +275,32 @@
   <a href="{% url 'node_create' %}" class="btn btn-primary" style="margin-top:16px">＋ افزودن اولین شخص</a>
 </div>
 {% else %}
+
+<section class="theory-library">
+  <div class="theory-library-head"><h2>راهنمای مانیتورینگ رابطه و شبکه</h2><button class="theory-library-toggle" type="button" aria-expanded="false" onclick="toggleTheoryLibrary(this)">دیدن راهنما ({{ theory_catalog|length }})</button></div>
+  <div class="theory-library-body">
+  <p>هر شاخص فقط یک آینه برای دیدن الگوهای ثبت‌شدهٔ خودت است؛ نه تشخیص روان‌شناختی، نه حکم دربارهٔ شخصیت دیگران، و نه جایگزین متخصص.</p>
+  <div class="safety">اگر احساس ناامنی، بحران، آسیب به خود یا خشونت در رابطه داری، به جای تکیه بر این تحلیل‌ها با یک فرد قابل‌اعتماد یا متخصص محلی تماس بگیر.</div>
+  {% for item in theory_catalog %}
+  <details>
+    <summary>{{ item.name }} <span style="color:var(--text-muted);font-weight:500">· {{ item.group }} · {{ item.source }}</span></summary>
+    <dl><dt>چه چیزی می‌سنجد:</dt><dd>{{ item.measures }}</dd><br><dt>چطور بخوانمش:</dt><dd>{{ item.meaning }}</dd><br><dt>اقدام کم‌خطر:</dt><dd>{{ item.action }}</dd></dl>
+  </details>
+  {% endfor %}
+  </div>
+</section>
+
+<section class="theory-library" id="pulseCard">
+  <div class="theory-library-head"><h2>پالس کوتاه رابطه</h2><button class="theory-library-toggle" type="button" aria-expanded="false" onclick="togglePulse(this)">ثبت پالس</button></div>
+  <div class="theory-library-body">
+    <p>اختیاری و خصوصی است. این پنج پاسخ کوتاه، دادهٔ واقعی برای حمایت اجتماعی، خودتعیین‌گری، تعلق، اعتماد و گفت‌وگوی امن فراهم می‌کند.</p>
+    <div id="pulseFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px"></div>
+    <textarea id="pulseNote" maxlength="280" placeholder="اگر خواستی، یک توضیح کوتاه…" style="width:100%;margin-top:12px;min-height:70px;padding:9px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text)"></textarea>
+    <button class="btn btn-primary" type="button" style="margin-top:10px" onclick="savePulse()">ذخیرهٔ خصوصی پالس</button>
+    <span id="pulseStatus" style="font-size:11px;color:var(--text-muted);margin-right:8px"></span>
+  </div>
+</section>
+<section class="theory-library" id="extractionInbox"><div class="theory-library-head"><h2>پیشنهادهای نیازمند تأیید</h2><button class="theory-library-toggle" type="button" onclick="loadExtractions(this)">بررسی</button></div><div class="theory-library-body" id="extractionRows"></div></section>
 
 <!-- ══ STATS ROW ══════════════════════════════════════════════ -->
 <div class="stats-strip-6" style="margin-bottom:24px;">
@@ -1131,6 +1158,32 @@
 
 {% block extra_js %}
 <script>
+function toggleTheoryLibrary(button){
+  const library = button.closest('.theory-library');
+  const open = library.classList.toggle('open');
+  button.setAttribute('aria-expanded', String(open));
+  button.textContent = open ? 'بستن راهنما' : `دیدن راهنما (${library.querySelectorAll('details').length})`;
+}
+const PULSE_FIELDS = [['support','حمایت'],['autonomy','اختیار'],['belonging','تعلق'],['trust','اعتماد'],['voice','امکان مخالفت محترمانه']];
+function togglePulse(button){
+  const card = document.getElementById('pulseCard'); const open = card.classList.toggle('open');
+  button.setAttribute('aria-expanded', String(open)); button.textContent = open ? 'بستن پالس' : 'ثبت پالس';
+}
+(function(){
+  const wrap=document.getElementById('pulseFields'); if(!wrap) return;
+  wrap.innerHTML=PULSE_FIELDS.map(([key,label])=>`<label style="border:1px solid var(--border);border-radius:10px;padding:9px;font-size:11px;color:var(--text-soft)">${label}<select id="pulse-${key}" style="width:100%;margin-top:5px;padding:5px;border-radius:7px"><option value="1">۱ خیلی کم</option><option value="2">۲</option><option value="3" selected>۳ متوسط</option><option value="4">۴</option><option value="5">۵ خیلی زیاد</option></select></label>`).join('');
+})();
+async function savePulse(){
+  const data={note:document.getElementById('pulseNote').value}; PULSE_FIELDS.forEach(([key])=>data[key]=document.getElementById('pulse-'+key).value);
+  const status=document.getElementById('pulseStatus'); status.textContent='در حال ذخیره…';
+  try{const r=await fetch('/api/psychology/pulse/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrf()},body:JSON.stringify(data)});const d=await r.json();if(!r.ok)throw new Error(d.error);status.textContent='✓ ذخیره شد؛ در تحلیل‌های بعدی وارد می‌شود.';document.getElementById('pulseNote').value='';}catch(e){status.textContent=e.message||'خطا در ذخیره';}
+}
+async function loadExtractions(button){
+  const card=document.getElementById('extractionInbox'), box=document.getElementById('extractionRows');card.classList.add('open');box.textContent='در حال بارگذاری…';
+  const r=await fetch('/api/extractions/');const d=await r.json();
+  box.innerHTML=(d.suggestions||[]).map(s=>`<div style="padding:10px 0;border-top:1px solid var(--border);font-size:12px"><b>${_esc(s.kind)}</b> · ${_esc(JSON.stringify(s.payload))}<button class="btn" style="margin-right:8px" onclick="decideExtraction(${s.id},'dismiss')">رد</button>${s.kind==='event'?`<button class="btn btn-primary" onclick="decideExtraction(${s.id},'approve')">ثبت رویداد</button>`:''}</div>`).join('')||'پیشنهاد تازه‌ای نداری.';
+}
+async function decideExtraction(id,action){await fetch('/api/extractions/'+id+'/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrf()},body:JSON.stringify({action})});loadExtractions();}
 // ═══ V5: توضیح نظریه‌ها با هاور/کلیک روی ⓘ ═══
 (function(){
   const pop = document.createElement('div');

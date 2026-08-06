@@ -1010,6 +1010,11 @@ def chat_to_journal_api(request):
         tags=['chat'],
         owner=request.user,
     )
+    try:
+        from .extraction import extract_text
+        extract_text(request.user, entry.text, 'chat', entry.id)
+    except Exception:
+        pass
     return JsonResponse({'ok': True, 'entry_id': entry.id,
                          'msg': 'ذخیره شد — از صفحه ژورنال می‌تونی تحلیل AI هم بزنی'})
 
