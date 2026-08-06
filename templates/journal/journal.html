@@ -356,6 +356,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
   font-size:11px;padding:2px 8px;border-radius:10px;
   background:rgba(16,185,129,.1);color:#6ee7b7;border:1px solid rgba(16,185,129,.2);
 }
+.extract-modal{position:fixed;inset:0;z-index:8000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(3,3,15,.76);backdrop-filter:blur(10px)}.extract-modal.open{display:flex}.extract-dialog{width:min(570px,100%);max-height:82vh;overflow:auto;padding:22px;border:1px solid var(--primary-border);border-radius:22px;background:linear-gradient(145deg,var(--bg2),var(--card));box-shadow:0 24px 80px rgba(0,0,0,.55)}.extract-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.extract-card{margin-top:10px;padding:15px;border:1px solid var(--border);border-radius:14px;background:var(--surface);font-size:12px}.extract-card select,.extract-card input{margin-top:9px;width:100%;padding:9px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--text)}.extract-kind{display:inline-flex;padding:3px 8px;border-radius:999px;background:var(--primary-glow);color:var(--primary-light);font-size:10px;font-weight:800}.extract-actions{display:flex;gap:8px;margin-top:12px}.extract-copy{font-size:13px;line-height:1.9;color:var(--text);margin-top:8px}
 </style>
 {% endblock %}
 
@@ -433,6 +434,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
           <span class="char-count" id="charCount">۰ کاراکتر</span>
           <button class="btn btn-sm" onclick="clearAll()">پاک</button>
           <button class="btn" id="saveBtn" onclick="quickSave()">💾 ثبت لحظه</button>
+          <button class="btn btn-sm" type="button" onclick="showExtractions()">✨ پیشنهادها</button>
           <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">✦ تحلیل با AI</button>
         </div>
       </div>
@@ -528,6 +530,8 @@ animation:spin .7s linear infinite;vertical-align:middle;}
 </div>
 
 </div><!-- /layout -->
+
+<div class="extract-modal" id="extractModal" role="dialog" aria-modal="true"><div class="extract-dialog"><div class="extract-head"><div><b>پیشنهادهای استخراج‌شده</b><div style="font-size:11px;color:var(--text-muted);margin-top:4px">فقط مواردی که تأیید کنی وارد داده‌های اصلی می‌شوند.</div></div><button class="btn" onclick="closeExtractions()">بستن</button></div><div id="extractList" style="margin-top:12px"></div></div></div>
 
 <script>
 // ── Data from Django ─────────────────────────────────────
@@ -730,6 +734,13 @@ function closeResult(){document.getElementById('resultCard').classList.remove('s
 function getCookie(n){const v=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)');return v?v.pop():'';}
 
 // ── Quick Save (no AI) ──────────────────────────────────
+async function showExtractions(){
+  const modal=document.getElementById('extractModal'), list=document.getElementById('extractList');modal.classList.add('open');list.textContent='در حال آماده‌سازی…';
+  const r=await fetch('/api/extractions/');const d=await r.json();const options=(d.nodes||[]).map(n=>`<option value="${n.id}">${_esc(n.name)}</option>`).join('');
+  list.innerHTML=(d.suggestions||[]).sort((a,b)=>(a.kind==='person'?0:1)-(b.kind==='person'?0:1)).map(s=>{const p=s.payload||{};if(s.kind==='debt')return `<article class="extract-card"><span class="extract-kind">پیشنهاد مالی</span><div class="extract-copy">${_esc(p.person_raw||'یک نفر')} از تو <b>${_esc(p.amount_raw||'')}</b> تومان قرض گرفته. آیا ثبت شود؟</div><select id="ex-node-${s.id}"><option value="">طرف حساب را انتخاب کن…</option>${options}</select><div class="extract-actions"><button class="btn btn-primary" onclick="decideExtraction(${s.id},'approve',{node_id:document.getElementById('ex-node-${s.id}').value})">تأیید و ثبت</button><button class="btn" onclick="decideExtraction(${s.id},'dismiss')">رد</button></div></article>`;if(s.kind==='person')return `<article class="extract-card"><span class="extract-kind">شخص جدید</span><div class="extract-copy">«${_esc(p.name_raw||'این شخص')}» در نوشته‌ات آمده. می‌خواهی به گراف اضافه‌اش کنی؟</div><input id="ex-name-${s.id}" value="${_esc(p.name_raw||'')}" placeholder="نام"><input id="ex-user-${s.id}" placeholder="یک نام کوتاه برای جست‌وجو"><div class="extract-actions"><button class="btn btn-primary" onclick="decideExtraction(${s.id},'approve',{name:document.getElementById('ex-name-${s.id}').value,username:document.getElementById('ex-user-${s.id}').value})">افزودن شخص</button><button class="btn" onclick="decideExtraction(${s.id},'dismiss')">فعلاً نه</button></div></article>`;if(s.kind==='event')return `<article class="extract-card"><span class="extract-kind">رویداد</span><div class="extract-copy">${_esc(p.snippet||'یک رویداد')} — به تقویم اضافه شود؟</div><div class="extract-actions"><button class="btn btn-primary" onclick="decideExtraction(${s.id},'approve',{})">ثبت رویداد</button><button class="btn" onclick="decideExtraction(${s.id},'dismiss')">رد</button></div></article>`;return `<article class="extract-card"><span class="extract-kind">سیگنال</span><div class="extract-copy">سیگنال «${_esc(p.signal||'')}» برای تحلیل خصوصی تو ثبت شود؟</div><div class="extract-actions"><button class="btn btn-primary" onclick="decideExtraction(${s.id},'approve',{})">تأیید</button><button class="btn" onclick="decideExtraction(${s.id},'dismiss')">رد</button></div></article>`}).join('')||'<div style="padding:22px;text-align:center;color:var(--text-muted)">پیشنهاد بازی نداری.</div>';
+}
+function closeExtractions(){document.getElementById('extractModal').classList.remove('open');}
+async function decideExtraction(id,action,extra={}){const r=await fetch('/api/extractions/'+id+'/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({action,...extra})});const d=await r.json();if(!r.ok){alert(d.error||'خطا');return;}showExtractions();}
 async function quickSave(){
   const text=document.getElementById('journalText').value.trim();
   if(!text){alert('متنی بنویس!');return;}
@@ -750,9 +761,8 @@ async function quickSave(){
     });
     const d=await r.json();
     if(d.id){
-      alert('✓ ذخیره شد');
+      if(d.suggestions_created) showExtractions(); else alert('✓ ذخیره شد');
       clearAll();
-      location.reload();
     } else alert('خطا: '+(d.error||'ناشناخته'));
   }catch(e){alert('خطا در ذخیره');}
   finally{btn.disabled=false;btn.textContent=entryKind === 'moment' ? '💾 ثبت لحظه' : '💾 ذخیره جمع‌بندی';}

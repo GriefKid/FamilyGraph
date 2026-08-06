@@ -113,9 +113,9 @@ def journal_save_api(request):
 
     _extract_profile_media_from_journal(entry)
     from .extraction import extract_text
-    extract_text(request.user, entry.text, 'journal', entry.id)
+    suggestions = extract_text(request.user, entry.text, 'journal', entry.id)
 
-    return JsonResponse({'id': entry.id, 'message': 'ذخیره شد', 'occurred_at': entry.occurred_at.isoformat()})
+    return JsonResponse({'id': entry.id, 'message': 'ذخیره شد', 'suggestions_created': len(suggestions), 'occurred_at': entry.occurred_at.isoformat()})
 
 
 @login_required

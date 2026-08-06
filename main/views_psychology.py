@@ -35,7 +35,9 @@ def relationship_pulse_create_api(request):
 @login_required
 def extraction_suggestions_api(request):
     rows = ExtractionSuggestion.objects.filter(owner=request.user, status='pending')[:40]
-    return JsonResponse({'suggestions': [
+    return JsonResponse({'nodes': [
+        {'id': node.id, 'name': node.display_name()} for node in Node.objects.filter(owner=request.user).order_by('username')[:120]
+    ], 'suggestions': [
         {'id': row.id, 'kind': row.kind, 'payload': row.payload, 'source': row.source}
         for row in rows
     ]})
@@ -62,8 +64,15 @@ def extraction_suggestion_decide_api(request, pk):
     elif suggestion.kind == 'debt':
         node = Node.objects.filter(owner=request.user, pk=data.get('node_id')).first()
         digits = str(suggestion.payload.get('amount_raw', '')).translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹', '0123456789')).replace(',', '').replace('٬', '')
-        if not node or not digits.isdigit():
+        amount = suggestion.payload.get('amount_value') or (int(digits) if digits.isdigit() else None)
+        if not node or not amount:
             return JsonResponse({'error': 'برای ثبت مالی، شخص و مبلغ معتبر لازم است.'}, status=400)
-        Debt.objects.create(owner=request.user, node=node, direction=data.get('direction') if data.get('direction') in ('i_owe','they_owe') else 'i_owe', amount=int(digits), date=timezone.localdate(), note=suggestion.payload.get('snippet','')[:300])
+        Debt.objects.create(owner=request.user, node=node, direction=data.get('direction') if data.get('direction') in ('i_owe','they_owe') else suggestion.payload.get('direction', 'i_owe'), amount=amount, date=timezone.localdate(), note=suggestion.payload.get('snippet','')[:300])
+    elif suggestion.kind == 'person':
+        name = (data.get('name') or suggestion.payload.get('name_raw') or '').strip()[:100]
+        if not name:
+            return JsonResponse({'error': 'نام شخص لازم است.'}, status=400)
+        username = (data.get('username') or name).strip()[:100]
+        node, _ = Node.objects.get_or_create(owner=request.user, username=username, defaults={'name': name})
     suggestion.status = 'approved'; suggestion.save(update_fields=['status'])
     return JsonResponse({'ok': True})

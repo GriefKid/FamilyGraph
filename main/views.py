@@ -1569,6 +1569,11 @@ def journal_analyze_api(request):
                 mood=result.get('my_mood', ''), ai_analyzed=True, owner=entry_owner,
             )
         result['_entry_id'] = entry.id
+        try:
+            from .extraction import extract_text
+            result['_suggestions_created'] = len(extract_text(request.user, entry.text, 'journal', entry.id))
+        except Exception:
+            result['_suggestions_created'] = 0
 
         # Link any pre-uploaded images to this entry
         image_ids = body.get('image_ids', [])
