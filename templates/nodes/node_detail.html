@@ -480,7 +480,7 @@
       </div>
       <div class="hero-tags">
         {% if node.career %}<span class="hero-tag">💼 <strong>{{ node.career }}</strong></span>{% endif %}
-        {% if node.birth_day %}<span class="hero-tag">🎂 <strong>{{ node.birth_day|date:"j F Y" }}</strong></span>{% endif %}
+        {% if node.birth_day %}<span class="hero-tag">🎂 <strong>{{ node.birth_day|jalali_date:"long" }}</strong></span>{% endif %}
         {% if node.phone_number %}<span class="hero-tag" dir="ltr">📞 <strong>{{ node.phone_number }}</strong></span>{% endif %}
         {% if node.nickname and node.nickname != node.display_name %}<span class="hero-tag">✦ <strong>{{ node.nickname }}</strong></span>{% endif %}
       </div>
@@ -624,7 +624,7 @@
     {% for i in interactions %}
     <div class="ix-item">
       <span class="ix-item-kind">{{ i.get_kind_display }}</span>
-      <span class="ix-item-date">{{ i.date|date:"Y/m/d" }}</span>
+      <span class="ix-item-date">{{ i.date|jalali_date:"compact" }}</span>
       <span>{% if i.feeling == 1 %}😊{% elif i.feeling == -1 %}😕{% else %}😐{% endif %}</span>
       <span class="ix-item-note">{{ i.note }}</span>
     </div>

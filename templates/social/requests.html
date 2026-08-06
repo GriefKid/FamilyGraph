@@ -46,7 +46,7 @@
           <a href="/u/{{ r.sender.username }}/">{{ r.sender.get_full_name|default:r.sender.username }}</a>
           <span class="rq-type {{ r.request_type }}">{% if r.request_type == 'follow' %}👁 فالو{% else %}🔗 کانکشن{% endif %}</span>
         </div>
-        <div class="rq-msg">@{{ r.sender.username }}{% if r.message %} · {{ r.message }}{% endif %} · {{ r.created_at|date:"Y/m/d" }}</div>
+        <div class="rq-msg">@{{ r.sender.username }}{% if r.message %} · {{ r.message }}{% endif %} · {{ r.created_at|jalali_date:"compact" }}</div>
       </div>
       <div class="rq-btns">
         <button class="rq-btn rq-accept" onclick="rqRespond(this, {{ r.id }}, 'accept')">✓ قبول</button>
@@ -68,7 +68,7 @@
           <a href="/u/{{ r.receiver.username }}/">{{ r.receiver.get_full_name|default:r.receiver.username }}</a>
           <span class="rq-type {{ r.request_type }}">{% if r.request_type == 'follow' %}👁 فالو{% else %}🔗 کانکشن{% endif %}</span>
         </div>
-        <div class="rq-msg">⏳ در انتظار تایید · {{ r.created_at|date:"Y/m/d" }}</div>
+        <div class="rq-msg">⏳ در انتظار تایید · {{ r.created_at|jalali_date:"compact" }}</div>
       </div>
     </div>
     {% empty %}

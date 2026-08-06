@@ -56,6 +56,12 @@
 }
   
 .feed{margin-top:18px;display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px}.composer,.post-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px}.composer textarea{width:100%;min-height:84px;border:1px solid var(--border);background:var(--surface);border-radius:12px;color:var(--text);padding:10px;font-family:'Vazirmatn',sans-serif;resize:vertical}.composer-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;font-size:11px;color:var(--text-muted)}.post-publish{border:0;border-radius:10px;background:var(--grad-brand);color:#fff;padding:8px 14px;font:800 11px 'Vazirmatn',sans-serif;cursor:pointer}.post-card{margin-top:10px}.post-author{display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--text);font-size:12px;font-weight:800}.post-av{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#6366f1,#06b6d4)}.post-time{font-size:10px;color:var(--text-muted);font-weight:400}.post-body{font-size:13px;line-height:2;margin-top:11px;white-space:pre-wrap}.feed-side{background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.15);border-radius:18px;padding:15px;font-size:11px;color:var(--text-soft);line-height:1.9;height:max-content}.feed-side b{display:block;color:var(--primary-light);font-size:12px;margin-bottom:5px}@media(max-width:760px){.feed{grid-template-columns:1fr}.feed-side{display:none}}
+/* Feed refresh: the composer and public posts stay readable on small screens. */
+.composer,.post-card{background:linear-gradient(145deg,var(--card),rgba(99,102,241,.025))}
+.composer{box-shadow:0 12px 30px rgba(0,0,0,.12)}
+.composer textarea{min-height:96px;padding:12px}.post-publish{padding:9px 15px;box-shadow:0 6px 16px rgba(99,102,241,.26)}
+.post-av{width:34px;height:34px;box-shadow:0 4px 10px rgba(99,102,241,.24)}.post-time{display:block;margin-top:1px}.post-body{margin-top:12px}
+@media(max-width:760px){.composer-row{align-items:flex-start;flex-direction:column}.post-publish{width:100%;min-height:40px}}
 </style>
 {% endblock %}
 
@@ -136,7 +142,7 @@
       <div id="postFeed">
         {% for post in posts %}
         <article class="post-card">
-          <a class="post-author" href="/u/{{ post.author.username }}/"><span class="post-av">{{ post.author.username|first|upper }}</span><span>{{ post.author.get_full_name|default:post.author.username }}<span class="post-time"> · {{ post.created_at|date:"j F، H:i" }}</span></span></a>
+          <a class="post-author" href="/u/{{ post.author.username }}/"><span class="post-av">{{ post.author.username|first|upper }}</span><span>{{ post.author.get_full_name|default:post.author.username }}<span class="post-time"> · {{ post.created_at|jalali_date:"datetime" }}</span></span></a>
           <div class="post-body">{{ post.body }}</div>
           {% if post.image %}<img src="{{ post.image.url }}" alt="" style="max-width:100%;border-radius:12px;margin-top:10px">{% endif %}
         </article>

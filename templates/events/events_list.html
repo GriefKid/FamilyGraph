@@ -97,7 +97,7 @@
       <div class="tl-dot"></div>
       <div class="tl-card">
         <div class="tl-meta">
-          <span class="tl-date">{{ event.event.date|date:"j F Y" }}</span>
+          <span class="tl-date">{{ event.event.date|jalali_date:"long" }}</span>
           {% if event.event.event_time %}
             <span class="tl-time">⏰ {{ event.event.event_time|time:"H:i" }}</span>
           {% endif %}
@@ -141,7 +141,7 @@
       <div class="tl-dot"></div>
       <div class="tl-card" style="opacity:.75;">
         <div class="tl-meta">
-          <span class="tl-date">{{ event.date|date:"j F Y" }}</span>
+          <span class="tl-date">{{ event.date|jalali_date:"long" }}</span>
           {% if event.event_time %}
             <span class="tl-time" style="opacity:.6;">⏰ {{ event.event_time|time:"H:i" }}</span>
           {% endif %}

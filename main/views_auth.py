@@ -9,6 +9,7 @@ from datetime import date
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.core import signing
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
@@ -275,7 +276,6 @@ def register_view(request):
             if err:
                 error = err
             else:
-                from django.core import signing
                 reg.update({
                     'username':       username,
                     'email':          email,
@@ -329,7 +329,6 @@ def register_view(request):
                         pass
 
                 # رمز عبور با Django signing ذخیره شده — باز می‌کنیم
-                from django.core import signing
                 try:
                     pw = signing.loads(reg['password_token'], salt='register-pw', max_age=3600)
                 except Exception:

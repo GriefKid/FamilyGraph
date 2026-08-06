@@ -65,6 +65,9 @@
 
 /* ══ Toolbar ══════════════════════════════════════════ */
 .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.entry-kind{display:flex;gap:5px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:10px;}
+.entry-kind button{border:0;border-radius:7px;background:transparent;color:var(--text-muted);padding:5px 9px;cursor:pointer;font:700 11px 'Vazirmatn',sans-serif;}
+.entry-kind button.active{background:var(--primary-glow);color:var(--primary-light);}
 .date-input,.date-input-sm{
   background:var(--surface);border:1px solid var(--border);color:var(--text);
   border-radius:8px;padding:6px 10px;font-family:'Vazirmatn',sans-serif;font-size:12px;cursor:pointer;
@@ -386,14 +389,19 @@ animation:spin .7s linear infinite;vertical-align:middle;}
   <div id="tab-write" class="tab-pane active">
     <div class="jcard">
       <div class="jcard-head">
-        <h3>✎ یادداشت جدید</h3>
-        <span class="hint">@ برای mention افراد</span>
+        <h3>✦ ثبت یک لحظه</h3>
+        <span class="hint">همان لحظه ثبت کن؛ آخر شب هم می‌توانی جمع‌بندی بنویسی</span>
       </div>
       <div class="jcard-body">
         <!-- Date -->
         <div class="toolbar">
+          <div class="entry-kind" aria-label="نوع ثبت">
+            <button type="button" class="active" data-kind="moment" onclick="setEntryKind('moment')">✦ لحظه</button>
+            <button type="button" data-kind="reflection" onclick="setEntryKind('reflection')">☾ جمع‌بندی روز</button>
+          </div>
           <span class="date-label">تاریخ:</span>
           <input type="date" id="entryDate" class="date-input" />
+          <input type="time" id="entryTime" class="date-input" aria-label="ساعت رخداد" />
         </div>
 
         <!-- Textarea -->
@@ -424,7 +432,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
         <div class="action-row">
           <span class="char-count" id="charCount">۰ کاراکتر</span>
           <button class="btn btn-sm" onclick="clearAll()">پاک</button>
-          <button class="btn" id="saveBtn" onclick="quickSave()">💾 ذخیره متن</button>
+          <button class="btn" id="saveBtn" onclick="quickSave()">💾 ثبت لحظه</button>
           <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">✦ تحلیل با AI</button>
         </div>
       </div>
@@ -529,7 +537,7 @@ const ALL_NODES_U = {{ all_nodes_json|safe }};
 const ALL_MOODS  = {{ all_moods_json|safe }};
 
 // ── State ─────────────────────────────────────────────────
-let lastResult = null, uploadedImages = [], currentTags = [];
+let lastResult = null, uploadedImages = [], currentTags = [], entryKind = 'moment';
 let mentionState = null, activeMentionIdx = 0;
 let calYear, calMonth;
 
@@ -543,6 +551,7 @@ const nodeSet = new Set(ALL_NODES.map(n => n.username));
 // ── Init ──────────────────────────────────────────────────
 checkRoot();
 document.getElementById('entryDate').valueAsDate = new Date();
+document.getElementById('entryTime').value = new Date().toTimeString().slice(0,5);
 populateFilterDropdowns();
 
 // A person page can open the journal with a safe, explicit @mention prefilled.
@@ -562,6 +571,14 @@ function checkRoot(){
   fetch('/api/graph/all/').then(r=>r.json()).then(d=>{
     if(!d.root_id) document.getElementById('rootWarn').style.display='flex';
   }).catch(()=>{});
+}
+
+function setEntryKind(kind){
+  entryKind = kind === 'reflection' ? 'reflection' : 'moment';
+  document.querySelectorAll('.entry-kind button').forEach(button =>
+    button.classList.toggle('active', button.dataset.kind === entryKind)
+  );
+  document.getElementById('saveBtn').textContent = entryKind === 'moment' ? '💾 ثبت لحظه' : '💾 ذخیره جمع‌بندی';
 }
 
 function populateFilterDropdowns(){
@@ -725,6 +742,8 @@ async function quickSave(){
       body:JSON.stringify({
         text,
         entry_date:document.getElementById('entryDate').value,
+        occurred_at:`${document.getElementById('entryDate').value}T${document.getElementById('entryTime').value || '00:00'}`,
+        entry_kind:entryKind,
         tags:currentTags,
         image_ids:uploadedImages.map(i=>i.id)
       })
@@ -736,7 +755,7 @@ async function quickSave(){
       location.reload();
     } else alert('خطا: '+(d.error||'ناشناخته'));
   }catch(e){alert('خطا در ذخیره');}
-  finally{btn.disabled=false;btn.textContent='💾 ذخیره متن';}
+  finally{btn.disabled=false;btn.textContent=entryKind === 'moment' ? '💾 ثبت لحظه' : '💾 ذخیره جمع‌بندی';}
 }
 
 // ── Analyze with AI ─────────────────────────────────────
@@ -755,6 +774,8 @@ async function analyzeJournal(){
       body:JSON.stringify({
         text,
         entry_date:document.getElementById('entryDate').value,
+        occurred_at:`${document.getElementById('entryDate').value}T${document.getElementById('entryTime').value || '00:00'}`,
+        entry_kind:entryKind,
         tags:currentTags,
         image_ids:uploadedImages.map(i=>i.id),
         entry_id: window._analyzeEntryId || null,
@@ -1165,7 +1186,7 @@ async function loadEntries(){
         <div class="entry-card-top">
           ${e.image ? `<img class="entry-card-thumb" src="${e.image}">` : `<div class="entry-card-ph">📝</div>`}
           <div class="entry-card-body">
-            <div class="entry-card-date">${e.entry_date || e.created_at}</div>
+            <div class="entry-card-date">${e.entry_date || e.created_at}${e.occurred_at ? ' · '+e.occurred_at : ''}${e.kind === 'moment' ? ' · ✦ لحظه' : ' · ☾ جمع‌بندی'}</div>
             <div class="entry-card-text" id="et${e.id}">${e.preview}</div>
             <div class="entry-card-meta">
               ${e.tags.map(t=>`<span class="entry-tag">#${t}</span>`).join('')}

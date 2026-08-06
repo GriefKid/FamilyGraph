@@ -606,8 +606,15 @@ class AppSettings(models.Model):
 # ─────────────────────────────────────────────────────────────────
 
 class JournalEntry(models.Model):
+    ENTRY_KIND_CHOICES = [
+        ('moment', 'لحظه'),
+        ('reflection', 'جمع‌بندی روز'),
+    ]
     text            = models.TextField(verbose_name='متن')
     entry_date      = models.DateField(null=True, blank=True, verbose_name='تاریخ رویداد')
+    occurred_at     = models.DateTimeField(null=True, blank=True, verbose_name='زمان رخداد')
+    entry_kind      = models.CharField(max_length=12, choices=ENTRY_KIND_CHOICES,
+                                       default='reflection', verbose_name='نوع ثبت')
     tags            = models.JSONField(default=list, blank=True, verbose_name='تگ‌ها')
     mood            = models.CharField(max_length=100, blank=True, verbose_name='خلق‌وخو')
     ai_analyzed     = models.BooleanField(default=False, verbose_name='آنالیز AI')

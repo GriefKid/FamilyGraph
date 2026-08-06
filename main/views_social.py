@@ -1,7 +1,10 @@
 import json
 
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
@@ -24,6 +27,26 @@ from .models import (
 )
 
 User = get_user_model()
+
+
+def _rate_limited(user, action, limit, window_seconds):
+    """Small cache-backed throttle for social actions; returns a retry-after value."""
+    key = f'anti-spam:{action}:{user.pk}:{int(timezone.now().timestamp() // window_seconds)}'
+    if cache.add(key, 1, timeout=window_seconds):
+        return None
+    try:
+        count = cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, timeout=window_seconds)
+        count = 1
+    return window_seconds if count > limit else None
+
+
+def _spam_error(retry_after):
+    return JsonResponse(
+        {'error': 'تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره تلاش کن.', 'retry_after': retry_after},
+        status=429,
+    )
 
 
 def _body(request):
@@ -186,6 +209,9 @@ def discover_api(request):
 def follow_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
+    retry_after = _rate_limited(request.user, 'follow', 10, 60 * 60)
+    if retry_after:
+        return _spam_error(retry_after)
     target = get_object_or_404(User, pk=user_id)
     if target == request.user:
         return JsonResponse({'error': 'نمی‌توانی خودت را فالو کنی'}, status=400)
@@ -215,6 +241,9 @@ def unfollow_api(request, user_id):
 def friend_request_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
+    retry_after = _rate_limited(request.user, 'connection', 6, 60 * 60)
+    if retry_after:
+        return _spam_error(retry_after)
     target = get_object_or_404(User, pk=user_id)
     if target == request.user:
         return JsonResponse({'error': 'نمی‌توانی به خودت درخواست بدهی'}, status=400)
@@ -1132,11 +1161,20 @@ def _split_public_items(raw):
 def post_create_api(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
+    retry_after = _rate_limited(request.user, 'post', 8, 60 * 60)
+    if retry_after:
+        return _spam_error(retry_after)
     if not request.user.is_public:
         return JsonResponse({'error': 'برای انتشار پست، پروفایل باید پابلیک باشد.'}, status=403)
     body = (_body(request).get('body') or '').strip()[:1200]
     if not body:
         return JsonResponse({'error': 'متن پست خالی است.'}, status=400)
+    normalized = ' '.join(body.lower().split())
+    recent_same = SocialPost.objects.filter(
+        author=request.user, created_at__gte=timezone.now() - timedelta(hours=24)
+    ).only('body')
+    if any(' '.join(post.body.lower().split()) == normalized for post in recent_same):
+        return JsonResponse({'error': 'این پست را در ۲۴ ساعت اخیر منتشر کرده‌ای.'}, status=400)
     post = SocialPost.objects.create(author=request.user, body=body, is_public=True)
     return JsonResponse({
         'ok': True,

@@ -1526,23 +1526,41 @@ def journal_analyze_api(request):
             except Exception:
                 pass
 
+        entry_kind = body.get('entry_kind', 'moment')
+        if entry_kind not in dict(JournalEntry.ENTRY_KIND_CHOICES):
+            entry_kind = 'moment'
+        occurred_at = timezone.now()
+        raw_occurred_at = body.get('occurred_at', '')
+        if raw_occurred_at:
+            try:
+                from datetime import datetime
+                occurred_at = datetime.fromisoformat(raw_occurred_at.replace('Z', '+00:00'))
+                if timezone.is_naive(occurred_at):
+                    occurred_at = timezone.make_aware(occurred_at, timezone.get_current_timezone())
+            except (TypeError, ValueError):
+                pass
+        if entry_date is None:
+            entry_date = timezone.localdate(occurred_at)
+
         entry_owner = request.user if request.user.is_authenticated else None
         if existing_entry_id:
             try:
                 entry = JournalEntry.objects.get(id=existing_entry_id, owner=entry_owner)
                 entry.ai_analyzed = True
                 entry.mood = result.get('my_mood', '')
+                entry.entry_kind = entry_kind
+                entry.occurred_at = occurred_at
                 if raw_tags:
                     entry.tags = raw_tags
-                entry.save(update_fields=['ai_analyzed', 'mood', 'tags'])
+                entry.save(update_fields=['ai_analyzed', 'mood', 'tags', 'entry_kind', 'occurred_at'])
             except JournalEntry.DoesNotExist:
                 entry = JournalEntry.objects.create(
-                    text=text, entry_date=entry_date, tags=raw_tags,
+                    text=text, entry_date=entry_date, occurred_at=occurred_at, entry_kind=entry_kind, tags=raw_tags,
                     mood=result.get('my_mood', ''), ai_analyzed=True, owner=entry_owner,
                 )
         else:
             entry = JournalEntry.objects.create(
-                text=text, entry_date=entry_date, tags=raw_tags,
+                text=text, entry_date=entry_date, occurred_at=occurred_at, entry_kind=entry_kind, tags=raw_tags,
                 mood=result.get('my_mood', ''), ai_analyzed=True, owner=entry_owner,
             )
         result['_entry_id'] = entry.id

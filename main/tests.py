@@ -1,8 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 import json
+from datetime import date
 
-from .models import Follow, Friendship, Information, ProfileMediaItem, SocialCircle, SocialPost
+from .models import Follow, Friendship, Information, JournalEntry, ProfileMediaItem, SocialCircle, SocialPost
+from .templatetags.jalali_tags import jalali_date
 
 
 class RegistrationOnboardingTests(TestCase):
@@ -52,6 +55,7 @@ class RegistrationOnboardingTests(TestCase):
         self.assertEqual(profile.data['interests'], ['کتاب', 'موسیقی', 'پیاده‌روی'])
         self.assertEqual(profile.data['values'], ['صداقت', 'احترام'])
         self.assertEqual(profile.data['social_energy'], 'balanced')
+
 
 
 class PublicSocialTests(TestCase):
@@ -117,3 +121,40 @@ class PublicSocialTests(TestCase):
             set(circle.members.values_list('id', flat=True)),
             {self.me.id, self.match.id},
         )
+
+
+class JournalMomentTests(TestCase):
+    def test_quick_moment_keeps_the_event_time_and_is_private_to_its_owner(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='journal-owner', password='SecurePass1')
+        other = User.objects.create_user(username='other-user', password='SecurePass1')
+        self.client.force_login(user)
+
+        response = self.client.post(
+            '/api/journal/save/',
+            data=json.dumps({
+                'text': 'یک گفت‌وگوی خوب با یک دوست داشتم.',
+                'entry_date': '2026-08-06',
+                'occurred_at': '2026-08-06T14:35',
+                'entry_kind': 'moment',
+                'tags': ['دوستی'],
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        entry = JournalEntry.objects.get(owner=user)
+        self.assertEqual(entry.entry_kind, 'moment')
+        local_time = timezone.localtime(entry.occurred_at)
+        self.assertEqual(local_time.hour, 14)
+        self.assertEqual(local_time.minute, 35)
+
+        self.client.force_login(other)
+        response = self.client.get('/api/journal/entries/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['entries'], [])
+
+
+class JalaliPresentationTests(TestCase):
+    def test_jalali_filter_uses_persian_calendar_and_digits(self):
+        rendered = jalali_date(date(2026, 8, 6), 'compact')
+        self.assertEqual(rendered, '۱۴۰۵/۰۵/۱۵')

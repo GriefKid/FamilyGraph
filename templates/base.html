@@ -6,13 +6,15 @@
 <title>{% block title %}FamilyGraph{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Estedad:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 
 *{ box-sizing:border-box; margin:0; padding:0; }
+html{ min-height:100%; overflow-y:scroll; scroll-behavior:smooth; }
 
 /* ═══════════════ DESIGN TOKENS ═══════════════ */
 :root{
+  --font-sans:'Estedad','Vazirmatn',sans-serif;
   /* Backgrounds */
   --bg:#020208;
   --bg2:#070712;
@@ -83,6 +85,45 @@
   --grad-brand:linear-gradient(135deg,#4f46e5,#7c3aed);
 }
 
+.light{ --bg:#f7f7ff; --bg2:#eceeff; --card:rgba(255,255,255,.92); --text:#14142e; --text-soft:#4b4b7a; }
+.light .sidebar{ box-shadow:-10px 0 32px rgba(76,70,229,.07); }
+.light .topbar{ box-shadow:0 5px 20px rgba(56,54,130,.05); }
+
+/* Dracula: a high-contrast violet palette that keeps the existing component
+   system intact by overriding the same design tokens. */
+.dracula{
+  --bg:#282a36;
+  --bg2:#21222c;
+  --surface:rgba(68,71,90,.72);
+  --card:rgba(68,71,90,.78);
+  --card-hov:rgba(88,91,112,.90);
+  --border:rgba(189,147,249,.20);
+  --border-soft:rgba(248,248,242,.09);
+  --border-strong:rgba(255,121,198,.34);
+  --border-accent:rgba(189,147,249,.48);
+  --border-glow:rgba(255,121,198,.27);
+  --text:#f8f8f2;
+  --text-muted:#9da0b8;
+  --text-soft:#c8c8d5;
+  --text-dim:#6c6f86;
+  --primary:#bd93f9;
+  --primary-light:#d6b7ff;
+  --primary-dim:#8b6cc8;
+  --primary-glow:rgba(189,147,249,.18);
+  --primary-border:rgba(189,147,249,.40);
+  --secondary:#ff79c6;
+  --accent:#8be9fd;
+  --danger:#ff5555;
+  --success:#50fa7b;
+  --warning:#f1fa8c;
+  --grad-brand:linear-gradient(135deg,#bd93f9,#ff79c6);
+}
+.dracula .sidebar{ background:linear-gradient(180deg,rgba(33,34,44,.97),rgba(40,42,54,.98)); }
+.dracula .topbar{ background:rgba(40,42,54,.88); }
+.dracula .logo-icon,.dracula .btn-primary{ box-shadow:0 8px 26px rgba(255,121,198,.25); }
+.dracula .card,.dracula .section{ box-shadow:0 12px 32px rgba(17,18,27,.22); }
+.dracula select option,.dracula select optgroup{ background:#282a36 !important; color:#f8f8f2 !important; }
+
 /* ═══════════════ RESET & BASE ═══════════════ */
 ::-webkit-scrollbar{ width:3px; height:3px; }
 ::-webkit-scrollbar-track{ background:transparent; }
@@ -90,16 +131,24 @@
 ::-webkit-scrollbar-thumb:hover{ background:rgba(99,102,241,.38); }
 
 body{
-  font-family:'Vazirmatn',sans-serif;
+  font-family:var(--font-sans);
   background:var(--bg);
   color:var(--text);
-  min-height:100vh;
+  min-height:100dvh;
   display:flex;
   font-size:14px;
+  font-weight:500;
   line-height:1.65;
   overflow-x:hidden;
   position:relative;
 }
+button,input,textarea,select{ font-family:var(--font-sans) !important; }
+h1,h2,h3,h4,h5,h6,.page-title,.logo-name{ font-weight:900; letter-spacing:-.35px; }
+strong,b{ font-weight:800; }
+/* Keep page scrolling owned by the document. This avoids flex-container
+   height traps on long dashboards in Chromium and mobile browsers. */
+html, body{ height:auto; overflow-y:auto !important; }
+body{ display:block; }
 
 /* ═══════════════ AMBIENT ORBS ═══════════════ */
 .orb{
@@ -409,16 +458,31 @@ body{
 }
 .sb-btn:hover{ background:rgba(99,102,241,.09); color:var(--text); }
 .sb-btn-danger:hover{ background:rgba(244,63,94,.07); color:var(--danger); }
+.theme-control{ position:relative; z-index:2; }
+.theme-menu{
+  display:none; position:absolute; right:0; bottom:calc(100% + 8px); width:174px;
+  padding:6px; border:1px solid var(--border-strong); border-radius:12px;
+  background:var(--bg2); box-shadow:0 14px 35px rgba(0,0,0,.35);
+}
+.theme-control.open .theme-menu{ display:block; }
+.theme-option{
+  width:100%; display:flex; align-items:center; gap:8px; padding:8px 9px; border:0;
+  border-radius:8px; background:transparent; color:var(--text-soft); cursor:pointer;
+  font:600 11.5px 'Vazirmatn',sans-serif; text-align:right;
+}
+.theme-option:hover,.theme-option.active{ background:var(--primary-glow); color:var(--text); }
+.theme-dot{ width:14px; height:14px; border-radius:50%; border:1px solid rgba(255,255,255,.28); flex:none; }
 
 /* ═══════════════ MAIN WRAP ═══════════════ */
 .main-wrap{
   margin-right:var(--sidebar-w);
   flex:1;
-  min-height:100vh;
+  min-height:100dvh;
   display:flex;
   flex-direction:column;
   position:relative;
   z-index:1;
+  min-width:0;
 }
 
 /* ═══════════════ TOPBAR ═══════════════ */
@@ -457,6 +521,12 @@ body{
   align-items:center;
   gap:6px;
 }
+.tehran-clock{ display:flex; flex-direction:column; align-items:flex-end; min-width:118px; padding-left:10px; border-left:1px solid var(--border); line-height:1.35; }
+.tehran-clock-date{ color:var(--text-soft); font-size:10px; font-weight:600; white-space:nowrap; }
+.tehran-clock-time{ color:var(--primary-light); font-size:13px; font-weight:800; direction:ltr; letter-spacing:.4px; }
+.quick-nav{ display:flex; align-items:center; gap:6px; }
+.quick-nav a{ display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid var(--border); border-radius:9px; color:var(--text-soft); text-decoration:none; font-size:11px; font-weight:700; background:rgba(255,255,255,.025); }
+.quick-nav a:hover{ color:var(--primary-light); border-color:var(--primary-border); background:var(--primary-glow); }
 
 /* ═══════════════ CONTENT ═══════════════ */
 .content{
@@ -464,6 +534,15 @@ body{
   flex:1;
   animation:fadeUp .22s ease both;
 }
+.site-footer{
+  margin-top:auto; padding:18px 30px 22px; border-top:1px solid var(--border-soft);
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  color:var(--text-muted); font-size:11px; position:relative;
+}
+.site-footer::before{ content:''; position:absolute; top:-1px; right:30px; width:72px; height:1px; background:var(--grad-brand); }
+.footer-links{ display:flex; gap:12px; flex-wrap:wrap; }
+.footer-links a{ color:var(--text-soft); text-decoration:none; }
+.footer-links a:hover{ color:var(--primary-light); }
 @keyframes fadeUp{
   from{ opacity:0; transform:translateY(6px); }
   to{ opacity:1; transform:translateY(0); }
@@ -1034,6 +1113,52 @@ input:focus, textarea:focus, select:focus{
 .topbar{ backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
 .alert-card{ backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
 
+/* Mobile shell: the desktop navigation becomes an intentional slide-out menu
+   instead of squeezing the entire product into a narrow column. */
+.mobile-menu-btn{
+  display:none; width:38px; height:38px; border:1px solid var(--border);
+  border-radius:11px; background:var(--card); color:var(--text); cursor:pointer;
+  align-items:center; justify-content:center; font-size:18px; font-family:inherit;
+}
+.nav-scrim{ display:none; }
+.skip-link{
+  position:fixed; right:14px; top:-60px; z-index:1000; padding:9px 13px;
+  border-radius:10px; background:var(--primary); color:#fff; text-decoration:none;
+  font-size:12px; font-weight:700; transition:top .18s ease;
+}
+.skip-link:focus{ top:12px; }
+
+@media (max-width: 860px){
+  :root{ --topbar-h:58px; }
+  body{ display:block; }
+  .sidebar{
+    width:min(304px,86vw); transform:translateX(110%); transition:transform .26s ease;
+    box-shadow:-18px 0 50px rgba(0,0,0,.42);
+  }
+  body.menu-open{ overflow:hidden; }
+  body.menu-open .sidebar{ transform:translateX(0); }
+  .nav-scrim{ position:fixed; inset:0; z-index:90; background:rgba(3,3,14,.54); backdrop-filter:blur(2px); }
+  body.menu-open .nav-scrim{ display:block; }
+  .main-wrap{ margin-right:0; min-height:100dvh; }
+  .topbar{ padding:0 16px; gap:10px; }
+  .mobile-menu-btn{ display:inline-flex; flex-shrink:0; }
+  .page-title{ min-width:0; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .topbar-right{ margin-right:auto; }
+  .quick-nav{ display:none; }
+  .tehran-clock{ min-width:auto; padding-left:0; border-left:0; }
+  .tehran-clock-date{ display:none; }
+  .content{ padding:18px 14px calc(24px + env(safe-area-inset-bottom)); }
+  .site-footer{ padding:16px 14px calc(18px + env(safe-area-inset-bottom)); }
+  .notif-panel{ position:fixed; top:64px; left:12px; right:12px; width:auto; max-width:none; }
+  #gmic{ display:none !important; }
+}
+@media (max-width: 420px){
+  .content{ padding-right:11px; padding-left:11px; }
+  .topbar{ padding-right:11px; padding-left:11px; }
+  .page-title::before{ display:none; }
+  .topbar-actions .btn, .topbar-right > div:last-child .btn{ padding:7px 9px; font-size:11px; }
+}
+
 /* ── حرکت کمتر برای کسانی که ترجیح می‌دن ── */
 @media (prefers-reduced-motion: reduce){
   *, *::before, *::after{ animation-duration:.001s !important; transition-duration:.001s !important; }
@@ -1045,13 +1170,16 @@ input:focus, textarea:focus, select:focus{
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">پرش به محتوای اصلی</a>
+<div class="nav-scrim" id="navScrim" aria-hidden="true" onclick="toggleMobileMenu(false)"></div>
+
 <!-- Ambient orbs -->
 <div class="orb orb-1"></div>
 <div class="orb orb-2"></div>
 <div class="orb orb-3"></div>
 
 <!-- ══════════ SIDEBAR ══════════ -->
-<aside class="sidebar">
+<aside class="sidebar" id="site-navigation">
 
   <!-- Logo -->
   <div class="logo">
@@ -1168,10 +1296,17 @@ input:focus, textarea:focus, select:focus{
 
   <!-- Bottom actions -->
   <div class="sidebar-bottom">
-    <button class="sb-btn" onclick="toggleTheme()">
+    <div class="theme-control" id="themeControl">
+    <button class="sb-btn" type="button" aria-expanded="false" aria-controls="themeMenu" onclick="toggleThemeMenu(event)">
       <span id="themeIcon" style="font-size:14px;">☀</span>
-      <span id="themeLabel">تم روشن</span>
+      <span id="themeLabel">انتخاب تم</span>
     </button>
+    <div class="theme-menu" id="themeMenu" role="menu" aria-label="انتخاب تم">
+      <button class="theme-option" type="button" data-theme="dark" onclick="setTheme('dark')" role="menuitem"><span class="theme-dot" style="background:#090914"></span>دارک</button>
+      <button class="theme-option" type="button" data-theme="light" onclick="setTheme('light')" role="menuitem"><span class="theme-dot" style="background:#f4f4fc"></span>روشن</button>
+      <button class="theme-option" type="button" data-theme="dracula" onclick="setTheme('dracula')" role="menuitem"><span class="theme-dot" style="background:linear-gradient(135deg,#bd93f9,#ff79c6)"></span>Dracula</button>
+    </div>
+    </div>
     <form method="post" action="/logout/" style="margin:0;">
       {% csrf_token %}
       <button type="submit" class="sb-btn sb-btn-danger">
@@ -1188,8 +1323,20 @@ input:focus, textarea:focus, select:focus{
 
   <!-- Topbar -->
   <div class="topbar">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="باز کردن منو" aria-controls="site-navigation" aria-expanded="false" onclick="toggleMobileMenu()">☰</button>
     <span class="page-title">{% block page_title %}{% endblock %}</span>
     <div class="topbar-right">
+
+      <nav class="quick-nav" aria-label="دسترسی سریع">
+        <a href="/checkin/">✓ چک‌این</a>
+        <a href="/journal/">✎ یادداشت</a>
+        <a href="/nodes/create/">＋ شخص</a>
+      </nav>
+
+      <div class="tehran-clock" aria-label="زمان تهران">
+        <span class="tehran-clock-date" id="tehranDate"></span>
+        <time class="tehran-clock-time" id="tehranTime"></time>
+      </div>
 
       <!-- Notification Bell -->
       <div class="notif-wrap" id="notifWrap">
@@ -1215,7 +1362,17 @@ input:focus, textarea:focus, select:focus{
   </div>
 
   <!-- Content -->
-  <div class="content">{% block content %}{% endblock %}</div>
+  <div class="content" id="main-content">{% block content %}{% endblock %}</div>
+
+  <footer class="site-footer">
+    <span>FamilyGraph · برای رابطه‌هایی که ارزش مراقبت دارند</span>
+    <nav class="footer-links" aria-label="پیوندهای پایانی">
+      <a href="/">امروز</a>
+      <a href="/graph/">نقشهٔ رابطه‌ها</a>
+      <a href="/social/">اجتماع</a>
+      <a href="/u/{{ request.user.username }}/">پروفایل</a>
+    </nav>
+  </footer>
 
 </div>
 
@@ -1223,21 +1380,69 @@ input:focus, textarea:focus, select:focus{
 <script>
 
 // ── Theme ────────────────────────────────────────────
-function toggleTheme(){
-  const on = document.body.classList.toggle('light');
-  localStorage.setItem('theme', on ? 'light' : 'dark');
-  document.getElementById('themeIcon').textContent  = on ? '☾' : '☀';
-  document.getElementById('themeLabel').textContent = on ? 'تم تاریک' : 'تم روشن';
+const THEME_META = {
+  dark: { icon:'☾', label:'تم دارک' },
+  light: { icon:'☀', label:'تم روشن' },
+  dracula: { icon:'✦', label:'تم Dracula' }
+};
+function setTheme(theme){
+  if(!THEME_META[theme]) theme = 'dark';
+  document.body.classList.remove('light','dracula');
+  if(theme !== 'dark') document.body.classList.add(theme);
+  localStorage.setItem('theme', theme);
+  const meta = THEME_META[theme];
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if(icon) icon.textContent = meta.icon;
+  if(label) label.textContent = meta.label;
+  document.querySelectorAll('.theme-option').forEach(function(option){
+    option.classList.toggle('active', option.dataset.theme === theme);
+  });
+  toggleThemeMenu(false);
 }
-(function(){
-  if(localStorage.getItem('theme') === 'light'){
-    document.body.classList.add('light');
-    const ti = document.getElementById('themeIcon');
-    const tl = document.getElementById('themeLabel');
-    if(ti) ti.textContent = '☾';
-    if(tl) tl.textContent = 'تم تاریک';
-  }
-})();
+function toggleThemeMenu(eventOrForce){
+  if(eventOrForce && typeof eventOrForce.stopPropagation === 'function') eventOrForce.stopPropagation();
+  const control = document.getElementById('themeControl');
+  const button = control && control.querySelector('.sb-btn');
+  if(!control) return;
+  const open = typeof eventOrForce === 'boolean' ? eventOrForce : !control.classList.contains('open');
+  control.classList.toggle('open', open);
+  if(button) button.setAttribute('aria-expanded', String(open));
+}
+
+function toggleMobileMenu(force){
+  const open = typeof force === 'boolean' ? force : !document.body.classList.contains('menu-open');
+  document.body.classList.toggle('menu-open', open);
+  const btn = document.getElementById('mobileMenuBtn');
+  if(btn){ btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? '×' : '☰'; }
+}
+
+function updateTehranClock(){
+  const now = new Date();
+  const dateTarget = document.getElementById('tehranDate');
+  const timeTarget = document.getElementById('tehranTime');
+  if(!dateTarget || !timeTarget) return;
+  dateTarget.textContent = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+    timeZone:'Asia/Tehran', weekday:'long', day:'numeric', month:'long'
+  }).format(now);
+  timeTarget.textContent = new Intl.DateTimeFormat('fa-IR', {
+    timeZone:'Asia/Tehran', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+  }).format(now);
+  timeTarget.dateTime = now.toISOString();
+}
+updateTehranClock();
+setInterval(updateTehranClock, 1000);
+document.addEventListener('keydown', function(event){
+  if(event.key === 'Escape'){ toggleMobileMenu(false); toggleThemeMenu(false); }
+});
+document.querySelectorAll('.sidebar a').forEach(function(link){
+  link.addEventListener('click', function(){ toggleMobileMenu(false); });
+});
+(function(){ setTheme(localStorage.getItem('theme') || 'dark'); })();
+document.addEventListener('click', function(event){
+  const control = document.getElementById('themeControl');
+  if(control && !control.contains(event.target)) toggleThemeMenu(false);
+});
 
 // ── Collapsible nav groups ────────────────────────────
 function toggleNavGroup(id){

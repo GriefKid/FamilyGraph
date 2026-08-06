@@ -407,7 +407,7 @@
       <div class="nli-meta">
         <span>@{{ node.username }}</span>
         {% if node.career %}<span>{{ node.career }}</span>{% endif %}
-        {% if node.birth_day %}<span>🎂 {{ node.birth_day|date:"j F" }}</span>{% endif %}
+        {% if node.birth_day %}<span>🎂 {{ node.birth_day|jalali_date:"long" }}</span>{% endif %}
       </div>
     </div>
 
