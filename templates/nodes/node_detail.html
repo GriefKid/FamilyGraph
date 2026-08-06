@@ -541,6 +541,20 @@
   {% endif %}
 </div>
 
+{% if relationship_timeline %}
+<div class="section">
+  <div class="section-hd"><span class="section-hd-title">🧭 داستان مشترک شما</span><span class="chip chip-gray">{{ relationship_timeline|length }}</span></div>
+  <div class="timeline">{% for item in relationship_timeline %}<div class="ix-item"><span style="font-size:18px">{{ item.icon }}</span><div style="flex:1"><b>{{ item.title }}</b>{% if item.detail %}<div style="font-size:11px;color:var(--text-muted);margin-top:3px">{{ item.detail }}</div>{% endif %}</div><span style="font-size:10px;color:var(--text-muted)">{{ item.date|jalali_date:"long" }}</span></div>{% endfor %}</div>
+</div>
+{% endif %}
+
+{% if insight_sources %}
+<div class="section">
+  <div class="section-hd"><span class="section-hd-title">🔎 AI این شناخت را از کجا آورده؟</span></div>
+  <div style="padding:14px 18px;font-size:12px;line-height:1.9"><p style="color:var(--text-muted)">این موارد فقط پیشنهادهای تأییدشدهٔ خودت هستند. برای اصلاح یا بازگردانی وارد مرکز پیشنهادها شو.</p>{% for source in insight_sources %}<div class="ix-item"><span class="chip chip-indigo">{{ source.kind }}</span><span style="flex:1">{{ source.payload.explanation|default:source.payload.snippet }}</span><small>{{ source.source }} #{{ source.source_id }}</small></div>{% endfor %}<a class="btn btn-sm" href="{% url 'extraction_inbox' %}" style="margin-top:10px">مدیریت منابع و تاریخچه</a></div>
+</div>
+{% endif %}
+
 <!-- ══ INTERACTIONS (V4) ══ -->
 {% if not is_root_node %}
 <style>

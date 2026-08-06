@@ -75,6 +75,21 @@
     </div>
 
     <div class="panel" style="grid-column:1/-1">
+      <h3>🧠 حریم خصوصی و حافظهٔ AI</h3>
+      <div class="hint">AI فقط از منبع‌هایی که روشن می‌کنی پیشنهاد می‌سازد. هر نتیجه دلیل و منبع دارد و بدون تأیید تو وارد داده‌های اصلی نمی‌شود.</div>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="ai_privacy">
+        <div class="fields">
+          <label><input type="checkbox" name="ai_extraction_enabled" {% if profile_user.ai_extraction_enabled %}checked{% endif %}> استخراج هوشمند فعال باشد</label>
+          <label><input type="checkbox" name="ai_journal_enabled" {% if profile_user.ai_journal_enabled %}checked{% endif %}> استفاده از خاطره‌ها</label>
+          <label><input type="checkbox" name="ai_checkin_enabled" {% if profile_user.ai_checkin_enabled %}checked{% endif %}> استفاده از چک‌این‌ها</label>
+          <label><input type="checkbox" name="ai_chat_enabled" {% if profile_user.ai_chat_enabled %}checked{% endif %}> استفاده از چت‌های انتخاب‌شده</label>
+        </div><br>
+        <button class="btn">ذخیره کنترل‌های AI</button>
+        <a href="{% url 'extraction_inbox' %}" class="btn ghost" style="display:inline-flex;align-items:center;text-decoration:none">مدیریت پیشنهادها و تاریخچه</a>
+      </form>
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
       <h3>آثار هنری</h3>
       <div class="hint">هر کتاب، فیلم یا سریال یک اثر هنری مشترک در دیتابیس است. اگر قبلاً ثبت شده باشد از همان استفاده می‌شود؛ اگر نه، ساخته و تحلیل می‌شود.</div>
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="media">

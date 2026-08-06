@@ -150,6 +150,26 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
             .only('tags')
         )
 
+        from .models import Debt, ExtractionSuggestion
+        open_debts = list(
+            Debt.objects.filter(owner=user, settled=False)
+            .select_related('node').order_by('date')[:4]
+        )
+        pending_suggestions = ExtractionSuggestion.objects.filter(
+            owner=user, status='pending'
+        ).count()
+        today_actions = []
+        if not checkin_done:
+            today_actions.append({'icon': '⚡', 'title': 'چک‌این امروز',
+                                  'note': 'حال و انرژی امروزت را ثبت کن.', 'url': '/checkin/'})
+        for item in attention[:2]:
+            today_actions.append({'icon': '💬', 'title': f'یک قدم برای {item["node"].display_name()}',
+                                  'note': 'مدتی از آخرین تعامل گذشته است.',
+                                  'url': f'/nodes/{item["node"].id}/'})
+        if pending_suggestions:
+            today_actions.append({'icon': '✨', 'title': f'{pending_suggestions} پیشنهاد منتظر تصمیم',
+                                  'note': 'حافظهٔ AI را مرور و اصلاح کن.', 'url': '/extractions/'})
+
         context.update({
             'today': today,
             'attention': attention[:3],
@@ -157,6 +177,9 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
             'upcoming_events': upcoming_events,
             'recent_memories': recent_memories,
             'checkin_done': checkin_done,
+            'open_debts': open_debts,
+            'pending_suggestions': pending_suggestions,
+            'today_actions': today_actions[:5],
             'people_count': nodes.count(),
             'relationship_count': relationships.count(),
             'onboarding_ready': bool(
@@ -430,6 +453,32 @@ def node_detail(request, pk):
     except Exception:
         pass
 
+    relationship_timeline = []
+    for item in interactions:
+        relationship_timeline.append({'date': item.date, 'icon': '⚡',
+                                      'title': item.get_kind_display(), 'detail': item.note})
+    for item in journal_entries:
+        relationship_timeline.append({'date': item.entry_date or item.created_at.date(), 'icon': '📓',
+                                      'title': 'خاطرهٔ مرتبط', 'detail': item.text[:180]})
+    for item in events:
+        relationship_timeline.append({'date': item.date, 'icon': '📅',
+                                      'title': item.title, 'detail': item.description[:180]})
+    for item in node_debts:
+        relationship_timeline.append({'date': item.get('date'), 'icon': '💰',
+                                      'title': 'ثبت مالی', 'detail': item.get('note', '')})
+    relationship_timeline.sort(key=lambda row: str(row['date'] or ''), reverse=True)
+
+    insight_sources = []
+    try:
+        from .models import ExtractionSuggestion
+        node_names = {value for value in (node.username, node.name, node.first_name, node.nickname) if value}
+        for suggestion in ExtractionSuggestion.objects.filter(owner=request.user, status='approved')[:100]:
+            if (str(suggestion.payload.get('node_id') or '') == str(node.id)
+                    or suggestion.payload.get('person_raw') in node_names):
+                insight_sources.append(suggestion)
+    except Exception:
+        pass
+
     from .models import CLOSENESS_CHOICES, LifeEvent as _LE
     life_event_kinds = _LE.KIND_CHOICES
     is_root_node = bool(request.user.root_node_id and node.id == request.user.root_node_id)
@@ -464,6 +513,8 @@ def node_detail(request, pk):
         'active_goal':       active_goal,
         'goal_progress':     goal_progress,
         'social_username':   social_username,
+        'relationship_timeline': relationship_timeline[:30],
+        'insight_sources': insight_sources[:10],
     }
     return render(request, 'nodes/node_detail.html', context)
 

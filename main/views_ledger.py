@@ -62,6 +62,7 @@ def serialize_debt(d, today=None):
         'paid_fmt':      f'{d.paid or 0:,}',
         'remaining_fmt': f'{d.remaining:,}',
         'currency':  d.currency,
+        'date':      str(d.date),
         'date_fa':   jalali_str(d.date),
         'due_date':  str(d.due_date) if d.due_date else None,
         'due_fa':    jalali_str(d.due_date) if d.due_date else None,

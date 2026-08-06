@@ -55,6 +55,10 @@ class User(AbstractUser):
     chat_policy            = models.CharField(
         max_length=12, choices=CHAT_POLICY_CHOICES, default='connections',
         verbose_name='کی می‌تونه بهم پیام بده')
+    ai_extraction_enabled = models.BooleanField(default=True)
+    ai_journal_enabled = models.BooleanField(default=True)
+    ai_checkin_enabled = models.BooleanField(default=True)
+    ai_chat_enabled = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = 'کاربر'
@@ -665,10 +669,21 @@ class ExtractionSuggestion(models.Model):
     kind = models.CharField(max_length=20)    # event, debt, person, relationship, signal
     payload = models.JSONField(default=dict)
     status = models.CharField(max_length=12, default='pending')
+    fingerprint = models.CharField(max_length=64, blank=True, db_index=True)
+    applied_model = models.CharField(max_length=30, blank=True)
+    applied_object_id = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['owner', 'source', 'source_id', 'fingerprint'],
+                condition=~models.Q(fingerprint=''),
+                name='unique_extraction_per_source',
+            ),
+        ]
 
 
 # ─────────────────────────────────────────────────────────────────

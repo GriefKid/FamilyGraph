@@ -1092,6 +1092,14 @@ def profile_edit_view(request):
             user.save(update_fields=['discoverable', 'auto_accept_follow',
                                      'auto_accept_connection', 'chat_policy'])
             messages.success(request, 'تنظیمات شبکه ذخیره شد.')
+        elif action == 'ai_privacy':
+            user.ai_extraction_enabled = request.POST.get('ai_extraction_enabled') == 'on'
+            user.ai_journal_enabled = request.POST.get('ai_journal_enabled') == 'on'
+            user.ai_checkin_enabled = request.POST.get('ai_checkin_enabled') == 'on'
+            user.ai_chat_enabled = request.POST.get('ai_chat_enabled') == 'on'
+            user.save(update_fields=['ai_extraction_enabled', 'ai_journal_enabled',
+                                     'ai_checkin_enabled', 'ai_chat_enabled'])
+            messages.success(request, 'کنترل‌های حافظه و استخراج AI ذخیره شد.')
         elif action == 'media':
             title = request.POST.get('title', '').strip()
             kind = request.POST.get('kind', 'book')

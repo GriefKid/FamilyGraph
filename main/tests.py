@@ -4,7 +4,7 @@ from django.utils import timezone
 import json
 from datetime import date
 
-from .models import Follow, Friendship, Information, JournalEntry, ProfileMediaItem, SocialCircle, SocialPost
+from .models import Debt, ExtractionSuggestion, Follow, Friendship, Information, JournalEntry, Node, ProfileMediaItem, SocialCircle, SocialPost
 from .templatetags.jalali_tags import jalali_date
 
 
@@ -158,3 +158,53 @@ class JalaliPresentationTests(TestCase):
     def test_jalali_filter_uses_persian_calendar_and_digits(self):
         rendered = jalali_date(date(2026, 8, 6), 'compact')
         self.assertEqual(rendered, '۱۴۰۵/۰۵/۱۵')
+
+
+class ExtractionWorkflowTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='extract-owner', password='SecurePass1')
+        self.other = get_user_model().objects.create_user(username='extract-other', password='SecurePass1')
+
+    def test_persian_word_debt_is_explainable_and_not_duplicated(self):
+        from .extraction import extract_text
+        first = extract_text(self.user, 'کامی ازم سیصد هزار تومن قرض گرفت', 'journal', 11)
+        second = extract_text(self.user, 'کامی ازم سیصد هزار تومن قرض گرفت', 'journal', 11)
+        debt = next(item for item in first if item.kind == 'debt')
+        self.assertEqual(debt.payload['amount_value'], 300000)
+        self.assertEqual(debt.payload['direction'], 'they_owe')
+        self.assertIn('explanation', debt.payload)
+        self.assertEqual(second, [])
+
+    def test_source_privacy_switch_prevents_extraction(self):
+        from .extraction import extract_text
+        self.user.ai_journal_enabled = False
+        self.user.save(update_fields=['ai_journal_enabled'])
+        self.assertEqual(extract_text(self.user, 'الی ازم سیصد هزار تومن قرض گرفت', 'journal', 12), [])
+
+    def test_numeric_thousand_amount_is_understood(self):
+        from .extraction import extract_text
+        rows = extract_text(self.user, 'الی ازم 300 هزار تومان قرض گرفت', 'journal', 13)
+        debt = next(item for item in rows if item.kind == 'debt')
+        self.assertEqual(debt.payload['amount_value'], 300000)
+
+    def test_approval_and_undo_respect_owner(self):
+        node = Node.objects.create(owner=self.user, username='کامی', name='کامی')
+        suggestion = ExtractionSuggestion.objects.create(
+            owner=self.user, source='journal', source_id=1, kind='debt',
+            payload={'amount_value': 300000, 'direction': 'they_owe', 'snippet': 'قرض'},
+        )
+        self.client.force_login(self.other)
+        denied = self.client.post(f'/api/extractions/{suggestion.id}/',
+                                  data=json.dumps({'action': 'approve', 'node_id': node.id}),
+                                  content_type='application/json')
+        self.assertEqual(denied.status_code, 404)
+        self.client.force_login(self.user)
+        approved = self.client.post(f'/api/extractions/{suggestion.id}/',
+                                    data=json.dumps({'action': 'approve', 'node_id': node.id}),
+                                    content_type='application/json')
+        self.assertEqual(approved.status_code, 200)
+        self.assertTrue(Debt.objects.filter(owner=self.user, amount=300000).exists())
+        undone = self.client.post(f'/api/extractions/{suggestion.id}/',
+                                  data=json.dumps({'action': 'undo'}), content_type='application/json')
+        self.assertEqual(undone.status_code, 200)
+        self.assertFalse(Debt.objects.filter(owner=self.user, amount=300000).exists())

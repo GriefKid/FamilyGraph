@@ -38,6 +38,14 @@
     </div>
   </section>
 
+  <section class="briefing-card" style="margin-bottom:18px">
+    <h2>🎯 برنامهٔ امروز</h2>
+    <div class="briefing-card-sub">چند اقدام کوچک و قابل انجام، بر اساس داده‌هایی که خودت ثبت کرده‌ای</div>
+    {% if today_actions %}<div class="attention-list">{% for action in today_actions %}
+      <a class="attention-item" href="{{ action.url }}"><span style="font-size:19px">{{ action.icon }}</span><span class="attention-main"><span class="attention-name">{{ action.title }}</span><span class="attention-note">{{ action.note }}</span></span><span class="attention-arrow">←</span></a>
+    {% endfor %}</div>{% else %}<div class="empty-briefing">کار فوری نداری؛ می‌توانی یک لحظه از امروزت را ثبت کنی.</div>{% endif %}
+  </section>
+
   <section class="briefing-grid">
     <div class="stack">
       <div class="briefing-card" id="attention">
@@ -111,6 +119,10 @@
           {% endfor %}
         </div>
         {% else %}<div class="empty-briefing">رویداد نزدیک نداری. اگر قراری داری، همین حالا ثبتش کن.</div>{% endif %}
+      </div>
+      <div class="briefing-card">
+        <h2>💰 حساب‌های باز</h2>
+        {% for debt in open_debts %}<a class="stack-item" href="/nodes/{{ debt.node_id }}/"><div class="stack-title">{{ debt.node.display_name }} · {{ debt.amount|floatformat:"0" }} {{ debt.currency }}</div><div class="stack-meta">{% if debt.direction == 'they_owe' %}طلب تو{% else %}بدهی تو{% endif %} · {{ debt.date|jalali_date:"long" }}</div></a>{% empty %}<div class="empty-briefing">حساب مالی بازی ثبت نشده است.</div>{% endfor %}
       </div>
     </aside>
   </section>
