@@ -93,14 +93,15 @@ html,body{ min-height:100vh; font-family:'Vazirmatn',sans-serif; background:var(
 .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .field-inner{ position:relative; display:flex; align-items:center; }
 .field-icon{ position:absolute; right:13px; font-size:14px; opacity:.4; pointer-events:none; }
-.field input,.field select{
+.field input,.field select,.field textarea{
   width:100%; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.09); border-radius:12px;
   padding:11px 40px 11px 14px; color:var(--text); font-family:'Vazirmatn',sans-serif; font-size:14px; transition:all .2s;
   -webkit-appearance:none; appearance:none;
 }
+.field textarea{ min-height:82px; resize:vertical; line-height:1.7; padding:11px 14px; }
 .field input[dir=ltr]{ direction:ltr; }
-.field input:focus,.field select:focus{ outline:none; border-color:rgba(99,102,241,.55); background:rgba(99,102,241,.06); box-shadow:0 0 0 3px rgba(99,102,241,.12); }
-.field input::placeholder{ color:var(--text-muted); }
+.field input:focus,.field select:focus,.field textarea:focus{ outline:none; border-color:rgba(99,102,241,.55); background:rgba(99,102,241,.06); box-shadow:0 0 0 3px rgba(99,102,241,.12); }
+.field input::placeholder,.field textarea::placeholder{ color:var(--text-muted); }
 
 /* Password strength */
 .pw-strength{ margin-top:7px; }
@@ -253,8 +254,8 @@ html,body{ min-height:100vh; font-family:'Vazirmatn',sans-serif; background:var(
 
     <!-- ═══════════════════════════════════════ STEP 2 ═══ -->
     {% elif step == 2 %}
-    <div class="step-title">اطلاعات پروفایل</div>
-    <div class="step-sub">این مرحله کاملاً اختیاری‌ست — می‌تونی بعداً پر کنی</div>
+    <div class="step-title">شروع شخصی‌تر</div>
+    <div class="step-sub">اختیاری است؛ فقط برای اینکه پیشنهادهای AI از همان ابتدا به تو نزدیک‌تر باشند. این اطلاعات پیش‌فرض خصوصی‌اند.</div>
 
     <form method="post" id="regForm" novalidate>
       {% csrf_token %}
@@ -298,6 +299,57 @@ html,body{ min-height:100vh; font-family:'Vazirmatn',sans-serif; background:var(
         <div class="field-inner">
           <input type="text" name="city" placeholder="تهران" value="{{ reg.city|default:'' }}">
           <span class="field-icon">📍</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>کشور <span class="opt-badge">اختیاری</span></label>
+        <div class="field-inner">
+          <input type="text" name="country" placeholder="ایران" value="{{ reg.country|default:'' }}">
+          <span class="field-icon">🌍</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>چند خط دربارهٔ خودت <span class="opt-badge">اختیاری</span></label>
+        <textarea name="bio" maxlength="1200" placeholder="مثلاً الان چه چیزهایی در زندگی و روابطت برایت مهم‌اند؟">{{ reg.bio|default:'' }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>علایق و چیزهایی که دوست داری <span class="opt-badge">اختیاری</span></label>
+        <textarea name="interests" maxlength="600" placeholder="مثلاً: کتاب، فوتبال، موسیقی، برنامه‌نویسی — با ویرگول جدا کن">{{ reg.interests|default:'' }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>ارزش‌های مهم برای تو <span class="opt-badge">اختیاری</span></label>
+        <textarea name="values" maxlength="600" placeholder="مثلاً: صداقت، احترام، خانواده، رشد — با ویرگول جدا کن">{{ reg.values|default:'' }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>سبک ارتباطی‌ات <span class="opt-badge">اختیاری</span></label>
+        <textarea name="communication_style" maxlength="500" placeholder="مثلاً: پیام کوتاه را ترجیح می‌دهم، برای حرف مهم تماس بهتر است">{{ reg.communication_style|default:'' }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>می‌خواهی در روابطت روی چه چیزی بهتر شوی؟ <span class="opt-badge">اختیاری</span></label>
+        <textarea name="relationship_goal" maxlength="600" placeholder="مثلاً: ارتباط منظم‌تر با خانواده، دوست‌های عمیق‌تر، نه گفتن بهتر">{{ reg.relationship_goal|default:'' }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>مرزها یا حساسیت‌هایی که AI باید بداند <span class="opt-badge">اختیاری</span></label>
+        <textarea name="boundaries" maxlength="600" placeholder="مثلاً: دربارهٔ فلان موضوع پیشنهاد نده، یا قبل از یادآوری‌های زیاد از من بپرس">{{ reg.boundaries|default:'' }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>انرژی اجتماعی‌ات معمولاً چطور است؟ <span class="opt-badge">اختیاری</span></label>
+        <div class="field-inner">
+          <select name="social_energy">
+            <option value="">ترجیح می‌دهم نگویم</option>
+            <option value="low" {% if reg.social_energy == 'low' %}selected{% endif %}>کم — خلوت را بیشتر دوست دارم</option>
+            <option value="balanced" {% if reg.social_energy == 'balanced' %}selected{% endif %}>متعادل</option>
+            <option value="high" {% if reg.social_energy == 'high' %}selected{% endif %}>زیاد — از معاشرت انرژی می‌گیرم</option>
+          </select>
+          <span class="field-icon">⚡</span>
         </div>
       </div>
 

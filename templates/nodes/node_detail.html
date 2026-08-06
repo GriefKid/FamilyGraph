@@ -442,6 +442,9 @@
 }
 .btn-ai:hover{ opacity:.88; transform:translateY(-1px); box-shadow:0 0 28px rgba(99,102,241,.5); }
 .btn-ai:disabled{ opacity:.35; cursor:not-allowed; transform:none; }
+.hero-quick-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.hero-quick-actions a,.hero-quick-actions button{border:1px solid rgba(165,180,252,.25);background:rgba(99,102,241,.1);color:var(--primary-light);border-radius:9px;padding:6px 10px;font:600 11px 'Vazirmatn',sans-serif;text-decoration:none;cursor:pointer}
+.hero-quick-actions a:hover,.hero-quick-actions button:hover{background:rgba(99,102,241,.2);color:#fff}
 
 .empty-sec{ padding:28px 20px; text-align:center; color:var(--text-muted); font-size:13px; }
 
@@ -481,6 +484,13 @@
         {% if node.phone_number %}<span class="hero-tag" dir="ltr">📞 <strong>{{ node.phone_number }}</strong></span>{% endif %}
         {% if node.nickname and node.nickname != node.display_name %}<span class="hero-tag">✦ <strong>{{ node.nickname }}</strong></span>{% endif %}
       </div>
+      {% if not is_root_node %}
+      <div class="hero-quick-actions">
+        <button type="button" onclick="document.getElementById('interaction-section').scrollIntoView({behavior:'smooth',block:'start'})">⚡ ثبت تعامل</button>
+        <button type="button" onclick="document.getElementById('followup-section').scrollIntoView({behavior:'smooth',block:'start'})">📌 ثبت پیگیری</button>
+        <a href="/journal/?person={{ node.username|urlencode }}">✍ خاطره دربارهٔ این شخص</a>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -552,7 +562,7 @@
 .ix-item-note{ color:var(--text-muted); flex:1; }
 .ix-empty{ color:var(--text-muted); font-size:12.5px; text-align:center; padding:14px 0; }
 </style>
-<div class="section">
+<div class="section" id="interaction-section">
   <div class="section-hd">
     <span class="section-hd-title">⚡ تعامل‌ها</span>
     <span class="chip chip-gray" id="ixCount">{{ interactions|length }}</span>
@@ -643,7 +653,7 @@
 .fu-done-hd{ font-size:11px; color:var(--text-muted); margin:12px 0 4px; }
 .fu-empty{ color:var(--text-muted); font-size:12.5px; text-align:center; padding:12px 0; }
 </style>
-<div class="section">
+<div class="section" id="followup-section">
   <div class="section-hd">
     <span class="section-hd-title">📌 موضوعات باز</span>
     <span class="chip chip-gray" id="fuCount">{{ followups_open|length }}</span>

@@ -72,6 +72,14 @@
       <div class="kv"><div class="key">وضعیت</div><div class="value">{% if card.is_connection %}کانکشن دوطرفه{% elif card.is_following %}فالو شده{% else %}بدون ارتباط{% endif %}</div></div>
       <div class="kv"><div class="key">چت</div><div class="value">{% if card.is_connection %}<a href="/social/chat/?u={{ profile_user.id }}">باز کردن چت</a>{% else %}بعد از کانکشن فعال می‌شود{% endif %}</div></div>
     </div>
+    {% if profile_user.public_interests or profile_user.public_values or profile_user.public_communication_style %}
+    <div class="panel wide">
+      <h3>🪞 چیزهایی که عمومی انتخاب کرده</h3>
+      {% if profile_user.public_interests %}<div class="kv"><div class="key">علایق</div><div class="value">{{ profile_user.public_interests|join:" · " }}</div></div>{% endif %}
+      {% if profile_user.public_values %}<div class="kv"><div class="key">ارزش‌ها</div><div class="value">{{ profile_user.public_values|join:" · " }}</div></div>{% endif %}
+      {% if profile_user.public_communication_style %}<div class="kv"><div class="key">سبک ارتباط</div><div class="value">{{ profile_user.public_communication_style }}</div></div>{% endif %}
+    </div>
+    {% endif %}
 
     {# ── V11: آثار فرهنگی — ۳ بهترین + ۳ آخرین برای هر نوع ── #}
     {% for sec in media_sections %}
@@ -87,7 +95,7 @@
             </div>
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
               <div class="media-title">{{ m.title }}</div>
-              <div class="media-meta">{% if m.creator %}{{ m.creator }} · {% endif %}{% if m.completed_on %}{{ m.completed_on|date:"Y/m/d" }}{% endif %}</div>
+              <div class="media-meta">{{ m.get_status_display }}{% if m.creator %} · {{ m.creator }}{% endif %}{% if m.completed_on %} · {{ m.completed_on|date:"Y/m/d" }}{% endif %}</div>
               {% if m.rating %}<div class="score">{% for i in "12345" %}{% if forloop.counter <= m.rating %}★{% else %}☆{% endif %}{% endfor %} {{ m.rating|floatformat:"-1" }}/5</div>{% endif %}
               {% if m.notes %}<div class="signal">💬 {{ m.notes|truncatechars:140 }}</div>{% endif %}
             </div>
@@ -103,7 +111,7 @@
             </div>
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
               <div class="media-title">{{ m.title }}</div>
-              <div class="media-meta">{% if m.creator %}{{ m.creator }} · {% endif %}{% if m.completed_on %}{{ m.completed_on|date:"Y/m/d" }}{% endif %}</div>
+              <div class="media-meta">{{ m.get_status_display }}{% if m.creator %} · {{ m.creator }}{% endif %}{% if m.completed_on %} · {{ m.completed_on|date:"Y/m/d" }}{% endif %}</div>
               {% if m.rating %}<div class="score">{% for i in "12345" %}{% if forloop.counter <= m.rating %}★{% else %}☆{% endif %}{% endfor %} {{ m.rating|floatformat:"-1" }}/5</div>{% endif %}
               {% if m.notes %}<div class="signal">💬 {{ m.notes|truncatechars:140 }}</div>{% endif %}
             </div>
@@ -121,6 +129,17 @@
               onclick="fetchCovers(true)">🔄 پیدا کردن جلدها</button>
     </div>
     {% endif %}
+
+    <div class="panel wide">
+      <h3>✦ پست‌های عمومی</h3>
+      {% for post in posts %}
+      <article style="padding:12px 0;border-bottom:1px solid var(--border);">
+        <div style="font-size:13px;line-height:2;white-space:pre-wrap;">{{ post.body }}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">{{ post.created_at|date:"j F، H:i" }}</div>
+        {% if post.image %}<img src="{{ post.image.url }}" alt="" style="max-width:100%;border-radius:12px;margin-top:9px">{% endif %}
+      </article>
+      {% empty %}<div class="empty">هنوز پست عمومی‌ای منتشر نشده.</div>{% endfor %}
+    </div>
 
     {# ── V11: شناخت — هر چی اپ تا حالا فهمیده ── #}
     {% if persona_node_id %}

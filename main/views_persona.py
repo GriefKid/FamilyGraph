@@ -77,7 +77,9 @@ def gather_person_signals(user, node):
         d = info.data if (info and isinstance(info.data, dict)) else {}
         out = []
         for k, label in (('personality', 'شخصیت'), ('communication_style', 'سبک ارتباط'),
-                         ('relationship_quality', 'کیفیت رابطه'), ('tip', 'توصیه قبلی')):
+                         ('relationship_quality', 'کیفیت رابطه'), ('tip', 'توصیه قبلی'),
+                         ('about_me', 'درباره من'), ('relationship_goals', 'هدف‌های رابطه‌ای'),
+                         ('boundaries', 'مرزها و حساسیت‌ها'), ('social_energy', 'انرژی اجتماعی')):
             if d.get(k):
                 out.append(f'{label}: {str(d[k])[:200]}')
         for k, label in (('values', 'ارزش‌ها'), ('interests', 'علایق'),
@@ -285,7 +287,7 @@ def gather_person_signals(user, node):
         u = User.objects.filter(username=node.username).first()
         if not u:
             return out
-        from .models import ProfileMediaItem, ChatAnalysis
+        from .models import ProfileMediaItem, ChatAnalysis, SocialCircleMessage, SocialPost
         items = list(ProfileMediaItem.objects.filter(user=u)[:40])
         if items:
             kind_fa = {'book': 'کتاب', 'movie': 'فیلم', 'series': 'سریال', 'music': 'موسیقی'}
@@ -325,6 +327,22 @@ def gather_person_signals(user, node):
             out.append(f'بیوی خودش: {u.bio[:200]}')
         if u.city:
             out.append(f'شهر: {u.city}')
+        posts = list(SocialPost.objects.filter(author=u, is_public=True)
+                     .order_by('-created_at')[:4])
+        for post in posts:
+            out.append(f'پست عمومی: {post.body[:180]}')
+        shared_circles = user.social_circles.filter(members=u)[:3]
+        for circle in shared_circles:
+            messages = list(
+                SocialCircleMessage.objects.filter(circle=circle)
+                .select_related('author').order_by('-created_at')[:4]
+            )[::-1]
+            if messages:
+                sample = ' / '.join(
+                    f'{message.author.username}: {message.body[:80]}'
+                    for message in messages
+                )
+                out.append(f'از حلقه مشترک «{circle.name}»: {sample[:400]}')
         return out
     S += _safe(_as_user, [])
 

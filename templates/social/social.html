@@ -54,6 +54,9 @@
   justify-content:center; font-size:10px; font-weight:800; color:#fff;
   background:linear-gradient(135deg,#6366f1,#ec4899);
 }
+  
+.feed{margin-top:18px;display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:14px}.composer,.post-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:16px}.composer textarea{width:100%;min-height:84px;border:1px solid var(--border);background:var(--surface);border-radius:12px;color:var(--text);padding:10px;font-family:'Vazirmatn',sans-serif;resize:vertical}.composer-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;font-size:11px;color:var(--text-muted)}.post-publish{border:0;border-radius:10px;background:var(--grad-brand);color:#fff;padding:8px 14px;font:800 11px 'Vazirmatn',sans-serif;cursor:pointer}.post-card{margin-top:10px}.post-author{display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--text);font-size:12px;font-weight:800}.post-av{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,#6366f1,#06b6d4)}.post-time{font-size:10px;color:var(--text-muted);font-weight:400}.post-body{font-size:13px;line-height:2;margin-top:11px;white-space:pre-wrap}.feed-side{background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.15);border-radius:18px;padding:15px;font-size:11px;color:var(--text-soft);line-height:1.9;height:max-content}.feed-side b{display:block;color:var(--primary-light);font-size:12px;margin-bottom:5px}@media(max-width:760px){.feed{grid-template-columns:1fr}.feed-side{display:none}}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -95,7 +98,11 @@
       <div class="hub-name">چت</div>
       <div class="hub-desc">با کانکشن‌هات گفتگو کن — AI همزمان هر دو طرف و رابطه رو می‌شناسه</div>
     </a>
-
+    <a class="hub-card" href="/social/circles/">
+      <div class="hub-icon">👥</div>
+      <div class="hub-name">حلقه‌های کانکشن</div>
+      <div class="hub-desc">فقط با کانکشن‌های دوطرفه یک گروه کوچک بساز و گفتگو کن</div>
+    </a>
     <a class="hub-card" href="/profile/edit/">
       <div class="hub-icon">⚙️</div>
       <div class="hub-name">تنظیمات شبکه</div>
@@ -118,5 +125,40 @@
   </div>
   {% endif %}
 
+  <section class="feed">
+    <div>
+      <div class="composer">
+        <div style="font-size:13px;font-weight:800;margin-bottom:9px;">✦ یک چیز عمومی به اشتراک بگذار</div>
+        <textarea id="postBody" maxlength="1200" placeholder="مثلاً کتابی که شروع کردی، فکری که این هفته با تو مانده، یا چیزی که دوست داری آدم‌های نزدیکت بدانند…"></textarea>
+        <div class="composer-row"><span>فقط برای کسانی که پروفایل عمومی تو را می‌بینند</span><button class="post-publish" onclick="publishPost()">انتشار</button></div>
+      </div>
+      <div style="font-size:14px;font-weight:800;margin:17px 2px 8px;">پست‌های جدید</div>
+      <div id="postFeed">
+        {% for post in posts %}
+        <article class="post-card">
+          <a class="post-author" href="/u/{{ post.author.username }}/"><span class="post-av">{{ post.author.username|first|upper }}</span><span>{{ post.author.get_full_name|default:post.author.username }}<span class="post-time"> · {{ post.created_at|date:"j F، H:i" }}</span></span></a>
+          <div class="post-body">{{ post.body }}</div>
+          {% if post.image %}<img src="{{ post.image.url }}" alt="" style="max-width:100%;border-radius:12px;margin-top:10px">{% endif %}
+        </article>
+        {% empty %}<div class="hub-friends" style="color:var(--text-muted);font-size:12px;">هنوز پستی در حلقهٔ اجتماعی تو نیست. اولین پست را خودت منتشر کن.</div>{% endfor %}
+      </div>
+    </div>
+    <aside class="feed-side"><b>🔒 مرز اجتماعی</b>فقط پست‌ها و آثار عمومی در feed و پیشنهادها دیده می‌شوند. ژورنال، چت AI و اطلاعات خصوصی هرگز وارد این بخش نمی‌شوند.</aside>
+  </section>
+
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function socialCookie(name){const found=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return found?found.pop():''}
+async function publishPost(){
+  const input=document.getElementById('postBody'), body=input.value.trim();
+  if(!body)return;
+  const response=await fetch('/api/social/posts/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':socialCookie('csrftoken')},body:JSON.stringify({body})});
+  const data=await response.json();
+  if(!response.ok){alert(data.error||'خطا');return}
+  location.reload();
+}
+</script>
 {% endblock %}

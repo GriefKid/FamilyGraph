@@ -4,7 +4,9 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env file if it exists
+# Load a project-local .env first, while retaining the former parent-directory
+# location for existing deployments. Existing environment variables always win.
+load_dotenv(BASE_DIR / '.env')
 load_dotenv(BASE_DIR.parent / '.env')
 
 SECRET_KEY = os.environ.get(
@@ -13,6 +15,10 @@ SECRET_KEY = os.environ.get(
 )
 
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+if not DEBUG and SECRET_KEY.startswith('django-insecure-'):
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured('Set DJANGO_SECRET_KEY when DEBUG=False.')
 
 _allowed_raw = os.environ.get('ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = (
@@ -80,10 +86,11 @@ WSGI_APPLICATION = 'FamilyGraph.wsgi.application'
 
 if os.environ.get('USE_SQLITE') == '1':
     # موقت — فقط برای backup گرفتن از SQLite
+    _sqlite_path = os.environ.get('SQLITE_DB_PATH', '')
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': (BASE_DIR / _sqlite_path) if _sqlite_path else (BASE_DIR / 'db.sqlite3'),
         }
     }
 else:
@@ -133,6 +140,30 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Production deployment controls. They are intentionally inactive during local
+# development and are configured through environment variables in hosting.
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', '1') == '1'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    if os.environ.get('BEHIND_HTTPS_PROXY', '1') == '1':
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    _trusted_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+    if _trusted_origins:
+        CSRF_TRUSTED_ORIGINS = [
+            origin.strip() for origin in _trusted_origins.split(',') if origin.strip()
+        ]
+    if os.environ.get('ENABLE_HSTS', '0') == '1':
+        SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = True
 
 # ── Cache (برای کش کردن جواب‌های AI) ──────────────────────────────────────
 CACHES = {

@@ -232,6 +232,21 @@ def _validate_password(pw: str) -> str | None:
     return None
 
 
+def _clean_registration_text(request, field: str, limit: int) -> str:
+    """Keep onboarding answers bounded before storing them in the session."""
+    return request.POST.get(field, '').strip()[:limit]
+
+
+def _split_profile_items(raw: str) -> list[str]:
+    """Turn a comma/newline-separated onboarding answer into clean AI signals."""
+    items = []
+    for item in re.split(r'[,،\n]+', raw):
+        item = item.strip()
+        if item and item not in items:
+            items.append(item[:80])
+    return items[:12]
+
+
 def register_view(request):
     if request.user.is_authenticated:
         return redirect('/')
@@ -269,14 +284,22 @@ def register_view(request):
                 request.session['reg_data'] = reg
                 return redirect('/register/?step=2')
 
-    # ── Step 2: اطلاعات پروفایل (اختیاری) ──────────────────────
+    # ── Step 2: پروفایل و سیگنال‌های اولیه برای AI (اختیاری) ──
     elif request.method == 'POST' and step == 2:
         reg.update({
-            'first_name': request.POST.get('first_name', '').strip(),
-            'last_name':  request.POST.get('last_name', '').strip(),
-            'birth_date': request.POST.get('birth_date', '').strip(),
-            'career':     request.POST.get('career', '').strip(),
-            'city':       request.POST.get('city', '').strip(),
+            'first_name':          _clean_registration_text(request, 'first_name', 150),
+            'last_name':           _clean_registration_text(request, 'last_name', 150),
+            'birth_date':          _clean_registration_text(request, 'birth_date', 10),
+            'career':              _clean_registration_text(request, 'career', 200),
+            'city':                _clean_registration_text(request, 'city', 100),
+            'country':             _clean_registration_text(request, 'country', 100),
+            'bio':                 _clean_registration_text(request, 'bio', 1200),
+            'interests':           _clean_registration_text(request, 'interests', 600),
+            'values':              _clean_registration_text(request, 'values', 600),
+            'communication_style': _clean_registration_text(request, 'communication_style', 500),
+            'relationship_goal':   _clean_registration_text(request, 'relationship_goal', 600),
+            'boundaries':          _clean_registration_text(request, 'boundaries', 600),
+            'social_energy':       _clean_registration_text(request, 'social_energy', 30),
         })
         request.session['reg_data'] = reg
         return redirect('/register/?step=3')
@@ -321,6 +344,8 @@ def register_view(request):
                     is_public  = reg.get('is_public', False),
                     career     = reg.get('career', ''),
                     city       = reg.get('city', ''),
+                    country    = reg.get('country', ''),
+                    bio        = reg.get('bio', ''),
                     birth_date = bd,
                 )
 
@@ -331,12 +356,33 @@ def register_view(request):
                     first_name = user.first_name,
                     last_name  = user.last_name,
                     career     = user.career or '',
+                    birth_day  = bd,
+                    name       = f'{user.first_name} {user.last_name}'.strip(),
                     owner      = user,
                     username_locked = True,   # نود خودش قفله
                 )
                 # ── root_node: گراف از همون اول مرکز داره ──
                 user.root_node = self_node
                 user.save(update_fields=['root_node'])
+
+                # ── AI onboarding profile: private signals on the self-node ──
+                profile_data = {
+                    'profile_type':          'self_onboarding',
+                    'about_me':              user.bio,
+                    'interests':             _split_profile_items(reg.get('interests', '')),
+                    'values':                _split_profile_items(reg.get('values', '')),
+                    'communication_style':   reg.get('communication_style', ''),
+                    'relationship_goals':    reg.get('relationship_goal', ''),
+                    'boundaries':            reg.get('boundaries', ''),
+                    'social_energy':         reg.get('social_energy', ''),
+                }
+                if any(value for key, value in profile_data.items() if key != 'profile_type'):
+                    from main.models import Information
+                    Information.objects.create(
+                        node=self_node,
+                        visibility='private',
+                        data=profile_data,
+                    )
 
                 # اگه public بود، دنبال نودهای مشابه بگرد
                 _trigger_new_user_sync(user)

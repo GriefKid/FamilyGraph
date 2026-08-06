@@ -18,19 +18,82 @@ from .utils_jalali import (
     is_holiday, upcoming_holidays, season_fa,
 )
 
+
+class _ChatCompletionFailover:
+    """Retry retryable cloud chat failures against a local Ollama model."""
+
+    def __init__(self, primary, fallback, fallback_model):
+        self.primary = primary
+        self.fallback = fallback
+        self.fallback_model = fallback_model
+
+    def create(self, *args, **kwargs):
+        try:
+            return self.primary.chat.completions.create(*args, **kwargs)
+        except Exception as primary_error:
+            message = str(primary_error).lower()
+            retryable = (
+                '429', 'rate limit', 'timeout', 'timed out', 'connection',
+                '500', '502', '503', '504', 'service unavailable',
+            )
+            if not any(marker in message for marker in retryable):
+                raise
+            fallback_kwargs = dict(kwargs)
+            fallback_kwargs['model'] = self.fallback_model
+            try:
+                return self.fallback.chat.completions.create(*args, **fallback_kwargs)
+            except Exception as fallback_error:
+                raise fallback_error from primary_error
+
+
+class _AIClientFailover:
+    """Expose the subset of the OpenAI client used by this application."""
+
+    def __init__(self, primary, fallback, fallback_model):
+        self.chat = type('Chat', (), {})()
+        self.chat.completions = _ChatCompletionFailover(
+            primary, fallback, fallback_model
+        )
+
+
+def _ollama_client():
+    """Return the configured local Ollama client and its model name."""
+    base_url = os.environ.get('OLLAMA_BASE_URL', 'http://127.0.0.1:11434').rstrip('/')
+    model = os.environ.get('OLLAMA_MODEL', 'qwen2.5:3b')
+    return OpenAI(base_url=f'{base_url}/v1', api_key='ollama'), model
+
+
 # ── AI Provider Config ────────────────────────────────────────────────────
-# اولویت: Gemini → Mistral → Groq → OpenRouter
+# اولویت: OpenRouter → Gemini → Mistral → Groq → Ollama محلی
 #
 # Mistral  (رایگان، بدون بلاک ایران): console.mistral.ai → MISTRAL_API_KEY
 # Groq     (14,400 req/day رایگان): console.groq.com → GROQ_API_KEY
-# OpenRouter (50 req/day رایگان)  : openrouter.ai → OPENROUTER_API_KEY
+# OpenRouter (مدل‌های رایگان): openrouter.ai → OPENROUTER_API_KEY
+# Ollama    (کاملاً محلی و رایگان): ollama.com → OLLAMA_MODEL
 # Gemini   (1,500 req/day - بلاک در ایران بدون VPN)
 # ─────────────────────────────────────────────────────────────────────────
 
 def _ai_client():
     """Return (OpenAI client, api_key, provider).
-    Priority: Gemini → Mistral → Groq → OpenRouter
+    Priority: OpenRouter → Gemini → Mistral → Groq → local Ollama
     """
+    # Prefer the project's free cloud provider when a key is configured.
+    # OpenRouter accepts the OpenAI client already used by this project.
+    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '')
+    if openrouter_key:
+        primary = OpenAI(
+            base_url='https://openrouter.ai/api/v1',
+            api_key=openrouter_key,
+        )
+        if os.environ.get('OLLAMA_ENABLED', '1') == '1':
+            fallback, fallback_model = _ollama_client()
+            primary = _AIClientFailover(primary, fallback, fallback_model)
+        return (
+            primary,
+            openrouter_key,
+            'openrouter+ollama',
+        )
+
     gemini_key = os.environ.get('GEMINI_API_KEY', '')
     if gemini_key:
         return (
@@ -43,26 +106,35 @@ def _ai_client():
     groq_key = os.environ.get('GROQ_API_KEY', '')
     if groq_key:
         return OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_key), groq_key, 'groq'
-    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '')
-    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=openrouter_key), openrouter_key, 'openrouter'
+    # Ollama exposes an OpenAI-compatible local API and needs no cloud key.
+    if os.environ.get('OLLAMA_ENABLED', '1') == '1':
+        client, _model_name = _ollama_client()
+        return client, 'ollama', 'ollama'
+
+    return None, '', ''
 
 
 def _model():
     """Pick correct model name for active provider."""
+    configured_model = os.environ.get('AI_MODEL', '').strip()
+    if configured_model:
+        return configured_model
+    if os.environ.get('OPENROUTER_API_KEY'):
+        return 'openrouter/free'
     if os.environ.get('GEMINI_API_KEY'):
-        return "gemini-1.5-flash"
+        return "gemini-2.5-flash"
     if os.environ.get('MISTRAL_API_KEY'):
         return "mistral-small-latest"       # رایگان، بدون بلاک ایران
     if os.environ.get('GROQ_API_KEY'):
         return "llama-3.3-70b-versatile"   # 14,400 req/day free
-    return "google/gemma-4-31b-it:free"    # 50 req/day free
+    return os.environ.get('OLLAMA_MODEL', 'qwen2.5:3b')
 
 
 def _rate_limit_msg(e: Exception) -> str:
     s = str(e)
     if '429' in s or 'rate limit' in s.lower() or 'Rate limit' in s:
         return ('حد روزانه تموم شده 😔 — فردا دوباره امتحان کن '
-                'یا MISTRAL_API_KEY رو در .env تنظیم کن (console.mistral.ai — رایگان)')
+                'یا OPENROUTER_API_KEY را در .env تنظیم کن، یا Ollama محلی را اجرا کن.')
     return f'خطای AI: {s[:200]}'
 
 

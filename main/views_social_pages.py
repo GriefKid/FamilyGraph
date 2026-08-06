@@ -52,9 +52,12 @@ def suggest_users_api(request):
     """آدم‌های شبیه من که به دردم می‌خورن — رتبه‌بندی شباهت."""
     me = request.user
     my_friends = set(Friendship.objects.filter(user=me).values_list('friend_id', flat=True))
-    my_media = set(ProfileMediaItem.objects.filter(user=me).values_list('title', flat=True))
+    my_media = set(ProfileMediaItem.objects.filter(user=me, is_public=True).values_list('title', flat=True))
     my_career = set((me.career or '').lower().split())
     my_city = (me.city or '').strip().lower()
+    my_interests = {str(item).strip().lower() for item in (me.public_interests or []) if str(item).strip()}
+    my_values = {str(item).strip().lower() for item in (me.public_values or []) if str(item).strip()}
+    my_style_words = set((me.public_communication_style or '').lower().split())
 
     # دوستِ دوست‌ها (قوی‌ترین سیگنال)
     fof = {}
@@ -81,10 +84,28 @@ def suggest_users_api(request):
             reasons.append('حوزه کاری مشابه')
         if my_media:
             common = my_media & set(
-                ProfileMediaItem.objects.filter(user=u).values_list('title', flat=True))
+                ProfileMediaItem.objects.filter(user=u, is_public=True).values_list('title', flat=True))
             if common:
                 score += min(len(common), 4) * 2
                 reasons.append(f'سلیقه مشترک: {"، ".join(list(common)[:2])}')
+        public_interests = {
+            str(item).strip().lower() for item in (u.public_interests or []) if str(item).strip()
+        }
+        common_interests = my_interests & public_interests
+        if common_interests:
+            score += min(len(common_interests), 3) * 3
+            reasons.append(f'علاقه مشترک: {"، ".join(list(common_interests)[:2])}')
+        public_values = {
+            str(item).strip().lower() for item in (u.public_values or []) if str(item).strip()
+        }
+        common_values = my_values & public_values
+        if common_values:
+            score += min(len(common_values), 2) * 3
+            reasons.append(f'ارزش مشترک: {"، ".join(list(common_values)[:2])}')
+        their_style_words = set((u.public_communication_style or '').lower().split())
+        if len(my_style_words & their_style_words) >= 2:
+            score += 2
+            reasons.append('سبک ارتباطی نزدیک')
         if u.bio:
             score += 1
         if score > 0:

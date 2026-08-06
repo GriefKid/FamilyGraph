@@ -437,6 +437,9 @@ animation:spin .7s linear infinite;vertical-align:middle;}
         <button style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;" onclick="closeResult()">✕</button>
       </div>
       <div class="result-body" id="resultBody"></div>
+      <div style="padding:0 18px 12px;font-size:11px;color:var(--text-muted);line-height:1.8;">
+        پیشنهادهای AI از همین یادداشت استخراج شده‌اند؛ قبل از ذخیره، آن‌ها را مرور کن. فقط موارد تأییدشده وارد شبکه می‌شوند.
+      </div>
       <div class="apply-row" id="applyRow" style="display:none;">
         <button class="btn btn-primary" onclick="applyResult()">✓ ذخیره در شبکه</button>
         <button class="btn" onclick="closeResult()">انصراف</button>
@@ -541,6 +544,15 @@ const nodeSet = new Set(ALL_NODES.map(n => n.username));
 checkRoot();
 document.getElementById('entryDate').valueAsDate = new Date();
 populateFilterDropdowns();
+
+// A person page can open the journal with a safe, explicit @mention prefilled.
+const personFromLink = new URLSearchParams(window.location.search).get('person');
+if(personFromLink && nodeSet.has(personFromLink)){
+  const journalText = document.getElementById('journalText');
+  journalText.value = '@' + personFromLink + ' ';
+  journalText.focus();
+  updateCount();
+}
 
 const now = new Date();
 calYear  = now.getFullYear();

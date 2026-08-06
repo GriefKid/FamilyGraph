@@ -108,7 +108,14 @@ from .views_social import (
     profile_cover_api,
     chat_analyze_api,
     information_share_api,
+    post_create_api,
     typing_api,
+)
+from .views_social_circles import (
+    circle_create_api,
+    circle_messages_api,
+    circle_send_api,
+    circles_view,
 )
 
 urlpatterns = [
@@ -132,7 +139,7 @@ urlpatterns = [
     # ======================
     # HOME
     # ======================
-    path('', views.GraphView.as_view(), name='home'),
+    path('', views.HomeBriefingView.as_view(), name='home'),
 
     # ======================
     # NODE CRUD
@@ -269,6 +276,7 @@ urlpatterns = [
     path('api/social/suggest/',          suggest_users_api,          name='social_suggest'),
     path('api/social/share/send/',       share_send_api,             name='social_share_send'),
     path('social/chat/',                 chat_view,                  name='social_chat'),
+    path('social/circles/',              circles_view,               name='social_circles'),
     path('profile/edit/',                profile_edit_view,           name='profile_edit'),
     path('u/<str:username>/',            public_profile_view,         name='public_profile'),
     path('u/<str:username>/<str:kind>/',  profile_network_view,        name='profile_network'),
@@ -287,6 +295,10 @@ urlpatterns = [
     path('api/social/messages/unread/',   chat_unread_api,            name='social_unread'),
     path('api/social/profile/cover/',      profile_cover_api,          name='social_profile_cover'),
     path('api/social/share-info/<int:info_id>/', information_share_api, name='social_share_info'),
+    path('api/social/posts/',                   post_create_api,       name='social_post_create'),
+    path('api/social/circles/',                 circle_create_api,     name='social_circle_create'),
+    path('api/social/circles/<int:circle_id>/messages/', circle_messages_api, name='social_circle_messages'),
+    path('api/social/circles/<int:circle_id>/messages/send/', circle_send_api, name='social_circle_send'),
 
     # ======================
     # LEGACY / API

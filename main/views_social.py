@@ -20,6 +20,7 @@ from .models import (
     Node,
     ProfileMediaItem,
     Relationship,
+    SocialPost,
 )
 
 User = get_user_model()
@@ -45,17 +46,23 @@ def _user_card(user, viewer=None):
         'career': user.career,
         'city': user.city,
         'is_public': user.is_public,
+        'followers_count': Follow.objects.filter(target=user).count(),
+        'following_count': Follow.objects.filter(follower=user).count(),
+        'connections_count': Friendship.objects.filter(user=user).count(),
     }
     if viewer and viewer.is_authenticated and viewer != user:
         card['is_friend'] = Friendship.objects.filter(user=viewer, friend=user).exists()
+        card['is_connection'] = card['is_friend']
         card['is_following'] = Follow.objects.filter(follower=viewer, target=user).exists()
-        card['followers_count'] = Follow.objects.filter(target=user).count()
-        card['following_count'] = Follow.objects.filter(follower=user).count()
         card['request_sent'] = FriendRequest.objects.filter(
-            sender=viewer, receiver=user, status='pending'
+            sender=viewer, receiver=user, request_type='connection', status='pending'
         ).exists()
+        card['follow_request_sent'] = FriendRequest.objects.filter(
+            sender=viewer, receiver=user, request_type='follow', status='pending'
+        ).exists()
+        card['connection_request_sent'] = card['request_sent']
         card['request_received'] = FriendRequest.objects.filter(
-            sender=user, receiver=viewer, status='pending'
+            sender=user, receiver=viewer, request_type='connection', status='pending'
         ).exists()
     return card
 
@@ -125,6 +132,13 @@ def social_view(request):
     incoming_shared = Information.objects.filter(
         Q(visibility='selected', shared_with=request.user)
     ).exclude(node__owner=request.user).select_related('node', 'node__owner').distinct()[:40]
+    following_ids = set(following.values_list('target_id', flat=True))
+    feed_author_ids = following_ids | {request.user.id}
+    posts = SocialPost.objects.filter(
+        author_id__in=feed_author_ids,
+        is_public=True,
+        author__is_public=True,
+    ).select_related('author')[:30]
     return render(request, 'social/social.html', {
         'friends': friends,
         'following': following,
@@ -133,6 +147,7 @@ def social_view(request):
         'outgoing': outgoing,
         'infos': infos,
         'incoming_shared': incoming_shared,
+        'posts': posts,
     })
 
 
@@ -937,6 +952,8 @@ def public_profile_view(request, username):
                  ('series', 'سریال‌ها', '📺'), ('music', 'موسیقی', '🎵')]
     for kind, label, icon in kind_meta:
         qs = ProfileMediaItem.objects.filter(user=profile, kind=kind)
+        if profile != request.user:
+            qs = qs.filter(is_public=True)
         best = list(qs.filter(rating__gt=0).order_by('-rating', '-completed_on', '-created_at')[:3])
         latest = list(qs[:3])
         if best or latest:
@@ -967,6 +984,10 @@ def public_profile_view(request, username):
         'latest_books': ProfileMediaItem.objects.filter(user=profile, kind='book')[:3],
         'latest_movies': ProfileMediaItem.objects.filter(user=profile, kind='movie')[:3],
         'latest_series': ProfileMediaItem.objects.filter(user=profile, kind='series')[:3],
+        'posts': SocialPost.objects.filter(
+            author=profile,
+            is_public=True,
+        )[:20] if profile != request.user else SocialPost.objects.filter(author=profile)[:20],
     })
 
 
@@ -984,6 +1005,11 @@ def profile_edit_view(request):
             user.career = request.POST.get('career', '').strip()
             user.city = request.POST.get('city', '').strip()
             user.country = request.POST.get('country', '').strip()
+            user.public_interests = _split_public_items(request.POST.get('public_interests', ''))
+            user.public_values = _split_public_items(request.POST.get('public_values', ''))
+            user.public_communication_style = request.POST.get(
+                'public_communication_style', ''
+            ).strip()[:280]
             user.is_public = request.POST.get('is_public', '') == 'on'
             bd_raw = request.POST.get('birth_date', '').strip()
             if bd_raw:
@@ -1043,6 +1069,9 @@ def profile_edit_view(request):
             if title and kind in {'book', 'movie', 'series', 'music'}:
                 completed_on = request.POST.get('completed_on') or None
                 creator = request.POST.get('creator', '').strip()
+                status = request.POST.get('status', 'completed')
+                if status not in {'completed', 'current', 'planned'}:
+                    status = 'completed'
                 work = _get_or_create_work(kind, title, creator)
                 ProfileMediaItem.objects.update_or_create(
                     user=user, kind=kind, title=title,
@@ -1051,11 +1080,25 @@ def profile_edit_view(request):
                         'creator': creator or work.creator,
                         'rating': request.POST.get('rating') or 0,
                         'completed_on': completed_on,
+                        'status': status,
+                        'is_public': request.POST.get('is_public', '') == 'on',
                         'source': 'manual',
                         'notes': request.POST.get('notes', '').strip(),
                     },
                 )
                 messages.success(request, 'اثر به پروفایل اضافه شد.')
+        elif action == 'post':
+            body = request.POST.get('body', '').strip()[:1200]
+            if not user.is_public:
+                messages.error(request, 'برای انتشار پست، ابتدا پروفایلت را پابلیک کن.')
+            elif body:
+                SocialPost.objects.create(
+                    author=user,
+                    body=body,
+                    image=request.FILES.get('post_image'),
+                    is_public=True,
+                )
+                messages.success(request, 'پست عمومی منتشر شد.')
         elif action == 'delete_media':
             ProfileMediaItem.objects.filter(user=user, id=request.POST.get('media_id')).delete()
             messages.success(request, 'اثر حذف شد.')
@@ -1074,6 +1117,34 @@ def profile_edit_view(request):
         'all_nodes': Node.objects.filter(owner=user).order_by('username'),
         'cover_presets': cover_presets,
         'media_items': ProfileMediaItem.objects.filter(user=user)[:80],
+        'posts': SocialPost.objects.filter(author=user)[:30],
+    })
+
+
+def _split_public_items(raw):
+    return list(dict.fromkeys(
+        item.strip()[:80] for item in raw.replace('،', ',').replace('\n', ',').split(',')
+        if item.strip()
+    ))[:12]
+
+
+@login_required
+def post_create_api(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    if not request.user.is_public:
+        return JsonResponse({'error': 'برای انتشار پست، پروفایل باید پابلیک باشد.'}, status=403)
+    body = (_body(request).get('body') or '').strip()[:1200]
+    if not body:
+        return JsonResponse({'error': 'متن پست خالی است.'}, status=400)
+    post = SocialPost.objects.create(author=request.user, body=body, is_public=True)
+    return JsonResponse({
+        'ok': True,
+        'post': {
+            'id': post.id,
+            'body': post.body,
+            'created_at': post.created_at.strftime('%Y-%m-%d %H:%M'),
+        },
     })
 
 

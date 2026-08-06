@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import timedelta
 from django.db.models import Q, ProtectedError
 from django.views.decorators.http import require_http_methods, require_GET
 from django.views.decorators.csrf import csrf_exempt
@@ -30,22 +31,15 @@ def _ai_error_msg(e: Exception) -> str:
     return f'خطای AI: {s[:200]}'
 
 def _get_ai_client_and_model():
-    """Returns (client, model_name). Priority: Gemini → Mistral → Groq → OpenRouter."""
-    from openai import OpenAI
-    gemini_key = os.environ.get('GEMINI_API_KEY', '')
-    if gemini_key:
-        return (
-            OpenAI(base_url="https://generativelanguage.googleapis.com/v1beta/openai/", api_key=gemini_key),
-            "gemini-1.5-flash"
+    """Return the project's configured OpenAI-compatible client and model."""
+    from .views_smart_features import _ai_client, _model
+
+    client, configured, _provider = _ai_client()
+    if not configured:
+        raise RuntimeError(
+            'AI is not configured. Set OPENROUTER_API_KEY or run Ollama locally.'
         )
-    mistral_key = os.environ.get('MISTRAL_API_KEY', '')
-    if mistral_key:
-        return OpenAI(base_url="https://api.mistral.ai/v1", api_key=mistral_key), "mistral-small-latest"
-    groq_key = os.environ.get('GROQ_API_KEY', '')
-    if groq_key:
-        return OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_key), "llama-3.3-70b-versatile"
-    openrouter_key = os.environ.get('OPENROUTER_API_KEY', '')
-    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=openrouter_key), "google/gemma-4-31b-it:free"
+    return client, _model()
 
 COMMUNITY_PALETTE = [
     "#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
@@ -82,6 +76,94 @@ def _community_map(G):
 
 class GraphView(LoginRequiredMixin, TemplateView):
     template_name = "nodes/graph.html"
+
+
+class HomeBriefingView(LoginRequiredMixin, TemplateView):
+    """The action-oriented home view: what matters in the user's relationships today."""
+
+    template_name = 'dashboard.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        today = timezone.localdate()
+        root_id = user.root_node_id
+
+        nodes = Node.objects.filter(owner=user).exclude(pk=root_id)
+        relationships = Relationship.objects.filter(owner=user)
+        node_map = {node.id: node for node in nodes}
+
+        attention = []
+        try:
+            from .health import compute_health
+            health = compute_health(user)
+            rank = {'red': 0, 'yellow': 1, 'unknown': 2, 'green': 3}
+            for node_id, item in health.items():
+                node = node_map.get(node_id)
+                if not node or item.get('status') not in ('red', 'yellow'):
+                    continue
+                attention.append({
+                    'node': node,
+                    'status': item.get('status'),
+                    'score': item.get('score'),
+                    'days_since': item.get('days_since'),
+                    'expected': item.get('expected'),
+                })
+            attention.sort(
+                key=lambda item: (
+                    rank[item['status']],
+                    item['score'] if item['score'] is not None else 101,
+                )
+            )
+        except Exception:
+            pass
+
+        due_followups = []
+        try:
+            from .models import FollowUp
+            due_followups = list(
+                FollowUp.objects.filter(owner=user, done=False)
+                .select_related('node')
+                .order_by('due_date', '-created_at')[:4]
+            )
+        except Exception:
+            pass
+
+        upcoming_events = list(
+            Event.objects.filter(
+                owner=user,
+                date__gte=today,
+                date__lte=today + timedelta(days=7),
+            )
+            .prefetch_related('participants')
+            .order_by('date', 'event_time')[:4]
+        )
+
+        recent_memories = list(
+            JournalEntry.objects.filter(owner=user)
+            .order_by('-created_at')[:3]
+        )
+
+        checkin_done = any(
+            'checkin' in (entry.tags or [])
+            for entry in JournalEntry.objects.filter(owner=user, entry_date=today)
+            .only('tags')
+        )
+
+        context.update({
+            'today': today,
+            'attention': attention[:3],
+            'due_followups': due_followups,
+            'upcoming_events': upcoming_events,
+            'recent_memories': recent_memories,
+            'checkin_done': checkin_done,
+            'people_count': nodes.count(),
+            'relationship_count': relationships.count(),
+            'onboarding_ready': bool(
+                root_id and Information.objects.filter(node_id=root_id).exists()
+            ),
+        })
+        return context
 
 
 class NodeListView(LoginRequiredMixin, ListView):
@@ -987,6 +1069,11 @@ def chat_api(request):
             if isinstance(d, dict):
                 if d.get('personality'): root_info += f"\nشخصیت: {d['personality']}"
                 if d.get('interests'):   root_info += f"\nعلایق: {', '.join(d['interests']) if isinstance(d['interests'], list) else d['interests']}"
+                if d.get('values'): root_info += f"\nارزش‌ها: {', '.join(d['values']) if isinstance(d['values'], list) else d['values']}"
+                if d.get('communication_style'): root_info += f"\nسبک ارتباطی: {d['communication_style']}"
+                if d.get('relationship_goals'): root_info += f"\nهدف‌های رابطه‌ای: {d['relationship_goals']}"
+                if d.get('boundaries'): root_info += f"\nمرزها و حساسیت‌ها: {d['boundaries']}"
+                if d.get('social_energy'): root_info += f"\nانرژی اجتماعی: {d['social_energy']}"
 
     # روابط از دید من (root)
     if root_node:

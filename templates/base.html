@@ -1077,17 +1077,23 @@ input:focus, textarea:focus, select:focus{
   <!-- Nav -->
   <nav class="nav">
 
-    <!-- Group: فضای کاری -->
+    <!-- Group: امروز و شبکه -->
     <div class="nav-group">
       <div class="nav-group-label" id="g1-hdr" onclick="toggleNavGroup('g1')">
-        <span>🌟 فضای کاری</span>
+        <span>🌟 امروز و شبکه</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="nav-group-items" id="g1-items">
         <a href="/"              class="nav-item {% block nav_home %}{% endblock %}">
-          <span class="nav-icon">🕸</span><span>گراف</span>
+          <span class="nav-icon">✨</span><span>بریفینگ امروز</span>
+        </a>
+        <a href="/checkin/"      class="nav-item {% block nav_checkin %}{% endblock %}">
+          <span class="nav-icon">⚡</span><span>چک-این سریع</span>
+        </a>
+        <a href="/graph/"        class="nav-item {% block nav_graph %}{% endblock %}">
+          <span class="nav-icon">🕸</span><span>نقشهٔ رابطه‌ها</span>
         </a>
         <a href="/nodes/"        class="nav-item {% block nav_nodes %}{% endblock %}">
           <span class="nav-icon">👥</span><span>افراد</span>
@@ -1097,9 +1103,6 @@ input:focus, textarea:focus, select:focus{
         </a>
         <a href="/events/"       class="nav-item {% block nav_events %}{% endblock %}">
           <span class="nav-icon">📅</span><span>رویدادها</span>
-        </a>
-        <a href="/checkin/"      class="nav-item {% block nav_checkin %}{% endblock %}">
-          <span class="nav-icon">⚡</span><span>چک-این روزانه</span>
         </a>
         <a href="/ledger/"       class="nav-item {% block nav_ledger %}{% endblock %}">
           <span class="nav-icon">💰</span><span>قرض و طلب</span>
@@ -1113,10 +1116,10 @@ input:focus, textarea:focus, select:focus{
       </div>
     </div>
 
-    <!-- Group: تحلیل -->
+    <!-- Group: حافظه و تحلیل -->
     <div class="nav-group">
       <div class="nav-group-label" id="g2-hdr" onclick="toggleNavGroup('g2')">
-        <span>🧠 تحلیل هوشمند</span>
+        <span>🧠 حافظه و تحلیل</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>

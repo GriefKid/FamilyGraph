@@ -43,6 +43,14 @@ class User(AbstractUser):
     auto_accept_connection = models.BooleanField(
         default=False, verbose_name='تایید خودکار کانکشن',
         help_text='درخواست کانکشن بدون تایید من قبول بشه')
+    public_interests = models.JSONField(
+        default=list, blank=True, verbose_name='علایق عمومی',
+        help_text='فقط برای پیشنهادهای اجتماعی و پروفایل عمومی استفاده می‌شود')
+    public_values = models.JSONField(
+        default=list, blank=True, verbose_name='ارزش‌های عمومی',
+        help_text='فقط برای پیشنهادهای اجتماعی و پروفایل عمومی استفاده می‌شود')
+    public_communication_style = models.CharField(
+        max_length=280, blank=True, verbose_name='سبک ارتباط عمومی')
     CHAT_POLICY_CHOICES = [('connections', 'فقط کانکشن‌ها'), ('nobody', 'هیچ‌کس')]
     chat_policy            = models.CharField(
         max_length=12, choices=CHAT_POLICY_CHOICES, default='connections',
@@ -433,6 +441,11 @@ class ProfileMediaItem(models.Model):
         ('journal', 'Journal'),
         ('imported', 'Imported'),
     ]
+    STATUS_CHOICES = [
+        ('completed', 'تمام‌شده'),
+        ('current', 'در حال خواندن / دیدن / گوش دادن'),
+        ('planned', 'در برنامه'),
+    ]
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile_media_items')
     work = models.ForeignKey(ArtisticWork, null=True, blank=True, on_delete=models.SET_NULL, related_name='user_items')
     kind = models.CharField(max_length=10, choices=KIND_CHOICES)
@@ -440,6 +453,12 @@ class ProfileMediaItem(models.Model):
     creator = models.CharField(max_length=180, blank=True)
     rating = models.FloatField(default=0)
     completed_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='completed')
+    is_public = models.BooleanField(
+        default=True,
+        verbose_name='نمایش در پروفایل عمومی',
+        help_text='فالوئرها و بازدیدکنندگان فقط آثار عمومی را می‌بینند',
+    )
     source = models.CharField(max_length=12, choices=SOURCE_CHOICES, default='manual')
     source_journal = models.ForeignKey('JournalEntry', null=True, blank=True, on_delete=models.SET_NULL, related_name='detected_media_items')
     notes = models.TextField(blank=True)
@@ -467,6 +486,68 @@ class ProfileMediaItem(models.Model):
 
     def __str__(self):
         return f'{self.user} {self.kind}: {self.title}'
+
+
+class SocialPost(models.Model):
+    """A deliberately small public post: the social feed must never expose private notes."""
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_posts'
+    )
+    body = models.TextField(max_length=1200)
+    image = models.ImageField(upload_to='social_posts/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_public = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'پست اجتماعی'
+        verbose_name_plural = 'پست‌های اجتماعی'
+
+    def __str__(self):
+        return f'{self.author.username}: {self.body[:60]}'
+
+
+class SocialCircle(models.Model):
+    """A private group that can only contain mutually connected users."""
+
+    name = models.CharField(max_length=100)
+    description = models.CharField(max_length=280, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_circles_created'
+    )
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, related_name='social_circles', blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'حلقه اجتماعی'
+        verbose_name_plural = 'حلقه‌های اجتماعی'
+
+    def __str__(self):
+        return self.name
+
+
+class SocialCircleMessage(models.Model):
+    circle = models.ForeignKey(
+        SocialCircle, on_delete=models.CASCADE, related_name='messages'
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_circle_messages'
+    )
+    body = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'پیام حلقه اجتماعی'
+        verbose_name_plural = 'پیام‌های حلقه اجتماعی'
+
+    def __str__(self):
+        return f'{self.circle.name}: {self.body[:60]}'
 
 
 # ─────────────────────────────────────────────────────────────────

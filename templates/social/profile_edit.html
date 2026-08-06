@@ -25,6 +25,9 @@
           <div class="field"><label>لقب</label><input name="nickname" value="{{ self_node.nickname|default:'' }}"></div>
         </div>
         <div class="field"><label>بیو</label><textarea name="bio">{{ profile_user.bio }}</textarea></div>
+        <div class="field"><label>علایق عمومی <small>(با ویرگول جدا کن؛ فقط برای پیشنهادها و پروفایل عمومی)</small></label><input name="public_interests" value="{{ profile_user.public_interests|join:', ' }}" placeholder="کتاب، پیاده‌روی، موسیقی"></div>
+        <div class="field"><label>ارزش‌های عمومی <small>(اختیاری)</small></label><input name="public_values" value="{{ profile_user.public_values|join:', ' }}" placeholder="صداقت، رشد، خانواده"></div>
+        <div class="field"><label>سبک ارتباط عمومی <small>(اختیاری)</small></label><input name="public_communication_style" value="{{ profile_user.public_communication_style }}" placeholder="برای گفتگوی مهم تماس را ترجیح می‌دهم"></div>
         <div class="field"><label>آواتار</label><input type="file" name="avatar"></div>
         <label><input type="checkbox" name="is_public" {% if profile_user.is_public %}checked{% endif %}> حساب پابلیک</label><br><br>
         <button class="btn">ذخیره پروفایل</button>
@@ -81,11 +84,24 @@
           <div class="field"><label>نویسنده/کارگردان</label><input name="creator" id="workCreator"></div>
           <div class="field"><label>امتیاز ۰ تا ۵</label><input type="number" name="rating" min="0" max="5" step="0.5" value="3"></div>
           <div class="field"><label>تاریخ اتمام/تماشا</label><input type="date" name="completed_on"></div>
+          <div class="field"><label>وضعیت</label><select name="status"><option value="completed">تمام‌شده</option><option value="current">در حال خواندن / دیدن / گوش‌دادن</option><option value="planned">در برنامه</option></select></div>
         </div>
         <div class="field"><label>یادداشت شخصی</label><textarea name="notes"></textarea></div>
+        <label style="font-size:12px"><input type="checkbox" name="is_public" checked> در پروفایل عمومی نشان بده</label><br><br>
         <button class="btn">اضافه کردن اثر</button>
       </form>
-      <div class="media-list" style="margin-top:16px">{% for item in media_items %}<div class="media-item"><div><b>{% if item.work %}{{ item.work.title }}{% else %}{{ item.title }}{% endif %}</b> · {{ item.get_kind_display }} · {{ item.rating }}/5 · {{ item.get_source_display }}</div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete_media"><input type="hidden" name="media_id" value="{{ item.id }}"><button class="btn ghost">حذف</button></form></div>{% endfor %}</div>
+      <div class="media-list" style="margin-top:16px">{% for item in media_items %}<div class="media-item"><div><b>{% if item.work %}{{ item.work.title }}{% else %}{{ item.title }}{% endif %}</b> · {{ item.get_kind_display }} · {{ item.get_status_display }} · {% if item.is_public %}🌐 عمومی{% else %}🔒 خصوصی{% endif %}</div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete_media"><input type="hidden" name="media_id" value="{{ item.id }}"><button class="btn ghost">حذف</button></form></div>{% endfor %}</div>
+    </div>
+
+    <div class="panel" style="grid-column:1/-1">
+      <h3>پست‌های عمومی</h3>
+      <div class="hint">پست‌ها فقط روی پروفایل عمومی و feed فالوئرها نمایش داده می‌شوند؛ ژورنال شخصی هیچ‌وقت اینجا نمی‌آید.</div>
+      <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="post">
+        <div class="field"><textarea name="body" maxlength="1200" placeholder="یک فکر، تجربه یا چیزی که می‌خواهی عمومی باشد…"></textarea></div>
+        <div class="field"><label>تصویر اختیاری</label><input type="file" name="post_image" accept="image/*"></div>
+        <button class="btn">انتشار پست</button>
+      </form>
+      <div class="media-list" style="margin-top:16px">{% for post in posts %}<div class="media-item"><div>{{ post.body|truncatechars:160 }}<div class="hint" style="margin:4px 0 0">{{ post.created_at|date:"j F، H:i" }}</div></div></div>{% empty %}<div class="hint">هنوز پستی نداری.</div>{% endfor %}</div>
     </div>
   </div>
 </div>
