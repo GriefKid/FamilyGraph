@@ -58,6 +58,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'main.middleware.FeatureFlagMiddleware',
     'main.middleware.RequestObservabilityMiddleware',
+    'main.middleware.WriteRateLimitMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'main.middleware.LoginRequiredMiddleware',
@@ -157,9 +158,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Production deployment controls. They are intentionally inactive during local
 # development and are configured through environment variables in hosting.
 SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('DATA_UPLOAD_MAX_MEMORY_SIZE', 10 * 1024 * 1024))
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('FILE_UPLOAD_MAX_MEMORY_SIZE', 10 * 1024 * 1024))
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', '1') == '1'
@@ -179,13 +185,34 @@ if not DEBUG:
         SECURE_HSTS_PRELOAD = True
 
 # ── Cache (برای کش کردن جواب‌های AI) ──────────────────────────────────────
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-        'LOCATION': BASE_DIR / 'django_cache',
-        'TIMEOUT': 21600,   # 6 ساعت default
-        'OPTIONS': {
-            'MAX_ENTRIES': 500,
+_redis_url = os.environ.get('REDIS_URL', '').strip()
+if _redis_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_url,
+            'TIMEOUT': 21600,
+            'OPTIONS': {'socket_connect_timeout': 2, 'socket_timeout': 2},
         }
     }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+            'LOCATION': BASE_DIR / 'django_cache',
+            'TIMEOUT': 21600,
+            'OPTIONS': {'MAX_ENTRIES': 500},
+        }
+    }
+
+WRITE_RATE_LIMIT = int(os.environ.get('WRITE_RATE_LIMIT', '120'))
+WRITE_RATE_LIMIT_WINDOW = int(os.environ.get('WRITE_RATE_LIMIT_WINDOW', '60'))
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {'verbose': {'format': '{asctime} {levelname} {name} request_id={request_id} {message}', 'style': '{'}},
+    'filters': {'request_id': {'()': 'main.logging.RequestIdFilter'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'verbose', 'filters': ['request_id']}},
+    'root': {'handlers': ['console'], 'level': os.environ.get('LOG_LEVEL', 'INFO')},
 }

@@ -1,5 +1,6 @@
 from django.shortcuts import redirect
 from django.conf import settings
+from django.core.cache import cache
 import time
 import uuid
 from django.http import JsonResponse
@@ -36,6 +37,38 @@ class RequestObservabilityMiddleware:
                 metadata={'method': request.method})
         except Exception:
             pass
+
+
+class WriteRateLimitMiddleware:
+    """Fail-open shared-cache limit for state-changing endpoints."""
+    METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method not in self.METHODS:
+            return self.get_response(request)
+        limit = getattr(settings, 'WRITE_RATE_LIMIT', 120)
+        window = getattr(settings, 'WRITE_RATE_LIMIT_WINDOW', 60)
+        if limit <= 0 or window <= 0:
+            return self.get_response(request)
+        identity = str(request.user.pk) if request.user.is_authenticated else self._client_ip(request)
+        key = f'write-rate:{identity}:{int(time.time() // window)}'
+        try:
+            count = 1 if cache.add(key, 1, timeout=window) else cache.incr(key)
+            if count > limit:
+                response = JsonResponse({'error': 'درخواست‌های زیادی ارسال شده؛ کمی بعد دوباره تلاش کن.'}, status=429)
+                response['Retry-After'] = str(window)
+                return response
+        except Exception:
+            pass
+        return self.get_response(request)
+
+    @staticmethod
+    def _client_ip(request):
+        forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        return (forwarded.split(',', 1)[0].strip() if forwarded else request.META.get('REMOTE_ADDR', 'unknown'))[:64]
 
 
 class FeatureFlagMiddleware:

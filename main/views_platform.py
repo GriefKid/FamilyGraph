@@ -133,12 +133,20 @@ def system_health_api(request):
             cursor.execute('SELECT 1'); cursor.fetchone()
     except Exception:
         db_ok = False
+    cache_ok = True
+    try:
+        from django.core.cache import cache
+        cache.set('health:probe', 'ok', timeout=10)
+        cache_ok = cache.get('health:probe') == 'ok'
+    except Exception:
+        cache_ok = False
     ai_provider = next((name for name in ('OPENROUTER_API_KEY','GEMINI_API_KEY','MISTRAL_API_KEY','GROQ_API_KEY')
                         if os.environ.get(name)), '') or ('OLLAMA' if os.environ.get('OLLAMA_ENABLED', '1') == '1' else '')
-    data = {'ok': db_ok, 'database': 'ok' if db_ok else 'error',
+    data = {'ok': db_ok and cache_ok, 'database': 'ok' if db_ok else 'error',
+            'cache': 'ok' if cache_ok else 'error',
             'ai_configured': bool(ai_provider), 'ai_provider': ai_provider,
             'time': timezone.now().isoformat()}
-    return JsonResponse(data, status=200 if db_ok else 503)
+    return JsonResponse(data, status=200 if data['ok'] else 503)
 
 
 def _backup_payload(user):

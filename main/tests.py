@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 import json
@@ -546,7 +547,19 @@ class PlatformQualityTests(TestCase):
         response = self.client.get('/api/system/health/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['database'], 'ok')
+        self.assertEqual(response.json()['cache'], 'ok')
         self.assertTrue(response['X-Request-ID'])
+
+    @override_settings(WRITE_RATE_LIMIT=1, WRITE_RATE_LIMIT_WINDOW=60)
+    def test_write_rate_limit_blocks_only_excess_requests(self):
+        cache.clear()
+        first = self.client.post('/api/platform/demo/', data=json.dumps({'action': 'create'}),
+                                 content_type='application/json')
+        second = self.client.post('/api/platform/demo/', data=json.dumps({'action': 'reset'}),
+                                  content_type='application/json')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+        self.assertEqual(second['Retry-After'], '60')
 
     def test_demo_data_can_be_created_and_reset_without_touching_real_node(self):
         created = self.client.post('/api/platform/demo/', data=json.dumps({'action': 'create'}),

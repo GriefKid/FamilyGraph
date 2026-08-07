@@ -9,3 +9,4 @@ networkx>=3.4,<4
 cryptography>=43,<46
 gunicorn>=23,<24
 whitenoise>=6.8,<7
+redis>=5,<7
