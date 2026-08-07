@@ -318,6 +318,14 @@ class JournalMomentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['entries'], [])
 
+    def test_journal_search_normalizes_arabic_and_persian_letters(self):
+        user = get_user_model().objects.create_user(username='journal-search', password='SecurePass1')
+        JournalEntry.objects.create(owner=user, text='دوستم علي کتاب خواند', entry_date=date.today())
+        self.client.force_login(user)
+        response = self.client.get('/api/journal/entries/?q=علی')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()['entries']), 1)
+
 
 class JalaliPresentationTests(TestCase):
     def test_jalali_filter_uses_persian_calendar_and_digits(self):

@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.db.models import Q
 from django.utils import timezone
 from .models import ArtisticWork, JournalEntry, JournalImage, ProfileMediaItem
 
@@ -171,7 +172,13 @@ def journal_entries_api(request):
     has_img = request.GET.get('has_image', '')
 
     if q:
-        qs = qs.filter(text__icontains=q)
+        normalized = q.replace('ي', 'ی').replace('ك', 'ک')
+        variants = {q, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'),
+                    normalized.replace('ی', 'ي').replace('ک', 'ك')}
+        text_filter = Q()
+        for term in variants:
+            text_filter |= Q(text__icontains=term)
+        qs = qs.filter(text_filter)
     if tag:
         qs = qs.filter(tags__contains=[tag])
     if person:
