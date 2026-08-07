@@ -466,6 +466,7 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertEqual(response.status_code, 302)
         person = Node.objects.get(owner=self.user, first_name='رضا')
         self.assertTrue(person.username)
+        self.assertEqual(response['Location'], f'/nodes/{person.id}/')
 
     def test_post_meeting_creates_private_timeline_and_extraction(self):
         response = self.client.post('/api/relationship-life/reflection/', data=json.dumps({

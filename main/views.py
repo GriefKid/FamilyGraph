@@ -571,7 +571,7 @@ def create_node(request):
                 _g, _ = _G.objects.get_or_create(name=node.group.strip(), owner=request.user)
                 node.groups.add(_g)
             messages.success(request, f'نود "{node.username}" ایجاد شد')
-            return redirect('node_list')
+            return redirect('node_detail', pk=node.pk)
     else:
         form = NodeForm()
 
