@@ -38,6 +38,7 @@ def command_palette_api(request):
         {'title': 'ثبت قرض یا طلب', 'subtitle': 'دفتر مالی', 'url': '/ledger/', 'icon': '💰'},
         {'title': 'ساخت رویداد', 'subtitle': 'تقویم', 'url': '/events/create/', 'icon': '📅'},
         {'title': 'جست‌وجوی حافظه', 'subtitle': 'پاسخ منبع‌دار', 'url': '/memory/', 'icon': '🔎'},
+        {'title': 'خط زمان خاطره‌ها', 'subtitle': 'عکس‌ها و لحظه‌ها به ترتیب زمان', 'url': '/memory/timeline/', 'icon': '🕰️'},
         {'title': 'افزودن شخص', 'subtitle': 'گراف رابطه', 'url': '/nodes/create/', 'icon': '👤'},
     ]
     if q:

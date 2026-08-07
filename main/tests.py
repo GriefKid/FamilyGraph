@@ -578,6 +578,8 @@ class PlatformQualityTests(TestCase):
         ordered = self.client.get('/api/platform/onboarding/').json()
         self.assertEqual(ordered['goal'], 'memories')
         self.assertEqual(ordered['steps'][0]['id'], 'journal')
+        timeline = self.client.get('/api/platform/command-palette/?q=خط زمان').json()['results']
+        self.assertIn('/memory/timeline/', [row['url'] for row in timeline])
 
     def test_feature_flag_supports_rollout_and_user_override(self):
         flag = FeatureFlag.objects.get(name='hybrid-ai')
