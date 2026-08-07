@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import date, timedelta
 from django.db.models import Q, ProtectedError
-from django.views.decorators.http import require_http_methods, require_GET
+from django.views.decorators.http import require_http_methods, require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404, render
@@ -1060,15 +1060,13 @@ def groups_view(request):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def assign_group_api(request):
     """
     POST {node_ids, group_name, action}
     action: 'add' (default) | 'remove'
     group_name: اسم گروه — اگه وجود نداشت ساخته می‌شه
     """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     try:
         body = json.loads(request.body)
     except Exception:
@@ -1082,7 +1080,15 @@ def assign_group_api(request):
     if not node_ids:
         return JsonResponse({'error': 'node_ids لازم است'}, status=400)
 
+    if not isinstance(node_ids, list) or len(node_ids) > 100:
+        return JsonResponse({'error': 'invalid node_ids'}, status=400)
+    try:
+        node_ids = [int(node_id) for node_id in node_ids]
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'invalid node_ids'}, status=400)
     nodes = list(Node.objects.filter(pk__in=node_ids, owner=request.user))
+    if len(nodes) != len(set(node_ids)):
+        return JsonResponse({'error': 'one or more people were not found'}, status=404)
 
     if action == 'remove':
         if not group_name:

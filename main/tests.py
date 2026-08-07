@@ -116,6 +116,16 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'group-visible')
         self.assertNotContains(response, 'group-hidden')
 
+    def test_group_assignment_refuses_someone_elses_person(self):
+        user = get_user_model().objects.create_user(username='group-write', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='group-write-other', password='SecurePass1')
+        foreign_node = Node.objects.create(owner=other, username='foreign-node', name='Foreign')
+        self.client.force_login(user)
+        response = self.client.post('/api/groups/assign/', data=json.dumps({
+            'node_ids': [foreign_node.id], 'group_name': 'Friends', 'action': 'add',
+        }), content_type='application/json')
+        self.assertEqual(response.status_code, 404)
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):
