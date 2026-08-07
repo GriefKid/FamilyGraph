@@ -1177,11 +1177,9 @@ def chat_view(request):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def chat_clear_api(request):
     """POST → پاک کردن حافظه‌ی همدم (شروع گفتگوی نو)."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     try:
         from .models import ChatMessage
         ChatMessage.objects.filter(owner=request.user).delete()

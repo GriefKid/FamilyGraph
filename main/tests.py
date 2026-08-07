@@ -134,6 +134,18 @@ class DashboardBriefingTests(TestCase):
         response = self.client.post(f'/api/events/{event.id}/complete/')
         self.assertEqual(response.status_code, 404)
 
+    def test_clearing_chat_only_removes_the_current_users_messages(self):
+        from .models import ChatMessage
+        user = get_user_model().objects.create_user(username='chat-clear', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='chat-clear-other', password='SecurePass1')
+        ChatMessage.objects.create(owner=user, role='user', content='Mine')
+        ChatMessage.objects.create(owner=other, role='user', content='Other')
+        self.client.force_login(user)
+        response = self.client.post('/api/chat/clear/')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ChatMessage.objects.filter(owner=user).exists())
+        self.assertTrue(ChatMessage.objects.filter(owner=other).exists())
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):
