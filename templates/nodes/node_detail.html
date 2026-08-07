@@ -488,6 +488,7 @@
       {% if not is_root_node %}
       <div class="hero-quick-actions">
         <button type="button" onclick="showMeetingBrief()">🧳 آمادگی ملاقات</button>
+        <button type="button" onclick="startMeetingReflection()">📝 بازتاب ملاقات</button>
         {% if request.user.root_node_id %}<a href="/relationships/create/?target={{ node.id }}">🔗 ثبت رابطه با من</a>{% endif %}
         <button type="button" onclick="document.getElementById('interaction-section').scrollIntoView({behavior:'smooth',block:'start'})">⚡ ثبت تعامل</button>
         <button type="button" onclick="document.getElementById('followup-section').scrollIntoView({behavior:'smooth',block:'start'})">📌 ثبت پیگیری</button>
@@ -1557,5 +1558,6 @@ async function showMeetingBrief(){
   if(!box){box=document.createElement('div');box.id='meetingBrief';box.style.cssText='margin-top:10px;padding:11px;border:1px solid rgba(59,130,246,.25);border-radius:10px;background:rgba(59,130,246,.07);font-size:12px;line-height:1.9';actions.insertAdjacentElement('afterend',box)}
   box.textContent='در حال آماده‌سازی…';
   try{const r=await fetch('/api/relationship-life/briefing/{{ node.id }}/'),d=await r.json();if(!r.ok)throw new Error(d.error||'خطا');const lines=[];if(d.last_interaction)lines.push('آخرین تعامل: '+d.last_interaction);if(d.commitments?.length)lines.push('قول‌های باز: '+d.commitments.map(x=>x.text).join('، '));if(d.gift_suggestions?.length)lines.push('ایدهٔ هدیه: '+d.gift_suggestions.join('، '));if(d.facts?.length)lines.push('نکات مهم: '+d.facts.slice(0,4).map(x=>x.value).join('، '));box.textContent=lines.join('\n')||'هنوز نکتهٔ ثبت‌شده‌ای برای این ملاقات نداریم.';box.style.whiteSpace='pre-line'}catch(e){box.textContent=e.message||'خطا در آماده‌سازی خلاصه.'}}
+async function startMeetingReflection(){const summary=window.prompt('دیدار یا گفتگو چطور بود؟ یک جمله کافی است.');if(!summary?.trim())return;const r=await fetch('/api/relationship-life/reflection/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({node_id:{{ node.id }},summary,relationship_change:'same',feeling:0})}),d=await r.json();if(!r.ok)return fgToast(d.error||'ثبت بازتاب انجام نشد.',true);fgToast('بازتاب ثبت شد.');setTimeout(()=>location.reload(),500)}
 </script>
 {% endblock %}
