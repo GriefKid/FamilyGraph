@@ -569,6 +569,7 @@ class RelationshipLifeCycleTests(TestCase):
         sw = self.client.get('/service-worker.js')
         self.assertEqual(sw.status_code, 200)
         self.assertIn('application/javascript', sw['Content-Type'])
+        self.assertContains(sw, 'SKIP_WAITING')
 
 
 class PlatformQualityTests(TestCase):
