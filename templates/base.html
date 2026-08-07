@@ -1258,7 +1258,7 @@ input:focus, textarea:focus, select:focus{
       <div class="nav-group-items" id="g3-items">
         <a href="/notifications/" class="nav-item {% block nav_notifs %}{% endblock %}">
           <span class="nav-icon">📬</span><span>اطلاعیه‌ها</span>
-          {% with cnt=request.user.pending_sync_count %}{% if cnt > 0 %}
+          {% with cnt=request.user.inbox_count %}{% if cnt > 0 %}
           <span class="nav-badge">{{ cnt }}</span>
           {% endif %}{% endwith %}
         </a>

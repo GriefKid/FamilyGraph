@@ -677,6 +677,13 @@ class PlatformQualityTests(TestCase):
         self.assertTrue(mine.is_read)
         self.assertFalse(other.is_read)
 
+    def test_inbox_count_includes_only_the_owners_unread_items(self):
+        from .models import Notification
+        Notification.objects.create(user=self.user, message='Mine')
+        Notification.objects.create(user=self.other, message='Other')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.inbox_count, 1)
+
     @override_settings(WRITE_RATE_LIMIT=1, WRITE_RATE_LIMIT_WINDOW=60)
     def test_write_rate_limit_blocks_only_excess_requests(self):
         cache.clear()

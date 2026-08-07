@@ -81,6 +81,11 @@ class User(AbstractUser):
         """تعداد SyncNotificationهای در انتظار — برای badge sidebar."""
         return self.sync_notifications.filter(status='pending').count()
 
+    @property
+    def inbox_count(self):
+        """Actionable inbox items, always scoped to this account."""
+        return self.unread_notif_count + self.pending_sync_count
+
 
 # ─────────────────────────────────────────────────────────────────
 # 2. Group
