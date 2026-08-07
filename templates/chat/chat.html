@@ -111,6 +111,23 @@ gap:10px;
 align-items:flex-end;
 }
 
+.chat-style{
+padding:10px 12px;
+background:var(--card);
+border:1px solid var(--border);
+border-radius:var(--radius);
+color:var(--text-soft);
+font-family:'Vazirmatn',sans-serif;
+font-size:12px;
+outline:none;
+cursor:pointer;
+}
+
+@media (max-width:640px){
+  .chat-input-bar{flex-wrap:wrap;padding:10px 12px}
+  .chat-style{order:-1;width:100%}
+}
+
 .chat-input{
 flex:1;
 padding:11px 16px;
@@ -235,6 +252,11 @@ color:var(--primary);
   </div>
 
   <div class="chat-input-bar">
+    <select id="chatStyle" class="chat-style" aria-label="لحن پاسخ همدم" title="لحن پاسخ همدم">
+      <option value="friendly">خودمونی</option>
+      <option value="standard">فارسی معیار</option>
+      <option value="concise">کوتاه و مستقیم</option>
+    </select>
     <textarea id="chatInput" class="chat-input" rows="1"
               placeholder="هر چی تو دلته بنویس... 💬"
               onkeydown="handleKey(event)"
@@ -248,7 +270,10 @@ color:var(--primary);
 const msgList  = document.getElementById("msgList")
 const chatInput= document.getElementById("chatInput")
 const sendBtn  = document.getElementById("sendBtn")
+const chatStyle= document.getElementById("chatStyle")
 const welcome  = document.getElementById("welcome")
+chatStyle.value = localStorage.getItem("hamdam-style") || "friendly"
+chatStyle.addEventListener("change",()=>localStorage.setItem("hamdam-style",chatStyle.value))
 let chatHistory = []   // V5: حافظه گفتگو — چت پیوسته و دوطرفه
 // V8: ادامه از گفتگوی قبلی (حافظه بین‌جلسه‌ای)
 {% for m in past_messages %}
@@ -339,7 +364,7 @@ async function sendMessage(){
     let res=await fetch("/api/chat/",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
-      body:JSON.stringify({message:msg, history:chatHistory})
+      body:JSON.stringify({message:msg, history:chatHistory, style:chatStyle.value})
     })
     let data=await res.json()
     removeTyping()

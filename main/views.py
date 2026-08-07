@@ -1107,11 +1107,22 @@ def chat_api(request):
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
         raw_history  = data.get('history') or []
+        chat_style = data.get('style', 'friendly')
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
 
     if not user_message:
         return JsonResponse({'error': 'message is empty'}, status=400)
+
+    from .persian_chat import (
+        PERSIAN_FEW_SHOTS,
+        STYLE_LABELS,
+        language_policy,
+        normalize_persian_reply,
+        persian_quality_issues,
+    )
+    if chat_style not in STYLE_LABELS:
+        chat_style = 'friendly'
 
     # ── V5: تاریخچه گفتگو — چت دوطرفه و پیوسته ──
     history = []
@@ -1253,7 +1264,9 @@ def chat_api(request):
     except Exception:
         pass
 
+    persian_policy = language_policy(chat_style)
     system_prompt = (
+        persian_policy + "\n\n"
         "تو «همدم» هستی — همراهِ شخصی صاحب این شبکه روابط. دو نقش داری و بسته به حرف کاربر "
         "روان بین‌شون جابه‌جا می‌شی:\n\n"
         "۱) **همدمِ درد دل** — وقتی کاربر از احساساتش می‌گه (دلخوری، تنهایی، استرس، دعوا، دلتنگی، شادی): "
@@ -1275,7 +1288,8 @@ def chat_api(request):
         "(نمره دوستی، شخصیت، ارزش‌ها، هشدارها) استفاده کن و تحلیلت رو مستند بده. "
         "پاسخ‌ها کوتاه (۲ تا ۵ جمله) مگه تحلیل مفصل بخواد. "
         "به فارسی محاوره‌ای و صمیمی. اگه نشانه‌ی ناراحتی عمیق یا مداوم دیدی، با مهربونی پیشنهاد کن "
-        "با یه آدم مورد اعتماد یا مشاور هم حرف بزنه — بدون بزرگ‌نمایی."
+        "با یه آدم مورد اعتماد یا مشاور هم حرف بزنه — بدون بزرگ‌نمایی.\n\n"
+        + persian_policy
     )
 
     try:
@@ -1284,12 +1298,44 @@ def chat_api(request):
             model=ai_model,
             messages=(
                 [{"role": "system", "content": system_prompt}]
+                + PERSIAN_FEW_SHOTS
                 + history
                 + [{"role": "user", "content": user_message}]
             ),
             max_tokens=1024,
+            temperature=0.6,
         )
-        reply = response.choices[0].message.content
+        reply = normalize_persian_reply(response.choices[0].message.content)
+
+        # یک فرصت بازنویسی سبک و محدود برای خروجی انگلیسی، رباتیک یا بیش‌ازحد بلند.
+        # این مرحله داده‌های خصوصی گراف را دوباره ارسال نمی‌کند.
+        quality_issues = persian_quality_issues(reply)
+        if quality_issues:
+            try:
+                rewrite = client.chat.completions.create(
+                    model=ai_model,
+                    messages=[
+                        {"role": "system", "content": persian_policy},
+                        {
+                            "role": "user",
+                            "content": (
+                                "پاسخ زیر را با حفظ معنی، به فارسی طبیعی ایران بازنویسی کن. "
+                                "مقدمه اضافه نکن و فقط متن نهایی را بده:\n\n" + reply[:3000]
+                            ),
+                        },
+                    ],
+                    max_tokens=700,
+                    temperature=0.35,
+                )
+                rewritten = normalize_persian_reply(rewrite.choices[0].message.content)
+                if rewritten and not persian_quality_issues(rewritten):
+                    reply = rewritten
+                    quality_issues = []
+            except Exception:
+                pass
+
+        if not reply:
+            reply = 'ببخش، نتونستم جواب خوبی بسازم. یک بار دیگه برام می‌نویسی؟'
 
         # ── V8: ذخیره‌ی دوطرفه — درد دل‌ها دیگه گم نمی‌شن ──
         # BUGFIX: صفحه insights هم از همین API استفاده می‌کنه؛ با فلگ ephemeral
@@ -1304,7 +1350,7 @@ def chat_api(request):
             except Exception:
                 pass   # جدول migrate نشده — چت بدون حافظه هم کار کنه
 
-        return JsonResponse({'reply': reply})
+        return JsonResponse({'reply': reply, 'style': chat_style})
     except Exception as e:
         return JsonResponse({'error': _ai_error_msg(e)}, status=500)
 
