@@ -7,7 +7,7 @@ from collections import Counter
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import connection
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -45,7 +45,13 @@ def command_palette_api(request):
         commands = [item for item in commands if q.casefold() in (item['title'] + item['subtitle']).casefold()]
     people = Node.objects.filter(owner=request.user, merged_into__isnull=True)
     if q:
-        people = people.filter(username__icontains=q) | people.filter(name__icontains=q) | people.filter(nickname__icontains=q)
+        people = people.filter(
+            Q(username__icontains=q) |
+            Q(name__icontains=q) |
+            Q(nickname__icontains=q) |
+            Q(first_name__icontains=q) |
+            Q(last_name__icontains=q)
+        )
     results = commands + [{'title': node.display_name(), 'subtitle': f'@{node.username}',
                            'url': f'/nodes/{node.id}/', 'icon': '◉'} for node in people[:8]]
     return JsonResponse({'results': results[:12]})

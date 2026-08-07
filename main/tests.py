@@ -695,6 +695,9 @@ class PlatformQualityTests(TestCase):
         self.assertEqual((triple.subject, triple.predicate, triple.object_text), (self.node, 'interest', 'نجوم'))
 
     def test_command_palette_and_onboarding_are_tenant_scoped(self):
+        Node.objects.create(owner=self.user, username='palette-sara', first_name='Sara', last_name='Ahmadi')
+        own_results = self.client.get('/api/platform/command-palette/?q=Ahmadi').json()['results']
+        self.assertIn('@palette-sara', [row.get('subtitle', '') for row in own_results])
         Node.objects.create(owner=self.other, username='secret-person', name='نباید دیده شود')
         results = self.client.get('/api/platform/command-palette/?q=secret').json()['results']
         self.assertNotIn('secret-person', [row.get('subtitle', '') for row in results])
