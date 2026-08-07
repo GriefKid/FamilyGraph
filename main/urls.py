@@ -178,6 +178,7 @@ urlpatterns = [
     # ======================
     path('', views.HomeBriefingView.as_view(), name='home'),
     path('api/daily/snooze/', views.daily_action_snooze_api, name='daily_action_snooze'),
+    path('api/daily/feedback/', views.daily_action_feedback_api, name='daily_action_feedback'),
 
     # ======================
     # NODE CRUD

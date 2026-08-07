@@ -94,6 +94,12 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
                 return date.fromisoformat(snoozes.get(key, '')) >= today
             except (TypeError, ValueError):
                 return False
+
+        def is_muted(key):
+            try:
+                return date.fromisoformat((user.feature_overrides or {}).get('daily_muted_until', {}).get(key, '')) >= today
+            except (TypeError, ValueError):
+                return False
         root_id = user.root_node_id
 
         nodes = Node.objects.filter(owner=user).exclude(pk=root_id)
@@ -166,16 +172,16 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
             owner=user, status='pending'
         ).count()
         today_actions = []
-        if not checkin_done and not is_snoozed('checkin'):
+        if not checkin_done and not is_snoozed('checkin') and not is_muted('checkin'):
             today_actions.append({'icon': '⚡', 'title': 'چک‌این امروز',
                                   'note': 'حال و انرژی امروزت را ثبت کن.', 'url': '/checkin/'})
         for item in attention[:2]:
-            if is_snoozed(f'node-{item["node"].id}'):
+            if is_snoozed(f'node-{item["node"].id}') or is_muted(f'node-{item["node"].id}'):
                 continue
             today_actions.append({'icon': '💬', 'title': f'یک قدم برای {item["node"].display_name()}',
                                   'note': 'مدتی از آخرین تعامل گذشته است.',
                                   'url': f'/nodes/{item["node"].id}/'})
-        if pending_suggestions and not is_snoozed('suggestions'):
+        if pending_suggestions and not is_snoozed('suggestions') and not is_muted('suggestions'):
             today_actions.append({'icon': '✨', 'title': f'{pending_suggestions} پیشنهاد منتظر تصمیم',
                                   'note': 'حافظهٔ AI را مرور و اصلاح کن.', 'url': '/extractions/'})
 
@@ -214,6 +220,25 @@ def daily_action_snooze_api(request):
     snoozes = dict(overrides.get('daily_snoozed_until') or {})
     snoozes[key] = (timezone.localdate() + timedelta(days=1)).isoformat()
     overrides['daily_snoozed_until'] = snoozes
+    request.user.feature_overrides = overrides
+    request.user.save(update_fields=['feature_overrides'])
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_http_methods(['POST'])
+def daily_action_feedback_api(request):
+    try:
+        body = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON نامعتبر است.'}, status=400)
+    key = str(body.get('key', ''))
+    if key not in {'checkin', 'suggestions'} and (not key.startswith('node-') or not key[5:].isdigit() or not Node.objects.filter(owner=request.user, pk=key[5:]).exists()):
+        return JsonResponse({'error': 'پیشنهاد نامعتبر است.'}, status=400)
+    overrides = dict(request.user.feature_overrides or {})
+    muted = dict(overrides.get('daily_muted_until') or {})
+    muted[key] = (timezone.localdate() + timedelta(days=30)).isoformat()
+    overrides['daily_muted_until'] = muted
     request.user.feature_overrides = overrides
     request.user.save(update_fields=['feature_overrides'])
     return JsonResponse({'ok': True})

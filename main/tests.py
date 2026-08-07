@@ -629,6 +629,13 @@ class PlatformQualityTests(TestCase):
         self.user.refresh_from_db()
         self.assertIn('checkin', self.user.feature_overrides['daily_snoozed_until'])
 
+    def test_daily_action_can_be_muted_for_a_month(self):
+        response = self.client.post('/api/daily/feedback/', data=json.dumps({'key': 'suggestions'}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertIn('suggestions', self.user.feature_overrides['daily_muted_until'])
+
     @override_settings(WRITE_RATE_LIMIT=1, WRITE_RATE_LIMIT_WINDOW=60)
     def test_write_rate_limit_blocks_only_excess_requests(self):
         cache.clear()
