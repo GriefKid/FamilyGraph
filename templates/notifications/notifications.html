@@ -143,6 +143,7 @@
 <!-- ── General Notifications ── -->
 <div class="notif-section-title">📢 اطلاعیه‌های سیستم</div>
 {% if general_notifs %}
+<button type="button" class="btn btn-sm" style="margin:-3px 0 10px" onclick="markAllNotificationsRead(this)">خوانده‌شدن همه</button>
 {% for n in general_notifs %}
 {% if n.link %}<a class="notif-item {% if not n.is_read %}unread{% endif %}" href="{{ n.link }}" style="text-decoration:none;color:var(--text)">{% else %}<div class="notif-item {% if not n.is_read %}unread{% endif %}">{% endif %}
   <div class="notif-dot {% if n.is_read %}read{% endif %}"></div>
@@ -167,6 +168,13 @@ document.querySelectorAll('.notification-mode').forEach(button=>button.addEventL
   document.querySelectorAll('.notification-mode').forEach(item=>item.classList.toggle('active',item===button));
   fgToast('ریتم اطلاع‌رسانی ذخیره شد.');
 }));
+
+async function markAllNotificationsRead(button){
+  const response=await fetch('/api/notifications/mark-read/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+  if(!response.ok){fgToast('صندوق به‌روزرسانی نشد.',true);return;}
+  document.querySelectorAll('.notif-item.unread').forEach(item=>{item.classList.remove('unread');item.querySelector('.notif-dot')?.classList.add('read')});
+  button.remove(); fgToast('همهٔ اعلان‌ها خوانده شدند.');
+}
 
 async function syncRespond(id, action){
   const actionsDiv = document.getElementById(`sa-${id}`);

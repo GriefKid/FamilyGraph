@@ -666,6 +666,17 @@ class PlatformQualityTests(TestCase):
         response = self.client.get('/notifications/')
         self.assertContains(response, 'href="/checkin/"')
 
+    def test_marking_notifications_read_does_not_touch_another_user(self):
+        from .models import Notification
+        mine = Notification.objects.create(user=self.user, message='Mine')
+        other = Notification.objects.create(user=self.other, message='Other')
+        response = self.client.post('/api/notifications/mark-read/')
+        self.assertEqual(response.status_code, 200)
+        mine.refresh_from_db()
+        other.refresh_from_db()
+        self.assertTrue(mine.is_read)
+        self.assertFalse(other.is_read)
+
     @override_settings(WRITE_RATE_LIMIT=1, WRITE_RATE_LIMIT_WINDOW=60)
     def test_write_rate_limit_blocks_only_excess_requests(self):
         cache.clear()

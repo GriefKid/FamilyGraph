@@ -3,7 +3,7 @@ from . import views
 from .views_auth import (
     login_view, logout_view, register_view, profile_view, captcha_refresh,
 )
-from .views_notifications import notifications_view, sync_respond_api, notification_preferences_api
+from .views_notifications import notifications_view, sync_respond_api, notification_preferences_api, mark_notifications_read_api
 from .views import (
     groups_view,
     assign_group_api,
@@ -172,6 +172,7 @@ urlpatterns = [
     path('notifications/',           notifications_view,       name='notifications'),
     path('api/sync/<int:notif_id>/respond/', sync_respond_api, name='sync_respond'),
     path('api/notifications/preferences/', notification_preferences_api, name='notification_preferences'),
+    path('api/notifications/mark-read/', mark_notifications_read_api, name='mark_notifications_read'),
     path('export/',                  views.export_graph,       name='export_graph'),
 
     # ======================

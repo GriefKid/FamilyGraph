@@ -23,13 +23,19 @@ def notifications_view(request):
     ).order_by('-created_at')[:30]
 
     # علامت‌گذاری همه general به عنوان خوانده‌شده
-    Notification.objects.filter(user=user, is_read=False).update(is_read=True)
-
     return render(request, 'notifications/notifications.html', {
         'sync_notifs':    sync_notifs,
         'general_notifs': general_notifs,
         'notification_mode': (user.feature_overrides or {}).get('notification_mode', 'important'),
     })
+
+
+@login_required
+@require_POST
+def mark_notifications_read_api(request):
+    """Explicitly clear only the current user's unread notifications."""
+    updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    return JsonResponse({'ok': True, 'updated': updated})
 
 
 @login_required
