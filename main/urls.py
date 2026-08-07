@@ -69,6 +69,7 @@ from .views_life import (
     goal_create_api,
     goal_close_api,
     weekly_view,
+    monthly_recap_view,
 )
 from .views_import import (
     telegram_import_view,
@@ -265,6 +266,7 @@ urlpatterns = [
     path('api/persona/rel/<int:pk>/',             rel_persona_get_api,        name='rel_persona_get'),
     path('api/persona/rel/<int:pk>/synthesize/',  rel_persona_synthesize_api, name='rel_persona_synthesize'),
     path('weekly/',                      weekly_view,             name='weekly'),
+    path('monthly/',                     monthly_recap_view,      name='monthly_recap'),
     path('api/life-events/create/',      life_event_create_api,   name='life_event_create'),
     path('api/life-events/<int:pk>/delete/', life_event_delete_api, name='life_event_delete'),
     path('api/goals/create/',            goal_create_api,         name='goal_create'),

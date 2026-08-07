@@ -414,6 +414,17 @@ class MemoryIntelligenceTests(TestCase):
         self.assertContains(weekly, 'داستان این هفته')
 
 
+    def test_monthly_recap_is_private_and_renders_user_activity(self):
+        Interaction.objects.create(owner=self.user, node=self.ali, kind='call', date=timezone.localdate())
+        response = self.client.get('/monthly/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.ali.display_name())
+        self.client.force_login(self.other)
+        other_response = self.client.get('/monthly/')
+        self.assertEqual(other_response.status_code, 200)
+        self.assertNotContains(other_response, self.ali.display_name())
+
+
 class RelationshipLifeCycleTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='life-owner', password='SecurePass1')

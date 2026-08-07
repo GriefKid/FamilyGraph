@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -293,4 +294,59 @@ def weekly_view(request):
         'goals':          goals,
         'narrative':      narrative,
         'next_steps':     next_steps,
+    })
+
+
+@login_required
+def monthly_recap_view(request):
+    """Create a private monthly recap from existing activity; no setup required."""
+    user = request.user
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    previous_month_end = month_start - timedelta(days=1)
+    previous_month_start = previous_month_end.replace(day=1)
+
+    from .models import Commitment, Event, FollowUp, Interaction
+
+    interactions = Interaction.objects.filter(owner=user, date__range=(month_start, today))
+    previous_interactions = Interaction.objects.filter(
+        owner=user, date__range=(previous_month_start, previous_month_end)
+    )
+    most_present = list(
+        interactions.values('node_id').annotate(total=Count('id')).order_by('-total', 'node_id')[:5]
+    )
+    names = {
+        node.id: node.display_name()
+        for node in Node.objects.filter(owner=user, id__in=[row['node_id'] for row in most_present])
+    }
+    for row in most_present:
+        row['name'] = names.get(row['node_id'], 'بدون نام')
+
+    next_steps = []
+    try:
+        from .health import compute_health
+        needs_attention = [row for row in compute_health(user).values()
+                           if row.get('status') in ('red', 'yellow') and row.get('days_since') is not None]
+        needs_attention.sort(key=lambda row: row.get('score') if row.get('score') is not None else 101)
+        next_steps = needs_attention[:3]
+    except Exception:
+        pass
+
+    return render(request, 'daily/monthly_recap.html', {
+        'month_start': month_start,
+        'today': today,
+        'interaction_count': interactions.count(),
+        'previous_interaction_count': previous_interactions.count(),
+        'interaction_delta': interactions.count() - previous_interactions.count(),
+        'people_count': interactions.values('node_id').distinct().count(),
+        'most_present': most_present,
+        'completed_commitments': Commitment.objects.filter(
+            owner=user, status='done', completed_at__date__range=(month_start, today)
+        ).count(),
+        'completed_followups': FollowUp.objects.filter(
+            owner=user, done=True, done_at__date__range=(month_start, today)
+        ).count(),
+        'journal_count': JournalEntry.objects.filter(owner=user, entry_date__range=(month_start, today)).count(),
+        'event_count': Event.objects.filter(owner=user, date__range=(month_start, today)).count(),
+        'next_steps': next_steps,
     })
