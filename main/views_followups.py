@@ -3,7 +3,7 @@ views_followups.py — API های «موضوعات باز» (V4)
 قول‌ها، سوال‌ها و کارهای نیمه‌کاره با هر شخص.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db.utils import OperationalError, ProgrammingError
@@ -114,6 +114,26 @@ def followup_toggle_api(request, pk):
     f.done_at = timezone.now() if f.done else None
     f.save(update_fields=['done', 'done_at'])
     return JsonResponse({'ok': True, 'followup': serialize_followup(f)})
+
+
+@login_required
+@csrf_exempt
+def followup_snooze_api(request, pk):
+    """POST {days?} → defer an open follow-up without discarding it."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    body = _body(request) or {}
+    try:
+        days = max(1, min(int(body.get('days', 7)), 90))
+        from .models import FollowUp
+        followup = FollowUp.objects.get(pk=pk, owner=request.user, done=False)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'days نامعتبر است'}, status=400)
+    except FollowUp.DoesNotExist:
+        return JsonResponse({'error': 'پیدا نشد'}, status=404)
+    followup.due_date = timezone.localdate() + timedelta(days=days)
+    followup.save(update_fields=['due_date'])
+    return JsonResponse({'ok': True, 'followup': serialize_followup(followup)})
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -7,7 +7,7 @@ import json
 import io
 from datetime import date, timedelta
 
-from .models import AIExtractionTrace, Commitment, Debt, Event, ExtractionSuggestion, FeatureFlag, Follow, Friendship, GiftIdea, Information, Interaction, JournalEntry, KnowledgeTriple, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
+from .models import AIExtractionTrace, Commitment, Debt, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftIdea, Information, Interaction, JournalEntry, KnowledgeTriple, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
 from .templatetags.jalali_tags import jalali_date
 
 
@@ -458,6 +458,14 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertEqual(gift.status_code, 200)
         self.assertTrue(Commitment.objects.filter(owner=self.user, node=self.sara).exists())
         self.assertTrue(GiftIdea.objects.filter(owner=self.user, node=self.sara).exists())
+
+    def test_open_followup_can_be_snoozed_by_its_owner(self):
+        item = FollowUp.objects.create(owner=self.user, node=self.sara, text='تماس بگیر')
+        response = self.client.post(f'/api/followups/{item.id}/snooze/', data=json.dumps({'days': 7}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        item.refresh_from_db()
+        self.assertEqual(item.due_date, timezone.localdate() + timedelta(days=7))
 
     def test_person_can_be_created_without_a_technical_username(self):
         form = self.client.get('/nodes/create/')

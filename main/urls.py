@@ -28,7 +28,7 @@ from .views_interactions import (
 from .views_followups import (
     followup_create_api,
     followup_toggle_api,
-    followup_delete_api,
+    followup_delete_api, followup_snooze_api,
     followups_list_api,
 )
 from .views_checkin import checkin_view, checkin_submit_api
@@ -251,6 +251,7 @@ urlpatterns = [
     path('api/health/',                  health_api,              name='health_api'),
     path('api/followups/create/',        followup_create_api,     name='followup_create'),
     path('api/followups/<int:pk>/toggle/', followup_toggle_api,   name='followup_toggle'),
+    path('api/followups/<int:pk>/snooze/', followup_snooze_api,   name='followup_snooze'),
     path('api/followups/<int:pk>/delete/', followup_delete_api,   name='followup_delete'),
     path('api/followups/',               followups_list_api,      name='followups_list'),
     path('checkin/',                     checkin_view,            name='checkin'),

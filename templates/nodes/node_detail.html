@@ -713,6 +713,7 @@
           {% if f.due_date < today %}⏰ گذشته: {% elif f.due_date == today %}⏰ امروز{% else %}📅 {% endif %}{% if f.due_date != today %}{{ f.due_date|date:"Y/m/d" }}{% endif %}
         </span>
       {% endif %}
+      <button class="fu-del" onclick="fuSnooze({{ f.id }})" title="یک هفته بعد">↷</button>
       <button class="fu-del" onclick="fuDelete({{ f.id }})" title="حذف">✕</button>
     </div>
     {% empty %}
@@ -1582,5 +1583,8 @@ async function loadRelationAssistant(){
     const note=document.createElement('small');note.style.cssText='display:block;margin-top:8px;color:var(--text-muted)';note.textContent=(d.reason||'')+' · '+(d.safety||'');box.append(note);
   }catch(e){box.textContent=e.message||'خطا در آماده‌سازی پیشنهاد.'}
 }
+</script>
+<script>
+async function fuSnooze(id){const r=await fetch('/api/followups/'+id+'/snooze/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({days:7})}),d=await r.json();if(!r.ok)return fgToast(d.error||'عقب‌انداختن انجام نشد.',true);fgToast('برای یک هفته بعد یادآوری می‌شود.');setTimeout(()=>location.reload(),350)}
 </script>
 {% endblock %}
