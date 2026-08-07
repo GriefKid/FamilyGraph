@@ -455,12 +455,15 @@ function filterNodes(q){
     c.style.display = match ? '' : 'none';
   });
 }
-// Keep a server-side search active while moving through paginated results.
-const activePeopleQuery = new URLSearchParams(location.search).get('q');
-if(activePeopleQuery){
+// Keep all server-side directory filters active while moving through pages.
+const activePeopleFilters = new URLSearchParams(location.search);
+if(['q','group','focus'].some(key=>activePeopleFilters.has(key))){
   document.querySelectorAll('.pagination a').forEach(link=>{
     const url = new URL(link.href, location.origin);
-    url.searchParams.set('q', activePeopleQuery);
+    ['q','group','focus'].forEach(key=>{
+      const value=activePeopleFilters.get(key);
+      if(value) url.searchParams.set(key,value);
+    });
     link.href = url.pathname + url.search;
   });
 }

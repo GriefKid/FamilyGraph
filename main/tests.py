@@ -91,7 +91,7 @@ class DashboardBriefingTests(TestCase):
         response = self.client.get('/nodes/?q=Findable')
         self.assertContains(response, 'far-person')
         self.assertNotContains(response, 'hidden-person')
-        self.assertContains(response, 'activePeopleQuery')
+        self.assertContains(response, 'activePeopleFilters')
 
     def test_people_search_normalizes_arabic_and_persian_letters(self):
         user = get_user_model().objects.create_user(username='persian-search', password='SecurePass1')
