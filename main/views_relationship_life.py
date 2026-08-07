@@ -72,6 +72,8 @@ def trust_center_view(request):
         'no_ai_facts': no_ai_facts,
         'paused_people': safety,
         'ai_enabled': user.ai_chat_enabled or user.ai_extraction_enabled or user.ai_journal_enabled,
+        'share_links': ShareLink.objects.filter(owner=user, revoked=False,
+                                                expires_at__gt=timezone.now()).select_related('node')[:20],
     })
 
 
@@ -102,6 +104,15 @@ def share_link_create_api(request, pk):
     link = ShareLink.objects.create(owner=request.user, node=node,
                                     expires_at=timezone.now() + timedelta(days=days))
     return JsonResponse({'ok': True, 'token': str(link.token), 'expires_at': link.expires_at.isoformat()})
+
+
+@login_required
+@require_POST
+def share_link_revoke_api(request, token):
+    link = get_object_or_404(ShareLink, owner=request.user, token=token, revoked=False)
+    link.revoked = True
+    link.save(update_fields=['revoked'])
+    return JsonResponse({'ok': True})
 
 
 def shared_person_card_view(request, token):

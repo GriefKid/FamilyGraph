@@ -476,6 +476,9 @@ class RelationshipLifeCycleTests(TestCase):
         public = self.client.get(f'/shared/person/{created.json()["token"]}/')
         self.assertEqual(public.status_code, 200)
         self.assertNotContains(public, '09120000000')
+        revoked = self.client.post(f'/api/share-links/{created.json()["token"]}/revoke/')
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(self.client.get(f'/shared/person/{created.json()["token"]}/').status_code, 404)
 
     def test_person_can_be_created_without_a_technical_username(self):
         form = self.client.get('/nodes/create/')

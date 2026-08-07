@@ -59,7 +59,7 @@ from .views_relationship_life import (relationship_life_hub, meeting_briefing_ap
     quick_capture_api, meeting_reflection_api, commitment_action_api,
     safety_setting_api, person_export, csv_import_preview, csv_import_apply, service_worker,
     introduction_brief_api, person_delete_complete, trust_center_view, person_card_view,
-    share_link_create_api, shared_person_card_view)
+    share_link_create_api, share_link_revoke_api, shared_person_card_view)
 from .views_platform import (platform_tools_view, command_palette_api, onboarding_api, onboarding_complete_api,
     onboarding_goal_api,
     ai_quality_dashboard, ai_debug_private, ai_trace_rerun, feature_flags_view, frontend_error_api,
@@ -320,6 +320,7 @@ urlpatterns = [
     path('trust/',                       trust_center_view, name='trust_center'),
     path('people/<int:pk>/card/',        person_card_view, name='person_card'),
     path('api/people/<int:pk>/share-link/', share_link_create_api, name='share_link_create'),
+    path('api/share-links/<uuid:token>/revoke/', share_link_revoke_api, name='share_link_revoke'),
     path('shared/person/<uuid:token>/', shared_person_card_view, name='shared_person_card'),
     path('api/relationship-life/briefing/<int:pk>/', meeting_briefing_api, name='meeting_briefing'),
     path('api/relationship-life/capture/', quick_capture_api, name='quick_capture'),
