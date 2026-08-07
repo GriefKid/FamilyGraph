@@ -628,6 +628,12 @@ class RelationshipCreateView(LoginRequiredMixin, CreateView):
         form.instance.owner = self.request.user
         return super().form_valid(form)
 
+    def get_success_url(self):
+        target_id = self.request.GET.get('target')
+        if target_id and Node.objects.filter(owner=self.request.user, pk=target_id).exists():
+            return reverse_lazy('node_detail', kwargs={'pk': target_id})
+        return super().get_success_url()
+
 class RelationshipUpdateView(LoginRequiredMixin, UpdateView):
     model = Relationship
     form_class = RelationshipForm

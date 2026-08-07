@@ -472,6 +472,10 @@ class RelationshipLifeCycleTests(TestCase):
         relation_form = self.client.get(f'/relationships/create/?target={person.id}')
         self.assertEqual(relation_form.status_code, 200)
         self.assertContains(relation_form, f'value="{person.id}" selected')
+        relation = self.client.post(f'/relationships/create/?target={person.id}', {
+            'source': self.root.id, 'target': person.id, 'rel': 'دوست', 'strength': 3, 'status': 'active',
+        })
+        self.assertEqual(relation['Location'], f'/nodes/{person.id}/')
 
     def test_post_meeting_creates_private_timeline_and_extraction(self):
         response = self.client.post('/api/relationship-life/reflection/', data=json.dumps({
