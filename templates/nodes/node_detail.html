@@ -487,6 +487,7 @@
       </div>
       {% if not is_root_node %}
       <div class="hero-quick-actions">
+        <button type="button" onclick="togglePersonPin(this)">{% if node.is_pinned %}★ برداشتن پین{% else %}☆ پین‌کردن{% endif %}</button>
         <button type="button" onclick="createPersonShareLink()">🔗 لینک امن</button>
         <a href="/people/{{ node.id }}/card/">🪪 کارت شخص</a>
         <button type="button" onclick="showMeetingBrief()">🧳 آمادگی ملاقات</button>
@@ -1591,5 +1592,8 @@ async function fuSnooze(id){const r=await fetch('/api/followups/'+id+'/snooze/',
 </script>
 <script>
 async function createPersonShareLink(){const r=await fetch('/api/people/{{ node.id }}/share-link/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({days:7})}),d=await r.json();if(!r.ok)return fgToast(d.error||'ساخت لینک انجام نشد.',true);const url=location.origin+'/shared/person/'+d.token+'/';try{await navigator.clipboard.writeText(url);fgToast('لینک امن ۷ روزه کپی شد.')}catch(e){window.prompt('این لینک را کپی کن:',url)}}
+</script>
+<script>
+async function togglePersonPin(button){const r=await fetch('/api/nodes/{{ node.id }}/pin/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}}),d=await r.json();if(!r.ok)return fgToast(d.error||'تغییر پین انجام نشد.',true);button.textContent=d.is_pinned?'★ برداشتن پین':'☆ پین‌کردن';fgToast(d.is_pinned?'به افراد پین‌شده اضافه شد.':'پین برداشته شد.')}
 </script>
 {% endblock %}

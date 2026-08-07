@@ -143,6 +143,18 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'kept-person')
         self.assertNotContains(response, 'merged-person')
 
+    def test_person_pin_is_owner_scoped_and_sorts_first(self):
+        user = get_user_model().objects.create_user(username='pinned-user', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='pinned-other', password='SecurePass1')
+        pinned = Node.objects.create(owner=user, username='z-pinned', name='Pinned')
+        Node.objects.create(owner=user, username='a-normal', name='Normal')
+        foreign = Node.objects.create(owner=other, username='foreign-pin', name='Foreign')
+        self.client.force_login(user)
+        self.assertEqual(self.client.post(f'/api/nodes/{pinned.id}/pin/').status_code, 200)
+        self.assertEqual(self.client.post(f'/api/nodes/{foreign.id}/pin/').status_code, 404)
+        response = self.client.get('/nodes/')
+        self.assertLess(response.content.find(b'z-pinned'), response.content.find(b'a-normal'))
+
     def test_people_directory_group_filter_is_owner_scoped(self):
         from .models import Group
         user = get_user_model().objects.create_user(username='group-list', password='SecurePass1')

@@ -278,7 +278,7 @@ class NodeListView(LoginRequiredMixin, ListView):
                 queryset = queryset.filter(pk__in=attention_ids)
             except Exception:
                 queryset = queryset.none()
-        return queryset
+        return queryset.order_by('-is_pinned', 'username')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -288,6 +288,14 @@ class NodeListView(LoginRequiredMixin, ListView):
         context['selected_focus'] = self.request.GET.get('focus', '').strip()
         return context
 
+
+@login_required
+@require_POST
+def toggle_node_pin_api(request, pk):
+    node = get_object_or_404(Node, pk=pk, owner=request.user)
+    node.is_pinned = not node.is_pinned
+    node.save(update_fields=['is_pinned'])
+    return JsonResponse({'ok': True, 'is_pinned': node.is_pinned})
 
 @login_required
 def home(request):

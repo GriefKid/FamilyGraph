@@ -190,6 +190,7 @@ urlpatterns = [
     path('nodes/<int:pk>/', views.node_detail, name='node_detail'),
     path('nodes/<int:pk>/edit/', views.UpdateNodeView.as_view(), name='node_update'),
     path('nodes/<int:pk>/delete/', views.node_delete, name='node_delete'),
+    path('api/nodes/<int:pk>/pin/', views.toggle_node_pin_api, name='toggle_node_pin'),
 
     # ======================
     # RELATIONSHIP CRUD

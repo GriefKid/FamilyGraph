@@ -172,6 +172,7 @@ class Node(models.Model):
     )
     merged_into = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name='merged_duplicates')
+    is_pinned = models.BooleanField(default=False)
     is_demo = models.BooleanField(default=False)
 
     def display_name(self):
