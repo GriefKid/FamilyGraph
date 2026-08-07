@@ -88,6 +88,7 @@ class DashboardBriefingTests(TestCase):
         response = self.client.get('/graph/')
         self.assertContains(response, 'replace(/ي/g, "ی")')
         self.assertContains(response, 'openExactGraphMatch')
+        self.assertContains(response, 'id="searchStatus"')
         self.assertContains(response, 'aria-label="جستجوی شخص در گراف"')
 
     def test_people_search_is_server_side_and_owner_scoped(self):

@@ -263,6 +263,7 @@
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
       <input id="searchInput" type="search" aria-label="جستجوی شخص در گراف" placeholder="جستجوی نود..." oninput="highlightSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';highlightSearch('');this.blur()}else if(event.key==='Enter'){openExactGraphMatch(this.value)}">
+      <span id="searchStatus" aria-live="polite" style="font-size:10px;color:#94a3b8;white-space:nowrap"></span>
     </div>
     <!-- Hop filter -->
     <div class="tb-glass">
@@ -1212,9 +1213,11 @@ function closePanel(){
 function highlightSearch(q){
   q = q.trim().toLowerCase().replace(/ي/g, "ی").replace(/ك/g, "ک");
   const normalize = value => String(value||"").toLowerCase().replace(/ي/g, "ی").replace(/ك/g, "ک");
+  const matched = (gData?.nodes||[]).filter(d => !q || normalize(d.username).includes(q) || normalize(d.label).includes(q)).length;
   nLayer.selectAll(".ng").attr("opacity", d =>
     !q || normalize(d.username).includes(q) || normalize(d.label).includes(q) ? 1 : .08
   );
+  document.getElementById("searchStatus").textContent = q ? `${matched} نتیجه` : "";
 }
 function openExactGraphMatch(query){
   const normalize = value => String(value||"").trim().toLowerCase().replace(/ي/g, "ی").replace(/ك/g, "ک");
