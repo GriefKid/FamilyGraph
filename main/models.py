@@ -1365,6 +1365,7 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', 'is_read'], name='notif_user_read')]
         verbose_name = 'اطلاعیه'
         verbose_name_plural = 'اطلاعیه‌ها'
 
