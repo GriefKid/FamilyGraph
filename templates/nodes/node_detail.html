@@ -492,6 +492,11 @@
         <a href="/journal/?person={{ node.username|urlencode }}">✍ خاطره دربارهٔ این شخص</a>
       </div>
       {% endif %}
+      {% if is_new_person and not is_root_node %}
+      <div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(129,140,248,.24);border-radius:11px;background:rgba(99,102,241,.07);font-size:12px;line-height:1.8;color:var(--text-soft)">
+        برای شروع لازم نیست همه‌چیز را کامل کنی؛ یک تعامل، پیگیری یا خاطرهٔ کوتاه دربارهٔ این شخص ثبت کن.
+      </div>
+      {% endif %}
     </div>
   </div>
 

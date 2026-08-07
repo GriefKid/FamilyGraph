@@ -545,6 +545,7 @@ def node_detail(request, pk):
         'commitments': commitments,
         'gift_ideas': gifts,
         'meeting_reflections': meeting_reflections,
+        'is_new_person': not any((relationships, interactions, journal_entries, events, informations)),
     }
     return render(request, 'nodes/node_detail.html', context)
 
