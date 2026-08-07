@@ -1571,4 +1571,16 @@ function startMeetingReflection(){
   actions.insertAdjacentElement('afterend',box);const text=box.querySelector('textarea');text.focus();const [save,cancel]=box.querySelectorAll('button');cancel.onclick=()=>box.remove();save.onclick=async()=>{const summary=text.value.trim();if(!summary)return fgToast('اول یک جمله بنویس.',true);save.disabled=true;const r=await fetch('/api/relationship-life/reflection/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({node_id:{{ node.id }},summary,relationship_change:'same',feeling:0})}),d=await r.json();if(!r.ok){save.disabled=false;return fgToast(d.error||'ثبت بازتاب انجام نشد.',true)}fgToast('بازتاب ثبت شد.');setTimeout(()=>location.reload(),450)};
 }
 </script>
+<script>
+async function loadRelationAssistant(){
+  const box=document.getElementById('relationAssistant');if(!box)return;
+  box.textContent='در حال آماده‌سازی…';
+  try{const r=await fetch('/api/memory/assistant/{{ node.id }}/'),d=await r.json();if(!r.ok)throw new Error(d.error||'خطا');box.replaceChildren();
+    const add=(label,value)=>{if(!value)return;const row=document.createElement('div');const strong=document.createElement('b');strong.textContent=label+' ';row.append(strong,document.createTextNode(value));box.append(row)};
+    add('موضوع پیشنهادی:',d.topic);add('پیش‌نویس پیام:',d.draft);if(d.open_topics?.length)add('موضوعات باز:',d.open_topics.join('، '));if(d.avoid?.length)add('مرزها و حساسیت‌ها:',d.avoid.join('، '));
+    if(d.draft){const copy=document.createElement('button');copy.className='btn btn-sm';copy.style.marginTop='9px';copy.textContent='کپی متن پیام';copy.onclick=async()=>{try{await navigator.clipboard.writeText(d.draft);fgToast('متن پیام کپی شد.')}catch(e){fgToast('کپی خودکار ممکن نشد.',true)}};box.append(copy)}
+    const note=document.createElement('small');note.style.cssText='display:block;margin-top:8px;color:var(--text-muted)';note.textContent=(d.reason||'')+' · '+(d.safety||'');box.append(note);
+  }catch(e){box.textContent=e.message||'خطا در آماده‌سازی پیشنهاد.'}
+}
+</script>
 {% endblock %}
