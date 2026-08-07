@@ -447,5 +447,14 @@ function filterNodes(q){
     c.style.display = match ? '' : 'none';
   });
 }
+// Keep a server-side search active while moving through paginated results.
+const activePeopleQuery = new URLSearchParams(location.search).get('q');
+if(activePeopleQuery){
+  document.querySelectorAll('.pagination a').forEach(link=>{
+    const url = new URL(link.href, location.origin);
+    url.searchParams.set('q', activePeopleQuery);
+    link.href = url.pathname + url.search;
+  });
+}
 </script>
 {% endblock %}

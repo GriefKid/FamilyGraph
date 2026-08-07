@@ -90,6 +90,7 @@ class DashboardBriefingTests(TestCase):
         response = self.client.get('/nodes/?q=Findable')
         self.assertContains(response, 'far-person')
         self.assertNotContains(response, 'hidden-person')
+        self.assertContains(response, 'activePeopleQuery')
 
     def test_people_directory_hides_records_merged_into_another_person(self):
         user = get_user_model().objects.create_user(username='merged-list', password='SecurePass1')
