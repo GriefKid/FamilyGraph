@@ -91,6 +91,12 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'id="searchStatus"')
         self.assertContains(response, 'aria-label="جستجوی شخص در گراف"')
 
+    def test_relationship_search_normalizes_persian_characters(self):
+        user = get_user_model().objects.create_user(username='relationship-search', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/relationships/')
+        self.assertContains(response, "replace(/ي/g, 'ی')")
+
     def test_people_search_is_server_side_and_owner_scoped(self):
         user = get_user_model().objects.create_user(username='people-search', password='SecurePass1')
         other = get_user_model().objects.create_user(username='other-search', password='SecurePass1')

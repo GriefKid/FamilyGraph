@@ -144,9 +144,10 @@
 })();
 
 function rlFilter(q){
-  q = q.trim().toLowerCase();
+  const normalize = value => String(value||'').trim().toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+  q = normalize(q);
   document.querySelectorAll('.rl-card').forEach(c => {
-    c.style.display = (!q || (c.dataset.search || '').includes(q)) ? '' : 'none';
+    c.style.display = (!q || normalize(c.dataset.search).includes(q)) ? '' : 'none';
   });
 }
 </script>
