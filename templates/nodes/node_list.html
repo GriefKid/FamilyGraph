@@ -339,6 +339,10 @@
     <option value="">همهٔ گروه‌ها</option>
     {% for group in groups %}<option value="{{ group.id }}" {% if selected_group == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>{% endfor %}
   </select>
+  <select id="peopleFocusFilter" aria-label="فیلتر اولویت افراد" onchange="filterPeopleByFocus(this.value)">
+    <option value="">همهٔ افراد</option>
+    <option value="attention" {% if selected_focus == 'attention' %}selected{% endif %}>نیازمند توجه</option>
+  </select>
   <div class="view-toggle">
     <button class="vt-btn active" id="vt-grid" onclick="setView('grid')" title="نمایش کارتی">⊞</button>
     <button class="vt-btn" id="vt-list" onclick="setView('list')" title="نمایش لیستی">☰</button>
@@ -463,6 +467,12 @@ if(activePeopleQuery){
 function filterPeopleByGroup(group){
   const url = new URL(location.href);
   if(group) url.searchParams.set('group', group); else url.searchParams.delete('group');
+  url.searchParams.delete('page');
+  location.href = url.pathname + url.search;
+}
+function filterPeopleByFocus(focus){
+  const url = new URL(location.href);
+  if(focus) url.searchParams.set('focus', focus); else url.searchParams.delete('focus');
   url.searchParams.delete('page');
   location.href = url.pathname + url.search;
 }

@@ -100,6 +100,18 @@ class DashboardBriefingTests(TestCase):
         response = self.client.get('/nodes/?q=علی')
         self.assertContains(response, 'ali-person')
 
+    def test_people_directory_can_filter_to_relationships_needing_attention(self):
+        user = get_user_model().objects.create_user(username='attention-list', password='SecurePass1')
+        root = Node.objects.create(owner=user, username='attention-root', name='Root')
+        distant = Node.objects.create(owner=user, username='attention-person', name='Needs attention')
+        user.root_node = root
+        user.save(update_fields=['root_node'])
+        Relationship.objects.create(owner=user, source=root, target=distant, strength=5)
+        Interaction.objects.create(owner=user, node=distant, kind='meet', date=date.today() - timedelta(days=100))
+        self.client.force_login(user)
+        response = self.client.get('/nodes/?focus=attention')
+        self.assertContains(response, 'attention-person')
+
     def test_people_directory_hides_records_merged_into_another_person(self):
         user = get_user_model().objects.create_user(username='merged-list', password='SecurePass1')
         kept = Node.objects.create(owner=user, username='kept-person', name='Kept Person')

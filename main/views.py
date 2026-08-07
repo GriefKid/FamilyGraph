@@ -270,6 +270,14 @@ class NodeListView(LoginRequiredMixin, ListView):
         group_id = self.request.GET.get('group', '').strip()
         if group_id.isdigit():
             queryset = queryset.filter(groups__id=group_id, groups__owner=self.request.user).distinct()
+        if self.request.GET.get('focus') == 'attention':
+            try:
+                from .health import compute_health
+                attention_ids = [node_id for node_id, item in compute_health(self.request.user).items()
+                                 if item.get('status') in {'yellow', 'red'}]
+                queryset = queryset.filter(pk__in=attention_ids)
+            except Exception:
+                queryset = queryset.none()
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -277,6 +285,7 @@ class NodeListView(LoginRequiredMixin, ListView):
         context['search_query'] = self.request.GET.get('q', '').strip()[:80]
         context['groups'] = Group.objects.filter(owner=self.request.user)
         context['selected_group'] = self.request.GET.get('group', '').strip()
+        context['selected_focus'] = self.request.GET.get('focus', '').strip()
         return context
 
 
