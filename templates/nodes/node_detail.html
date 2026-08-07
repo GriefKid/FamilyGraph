@@ -487,6 +487,7 @@
       </div>
       {% if not is_root_node %}
       <div class="hero-quick-actions">
+        {% if request.user.root_node_id %}<a href="/relationships/create/?target={{ node.id }}">🔗 ثبت رابطه با من</a>{% endif %}
         <button type="button" onclick="document.getElementById('interaction-section').scrollIntoView({behavior:'smooth',block:'start'})">⚡ ثبت تعامل</button>
         <button type="button" onclick="document.getElementById('followup-section').scrollIntoView({behavior:'smooth',block:'start'})">📌 ثبت پیگیری</button>
         <a href="/journal/?person={{ node.username|urlencode }}">✍ خاطره دربارهٔ این شخص</a>

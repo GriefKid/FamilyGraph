@@ -605,6 +605,15 @@ class RelationshipCreateView(LoginRequiredMixin, CreateView):
     template_name = 'relationships/relationship_form.html'
     success_url = reverse_lazy('relationship_list')
 
+    def get_initial(self):
+        initial = super().get_initial()
+        target_id = self.request.GET.get('target')
+        if target_id and Node.objects.filter(owner=self.request.user, pk=target_id).exists():
+            initial['target'] = target_id
+        if self.request.user.root_node_id:
+            initial['source'] = self.request.user.root_node_id
+        return initial
+
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         qs = Node.objects.filter(owner=self.request.user)
