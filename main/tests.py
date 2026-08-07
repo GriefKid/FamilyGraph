@@ -491,6 +491,7 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertContains(detail, 'آمادگی ملاقات')
         self.assertContains(detail, 'بازتاب ملاقات')
         self.assertContains(detail, 'کپی متن پیام')
+        self.assertContains(detail, 'لینک امن')
         relation_form = self.client.get(f'/relationships/create/?target={person.id}')
         self.assertEqual(relation_form.status_code, 200)
         self.assertContains(relation_form, f'value="{person.id}" selected')
