@@ -96,6 +96,7 @@ class DashboardBriefingTests(TestCase):
         self.client.force_login(user)
         response = self.client.get('/relationships/')
         self.assertContains(response, "replace(/ي/g, 'ی')")
+        self.assertContains(response, 'id="rlSearchStatus"')
 
     def test_people_search_is_server_side_and_owner_scoped(self):
         user = get_user_model().objects.create_user(username='people-search', password='SecurePass1')

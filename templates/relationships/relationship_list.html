@@ -80,6 +80,7 @@
     <div class="rl-stat"><div class="n" style="color:#34d399" id="rlActive">—</div><div class="l">🟢 فعال</div></div>
     <div class="rl-stat"><div class="n" style="color:#a5b4fc" id="rlAvg">—</div><div class="l">⚡ میانگین قدرت</div></div>
     <input class="rl-search" id="rlSearch" placeholder="🔍 جستجو — اسم یا نوع رابطه…" oninput="rlFilter(this.value)">
+    <span id="rlSearchStatus" aria-live="polite" style="font-size:11px;color:var(--text-muted)"></span>
   </div>
 
   <div class="rl-grid" id="rlGrid">
@@ -146,9 +147,12 @@
 function rlFilter(q){
   const normalize = value => String(value||'').trim().toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک');
   q = normalize(q);
-  document.querySelectorAll('.rl-card').forEach(c => {
-    c.style.display = (!q || normalize(c.dataset.search).includes(q)) ? '' : 'none';
+  const cards = [...document.querySelectorAll('.rl-card')];
+  const visible = cards.filter(c => !q || normalize(c.dataset.search).includes(q));
+  cards.forEach(c => {
+    c.style.display = visible.includes(c) ? '' : 'none';
   });
+  document.getElementById('rlSearchStatus').textContent = q ? `${visible.length} نتیجه` : '';
 }
 </script>
 {% endblock %}
