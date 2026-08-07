@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}خط زمان خاطره‌ها · FamilyGraph{% endblock %}
 {% block page_title %}خط زمان خاطره‌ها{% endblock %}
+{% block extra_css %}<style>@media print{.sidebar,.topbar,.site-footer,.orb,.nav-scrim,form{display:none!important}.main-wrap{margin:0!important}.card{border:0!important;box-shadow:none!important;background:#fff!important;color:#111!important}}</style>{% endblock %}
 {% block content %}
 <main style="max-width:860px;margin:0 auto">
   <section class="card" style="padding:20px">
@@ -10,6 +11,7 @@
       <select name="person" style="padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text)"><option value="">همهٔ افراد</option>{% for node in nodes %}<option value="{{ node.id }}" {% if selected_node == node.id|stringformat:"s" %}selected{% endif %}>{{ node.display_name }}</option>{% endfor %}</select>
       <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" name="images" value="1" {% if images_only %}checked{% endif %}> فقط دارای عکس</label>
       <button class="btn btn-sm">اعمال فیلتر</button>
+      <button class="btn btn-sm" type="button" onclick="window.print()">چاپ timeline</button>
     </form>
     {% for entry in entries %}
     <article style="padding:16px 0;border-bottom:1px solid var(--border)">

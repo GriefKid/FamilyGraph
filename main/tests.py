@@ -538,6 +538,7 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertEqual(self.client.get('/trust/').status_code, 200)
         self.assertEqual(self.client.get(f'/people/{self.sara.id}/card/').status_code, 200)
         self.assertEqual(self.client.get('/memory/timeline/').status_code, 200)
+        self.assertContains(self.client.get('/memory/timeline/'), 'چاپ timeline')
         entry = JournalEntry.objects.create(owner=self.user, text='خاطرهٔ سارا', entry_date=timezone.localdate())
         entry.mentioned_nodes.add(self.sara)
         filtered = self.client.get(f'/memory/timeline/?person={self.sara.id}')
