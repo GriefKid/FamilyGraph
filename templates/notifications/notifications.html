@@ -144,11 +144,11 @@
 <div class="notif-section-title">📢 اطلاعیه‌های سیستم</div>
 {% if general_notifs %}
 {% for n in general_notifs %}
-<div class="notif-item {% if not n.is_read %}unread{% endif %}">
+{% if n.link %}<a class="notif-item {% if not n.is_read %}unread{% endif %}" href="{{ n.link }}" style="text-decoration:none;color:var(--text)">{% else %}<div class="notif-item {% if not n.is_read %}unread{% endif %}">{% endif %}
   <div class="notif-dot {% if n.is_read %}read{% endif %}"></div>
   <div class="notif-msg">{{ n.message }}</div>
   <div class="notif-ts">{{ n.created_at|timesince }} پیش</div>
-</div>
+{% if n.link %}</a>{% else %}</div>{% endif %}
 {% endfor %}
 {% else %}
 <div class="empty-state">اطلاعیه‌ای نداری</div>

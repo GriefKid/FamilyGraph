@@ -660,6 +660,12 @@ class PlatformQualityTests(TestCase):
                                     content_type='application/json')
         self.assertEqual(response.status_code, 400)
 
+    def test_notification_link_is_rendered_as_an_action(self):
+        from .models import Notification
+        Notification.objects.create(user=self.user, message='Follow-up is ready.', link='/checkin/')
+        response = self.client.get('/notifications/')
+        self.assertContains(response, 'href="/checkin/"')
+
     @override_settings(WRITE_RATE_LIMIT=1, WRITE_RATE_LIMIT_WINDOW=60)
     def test_write_rate_limit_blocks_only_excess_requests(self):
         cache.clear()
