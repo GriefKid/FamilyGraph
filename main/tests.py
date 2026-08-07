@@ -154,6 +154,7 @@ class DashboardBriefingTests(TestCase):
         self.assertEqual(self.client.post(f'/api/nodes/{foreign.id}/pin/').status_code, 404)
         response = self.client.get('/nodes/')
         self.assertLess(response.content.find(b'z-pinned'), response.content.find(b'a-normal'))
+        self.assertContains(response, 'title="پین‌شده"')
 
     def test_people_directory_group_filter_is_owner_scoped(self):
         from .models import Group

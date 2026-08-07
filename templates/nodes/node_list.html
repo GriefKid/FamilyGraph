@@ -356,6 +356,8 @@
      href="{% url 'node_detail' node.id %}"
      data-search="{{ node.username|lower }} {{ node.first_name|lower }} {{ node.last_name|lower }} {{ node.nickname|lower }} {{ node.career|lower }} {{ node.name|lower }}">
 
+    {% if node.is_pinned %}<span class="nc-root-badge" title="پین‌شده" style="right:8px;left:auto">★</span>{% endif %}
+
     <div class="nc-avatar-wrap">
       <div class="nc-avatar-ring">
         {% if node.picture %}
@@ -416,6 +418,7 @@
     <div class="nli-info">
       <div class="nli-name">
         {{ node.display_name }}
+        {% if node.is_pinned %}<span class="chip" style="font-size:9px;padding:1px 6px;margin-right:6px;">★</span>{% endif %}
         {% if request.user.root_node and node.id == request.user.root_node.id %}
         <span class="chip" style="font-size:9px;padding:1px 6px;margin-right:6px;">من</span>
         {% endif %}
