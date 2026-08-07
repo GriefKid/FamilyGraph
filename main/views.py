@@ -179,7 +179,8 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
             'checkin_done': checkin_done,
             'open_debts': open_debts,
             'pending_suggestions': pending_suggestions,
-            'today_actions': today_actions[:5],
+            # A daily briefing should create focus, not another task list.
+            'today_actions': today_actions[:3],
             'people_count': nodes.count(),
             'relationship_count': relationships.count(),
             'onboarding_ready': bool(
