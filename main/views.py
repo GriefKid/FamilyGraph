@@ -619,6 +619,9 @@ class RelationshipCreateView(LoginRequiredMixin, CreateView):
         qs = Node.objects.filter(owner=self.request.user)
         form.fields['source'].queryset = qs
         form.fields['target'].queryset = qs
+        if not form.instance.pk:
+            form.instance.source_id = form.initial.get('source') or None
+            form.instance.target_id = form.initial.get('target') or None
         return form
 
     def form_valid(self, form):
