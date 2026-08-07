@@ -112,6 +112,12 @@ class DashboardBriefingTests(TestCase):
         response = self.client.get('/nodes/?focus=attention')
         self.assertContains(response, 'attention-person')
 
+    def test_people_directory_explains_an_empty_filtered_result(self):
+        user = get_user_model().objects.create_user(username='empty-people-filter', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/nodes/?q=nobody')
+        self.assertContains(response, 'پاک‌کردن فیلترها')
+
     def test_people_directory_hides_records_merged_into_another_person(self):
         user = get_user_model().objects.create_user(username='merged-list', password='SecurePass1')
         kept = Node.objects.create(owner=user, username='kept-person', name='Kept Person')

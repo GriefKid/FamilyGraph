@@ -379,6 +379,13 @@
 
   </a>
   {% empty %}
+  {% if search_query or selected_group or selected_focus %}
+  <div class="empty-state">
+    <div class="empty-icon">🔎</div>
+    <div class="empty-text">برای این فیلتر نتیجه‌ای پیدا نشد</div>
+    <a href="{% url 'node_list' %}" class="btn btn-sm">پاک‌کردن فیلترها</a>
+  </div>
+  {% else %}
   <div class="empty-state">
     <div class="empty-icon">◎</div>
     <div class="empty-text">
@@ -387,6 +394,7 @@
     </div>
     <a href="{% url 'node_create' %}" class="btn btn-primary">＋ افزودن اولین شخص</a>
   </div>
+  {% endif %}
   {% endfor %}
 </div>
 
