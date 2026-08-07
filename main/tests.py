@@ -73,6 +73,15 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'افزودن اولین شخص مهم')
 
 
+    def test_base_navigation_is_keyboard_accessible(self):
+        user = get_user_model().objects.create_user(username='accessible-user', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/')
+        self.assertContains(response, 'href="#main-content"')
+        self.assertContains(response, 'id="main-content" tabindex="-1"')
+        self.assertContains(response, 'id="g1-hdr" type="button" aria-expanded="true"')
+
+
 class PublicSocialTests(TestCase):
     def setUp(self):
         User = get_user_model()

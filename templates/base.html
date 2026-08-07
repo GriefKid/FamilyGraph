@@ -350,6 +350,7 @@ body{ display:block; }
 }
 
 .nav-group-label{
+  width:100%; border:0; background:transparent; font-family:inherit; text-align:inherit;
   font-size:9.5px;
   font-weight:700;
   color:var(--text-dim);
@@ -1212,12 +1213,12 @@ input:focus, textarea:focus, select:focus{
 
     <!-- صفحه‌های مادر؛ تمام قابلیت‌های قبلی از داخل این بخش‌ها در دسترس‌اند. -->
     <div class="nav-group">
-      <div class="nav-group-label" id="g1-hdr" onclick="toggleNavGroup('g1')">
+      <button class="nav-group-label" id="g1-hdr" type="button" aria-expanded="true" aria-controls="g1-items" onclick="toggleNavGroup('g1')">
         <span>🌟 بخش‌های اصلی</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-      </div>
+      </button>
       <div class="nav-group-items" id="g1-items">
         <a href="/" class="nav-item {% block nav_home %}{% endblock %}"><span class="nav-icon">✨</span><span>امروز من</span></a>
         <a href="/people/" class="nav-item {% block nav_people_hub %}{% endblock %}"><span class="nav-icon">👥</span><span>آدم‌ها</span></a>
@@ -1232,12 +1233,12 @@ input:focus, textarea:focus, select:focus{
 
     <!-- دسترسی سریع به کارهای پرتکرار -->
     <div class="nav-group">
-      <div class="nav-group-label" id="g2-hdr" onclick="toggleNavGroup('g2')">
+      <button class="nav-group-label" id="g2-hdr" type="button" aria-expanded="true" aria-controls="g2-items" onclick="toggleNavGroup('g2')">
         <span>⚡ دسترسی سریع</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-      </div>
+      </button>
       <div class="nav-group-items" id="g2-items">
         <a href="/checkin/" class="nav-item {% block nav_checkin %}{% endblock %}"><span class="nav-icon">⚡</span><span>چک‌این سریع</span></a>
         <a href="/nodes/create/" class="nav-item"><span class="nav-icon">＋</span><span>آدم جدید</span></a>
@@ -1248,12 +1249,12 @@ input:focus, textarea:focus, select:focus{
 
     <!-- Group: تنظیمات -->
     <div class="nav-group">
-      <div class="nav-group-label" id="g3-hdr" onclick="toggleNavGroup('g3')">
+      <button class="nav-group-label" id="g3-hdr" type="button" aria-expanded="true" aria-controls="g3-items" onclick="toggleNavGroup('g3')">
         <span>👤 حساب کاربری</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-      </div>
+      </button>
       <div class="nav-group-items" id="g3-items">
         <a href="/notifications/" class="nav-item {% block nav_notifs %}{% endblock %}">
           <span class="nav-icon">📬</span><span>اطلاعیه‌ها</span>
@@ -1339,7 +1340,7 @@ input:focus, textarea:focus, select:focus{
   </div>
 
   <!-- Content -->
-  <div class="content" id="main-content">{% block content %}{% endblock %}</div>
+  <main class="content" id="main-content" tabindex="-1">{% block content %}{% endblock %}</main>
 
   <footer class="site-footer">
     <span>FamilyGraph · برای رابطه‌هایی که ارزش مراقبت دارند</span>
@@ -1427,6 +1428,7 @@ function toggleNavGroup(id){
   const items = document.getElementById(id+'-items');
   const collapsed = items.classList.toggle('collapsed');
   hdr.classList.toggle('collapsed', collapsed);
+  hdr.setAttribute('aria-expanded', String(!collapsed));
   const s = JSON.parse(localStorage.getItem('nav-g')||'{}');
   s[id] = collapsed;
   localStorage.setItem('nav-g', JSON.stringify(s));
@@ -1439,6 +1441,7 @@ function toggleNavGroup(id){
       const items = document.getElementById(id+'-items');
       if(hdr && items){
         hdr.classList.add('collapsed');
+        hdr.setAttribute('aria-expanded', 'false');
         items.classList.add('collapsed');
       }
     }
