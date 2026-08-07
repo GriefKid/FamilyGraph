@@ -329,12 +329,12 @@
 </div>
 
 <div class="toolbar">
-  <div class="search-wrap">
+  <form class="search-wrap" method="get" role="search">
     <span class="search-icon">🔍</span>
-    <input class="search-input" type="text" id="searchInput"
+    <input class="search-input" type="search" id="searchInput" name="q" value="{{ search_query }}"
            placeholder="جستجو با نام، username یا شغل..."
            onkeyup="filterNodes(this.value)">
-  </div>
+  </form>
   <div class="view-toggle">
     <button class="vt-btn active" id="vt-grid" onclick="setView('grid')" title="نمایش کارتی">⊞</button>
     <button class="vt-btn" id="vt-list" onclick="setView('list')" title="نمایش لیستی">☰</button>

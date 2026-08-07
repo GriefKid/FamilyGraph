@@ -81,6 +81,16 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'id="main-content" tabindex="-1"')
         self.assertContains(response, 'id="g1-hdr" type="button" aria-expanded="true"')
 
+    def test_people_search_is_server_side_and_owner_scoped(self):
+        user = get_user_model().objects.create_user(username='people-search', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='other-search', password='SecurePass1')
+        Node.objects.create(owner=user, username='far-person', name='Findable Person')
+        Node.objects.create(owner=other, username='hidden-person', name='Findable Person')
+        self.client.force_login(user)
+        response = self.client.get('/nodes/?q=Findable')
+        self.assertContains(response, 'far-person')
+        self.assertNotContains(response, 'hidden-person')
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):

@@ -251,7 +251,23 @@ class NodeListView(LoginRequiredMixin, ListView):
     paginate_by = 24
 
     def get_queryset(self):
-        return Node.objects.filter(owner=self.request.user).select_related('owner')
+        queryset = Node.objects.filter(owner=self.request.user).select_related('owner')
+        query = self.request.GET.get('q', '').strip()[:80]
+        if query:
+            queryset = queryset.filter(
+                Q(username__icontains=query) |
+                Q(name__icontains=query) |
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(nickname__icontains=query) |
+                Q(career__icontains=query)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('q', '').strip()[:80]
+        return context
 
 
 @login_required
