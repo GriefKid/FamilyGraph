@@ -93,6 +93,13 @@ class DashboardBriefingTests(TestCase):
         self.assertNotContains(response, 'hidden-person')
         self.assertContains(response, 'activePeopleQuery')
 
+    def test_people_search_normalizes_arabic_and_persian_letters(self):
+        user = get_user_model().objects.create_user(username='persian-search', password='SecurePass1')
+        Node.objects.create(owner=user, username='ali-person', first_name='علي')
+        self.client.force_login(user)
+        response = self.client.get('/nodes/?q=علی')
+        self.assertContains(response, 'ali-person')
+
     def test_people_directory_hides_records_merged_into_another_person(self):
         user = get_user_model().objects.create_user(username='merged-list', password='SecurePass1')
         kept = Node.objects.create(owner=user, username='kept-person', name='Kept Person')

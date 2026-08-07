@@ -254,14 +254,19 @@ class NodeListView(LoginRequiredMixin, ListView):
         queryset = Node.objects.filter(owner=self.request.user, merged_into__isnull=True).select_related('owner')
         query = self.request.GET.get('q', '').strip()[:80]
         if query:
-            queryset = queryset.filter(
-                Q(username__icontains=query) |
-                Q(name__icontains=query) |
-                Q(first_name__icontains=query) |
-                Q(last_name__icontains=query) |
-                Q(nickname__icontains=query) |
-                Q(career__icontains=query)
-            )
+            normalized = query.replace('ي', 'ی').replace('ك', 'ک')
+            variants = {
+                query, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'),
+                normalized.replace('ی', 'ي').replace('ک', 'ك'),
+            }
+            search_filter = Q()
+            for term in variants:
+                search_filter |= (
+                    Q(username__icontains=term) | Q(name__icontains=term) |
+                    Q(first_name__icontains=term) | Q(last_name__icontains=term) |
+                    Q(nickname__icontains=term) | Q(career__icontains=term)
+                )
+            queryset = queryset.filter(search_filter)
         group_id = self.request.GET.get('group', '').strip()
         if group_id.isdigit():
             queryset = queryset.filter(groups__id=group_id, groups__owner=self.request.user).distinct()
