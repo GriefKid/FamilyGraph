@@ -126,6 +126,14 @@ class DashboardBriefingTests(TestCase):
         }), content_type='application/json')
         self.assertEqual(response.status_code, 404)
 
+    def test_event_completion_refuses_someone_elses_event(self):
+        user = get_user_model().objects.create_user(username='event-write', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='event-write-other', password='SecurePass1')
+        event = Event.objects.create(owner=other, title='Private event', date=date.today())
+        self.client.force_login(user)
+        response = self.client.post(f'/api/events/{event.id}/complete/')
+        self.assertEqual(response.status_code, 404)
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):

@@ -957,12 +957,10 @@ def event_create(request):
     return render(request, 'events/event_form.html', {'form': form})
 
 @login_required
-@csrf_exempt
+@require_POST
 def event_complete_api(request, pk):
     """V11: «✓ برگزار شد» — برای همه‌ی شرکت‌کننده‌ها تعامل حضوری ثبت می‌کنه.
     این همون چیزیه که صفحه رویدادها رو به موتور سلامت رابطه وصل می‌کنه."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     event = get_object_or_404(Event, pk=pk, owner=request.user)
     logged = 0
     try:
