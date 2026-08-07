@@ -1560,4 +1560,15 @@ async function showMeetingBrief(){
   try{const r=await fetch('/api/relationship-life/briefing/{{ node.id }}/'),d=await r.json();if(!r.ok)throw new Error(d.error||'خطا');const lines=[];if(d.last_interaction)lines.push('آخرین تعامل: '+d.last_interaction);if(d.commitments?.length)lines.push('قول‌های باز: '+d.commitments.map(x=>x.text).join('، '));if(d.gift_suggestions?.length)lines.push('ایدهٔ هدیه: '+d.gift_suggestions.join('، '));if(d.facts?.length)lines.push('نکات مهم: '+d.facts.slice(0,4).map(x=>x.value).join('، '));box.textContent=lines.join('\n')||'هنوز نکتهٔ ثبت‌شده‌ای برای این ملاقات نداریم.';box.style.whiteSpace='pre-line'}catch(e){box.textContent=e.message||'خطا در آماده‌سازی خلاصه.'}}
 async function startMeetingReflection(){const summary=window.prompt('دیدار یا گفتگو چطور بود؟ یک جمله کافی است.');if(!summary?.trim())return;const r=await fetch('/api/relationship-life/reflection/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({node_id:{{ node.id }},summary,relationship_change:'same',feeling:0})}),d=await r.json();if(!r.ok)return fgToast(d.error||'ثبت بازتاب انجام نشد.',true);fgToast('بازتاب ثبت شد.');setTimeout(()=>location.reload(),500)}
 </script>
+<script>
+// Override the compact browser prompt with an inline, mobile-friendly reflection form.
+function startMeetingReflection(){
+  let box=document.getElementById('meetingReflectionForm');
+  if(box){box.remove();return}
+  const actions=document.querySelector('.hero-quick-actions');
+  box=document.createElement('div');box.id='meetingReflectionForm';box.style.cssText='margin-top:10px;padding:12px;border:1px solid rgba(129,140,248,.28);border-radius:11px;background:rgba(99,102,241,.07)';
+  box.innerHTML='<label style="display:block;font-size:12px;font-weight:700;margin-bottom:7px">دیدار یا گفتگو چطور بود؟</label><textarea rows="3" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font:inherit" placeholder="یک جمله کافی است…"></textarea><div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm">ثبت بازتاب</button><button class="btn btn-sm" type="button">لغو</button></div>';
+  actions.insertAdjacentElement('afterend',box);const text=box.querySelector('textarea');text.focus();const [save,cancel]=box.querySelectorAll('button');cancel.onclick=()=>box.remove();save.onclick=async()=>{const summary=text.value.trim();if(!summary)return fgToast('اول یک جمله بنویس.',true);save.disabled=true;const r=await fetch('/api/relationship-life/reflection/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({node_id:{{ node.id }},summary,relationship_change:'same',feeling:0})}),d=await r.json();if(!r.ok){save.disabled=false;return fgToast(d.error||'ثبت بازتاب انجام نشد.',true)}fgToast('بازتاب ثبت شد.');setTimeout(()=>location.reload(),450)};
+}
+</script>
 {% endblock %}
