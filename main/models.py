@@ -750,7 +750,8 @@ class MemoryFact(models.Model):
 
     class Meta:
         ordering = ['category', '-confidence', '-observed_at']
-        indexes = [models.Index(fields=['owner', 'node', 'active'], name='memory_owner_node_active')]
+        indexes = [models.Index(fields=['owner', 'node', 'active'], name='memory_owner_node_active'),
+                   models.Index(fields=['owner', 'active'], name='memory_owner_active')]
         constraints = [models.UniqueConstraint(fields=['owner', 'node', 'category', 'value'],
                                                 name='unique_memory_fact_per_node')]
 
