@@ -91,6 +91,15 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'far-person')
         self.assertNotContains(response, 'hidden-person')
 
+    def test_people_directory_hides_records_merged_into_another_person(self):
+        user = get_user_model().objects.create_user(username='merged-list', password='SecurePass1')
+        kept = Node.objects.create(owner=user, username='kept-person', name='Kept Person')
+        Node.objects.create(owner=user, username='merged-person', name='Merged Person', merged_into=kept)
+        self.client.force_login(user)
+        response = self.client.get('/nodes/')
+        self.assertContains(response, 'kept-person')
+        self.assertNotContains(response, 'merged-person')
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):

@@ -251,7 +251,7 @@ class NodeListView(LoginRequiredMixin, ListView):
     paginate_by = 24
 
     def get_queryset(self):
-        queryset = Node.objects.filter(owner=self.request.user).select_related('owner')
+        queryset = Node.objects.filter(owner=self.request.user, merged_into__isnull=True).select_related('owner')
         query = self.request.GET.get('q', '').strip()[:80]
         if query:
             queryset = queryset.filter(
