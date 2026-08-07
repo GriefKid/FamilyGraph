@@ -52,7 +52,7 @@ from .views_persona import (
     rel_persona_synthesize_api,
 )
 from .views_psychology import relationship_pulse_create_api, extraction_inbox, extraction_suggestions_api, extraction_suggestion_decide_api
-from .views_memory import (memory_hub, knowledge_graph_view, memory_fact_api, memory_search_api,
+from .views_memory import (memory_hub, memory_timeline_view, knowledge_graph_view, memory_fact_api, memory_search_api,
     relationship_assistant_api, recommendation_feedback_api, node_merge_preview_api,
     node_merge_apply_api, node_merge_undo_api, clear_psychology_inferences_api)
 from .views_relationship_life import (relationship_life_hub, meeting_briefing_api,
@@ -304,6 +304,7 @@ urlpatterns = [
     path('api/psychology/pulse/',        relationship_pulse_create_api, name='relationship_pulse_create'),
     path('extractions/',                 extraction_inbox, name='extraction_inbox'),
     path('memory/',                      memory_hub, name='memory_hub'),
+    path('memory/timeline/',             memory_timeline_view, name='memory_timeline'),
     path('memory/knowledge/',            knowledge_graph_view, name='knowledge_graph'),
     path('api/memory/facts/',            memory_fact_api, name='memory_fact_create'),
     path('api/memory/facts/<int:pk>/',   memory_fact_api, name='memory_fact_update'),

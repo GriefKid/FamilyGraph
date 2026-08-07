@@ -67,6 +67,14 @@ def memory_hub(request):
 
 
 @login_required
+def memory_timeline_view(request):
+    entries = JournalEntry.objects.filter(owner=request.user).prefetch_related(
+        'images', 'mentioned_nodes'
+    ).order_by('-entry_date', '-created_at')[:120]
+    return render(request, 'memory/timeline.html', {'entries': entries})
+
+
+@login_required
 def knowledge_graph_view(request):
     triples = KnowledgeTriple.objects.filter(owner=request.user, active=True).select_related(
         'subject', 'object_node')[:500]
