@@ -19,7 +19,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from .models import Node, Information, Event
+from .models import Group, Node, Information, Event
 from django.views.generic import ListView
 from django.views.generic import TemplateView
 
@@ -262,11 +262,16 @@ class NodeListView(LoginRequiredMixin, ListView):
                 Q(nickname__icontains=query) |
                 Q(career__icontains=query)
             )
+        group_id = self.request.GET.get('group', '').strip()
+        if group_id.isdigit():
+            queryset = queryset.filter(groups__id=group_id, groups__owner=self.request.user).distinct()
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['search_query'] = self.request.GET.get('q', '').strip()[:80]
+        context['groups'] = Group.objects.filter(owner=self.request.user)
+        context['selected_group'] = self.request.GET.get('group', '').strip()
         return context
 
 

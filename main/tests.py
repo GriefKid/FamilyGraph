@@ -101,6 +101,21 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'kept-person')
         self.assertNotContains(response, 'merged-person')
 
+    def test_people_directory_group_filter_is_owner_scoped(self):
+        from .models import Group
+        user = get_user_model().objects.create_user(username='group-list', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='other-group-list', password='SecurePass1')
+        own_group = Group.objects.create(owner=user, name='Friends')
+        foreign_group = Group.objects.create(owner=other, name='Hidden Group')
+        visible = Node.objects.create(owner=user, username='group-visible', name='Visible')
+        hidden = Node.objects.create(owner=user, username='group-hidden', name='Hidden')
+        visible.groups.add(own_group)
+        hidden.groups.add(foreign_group)
+        self.client.force_login(user)
+        response = self.client.get(f'/nodes/?group={own_group.id}')
+        self.assertContains(response, 'group-visible')
+        self.assertNotContains(response, 'group-hidden')
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):

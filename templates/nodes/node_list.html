@@ -335,6 +335,10 @@
            placeholder="جستجو با نام، username یا شغل..."
            onkeyup="filterNodes(this.value)">
   </form>
+  <select id="peopleGroupFilter" aria-label="فیلتر گروه افراد" onchange="filterPeopleByGroup(this.value)">
+    <option value="">همهٔ گروه‌ها</option>
+    {% for group in groups %}<option value="{{ group.id }}" {% if selected_group == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>{% endfor %}
+  </select>
   <div class="view-toggle">
     <button class="vt-btn active" id="vt-grid" onclick="setView('grid')" title="نمایش کارتی">⊞</button>
     <button class="vt-btn" id="vt-list" onclick="setView('list')" title="نمایش لیستی">☰</button>
@@ -455,6 +459,12 @@ if(activePeopleQuery){
     url.searchParams.set('q', activePeopleQuery);
     link.href = url.pathname + url.search;
   });
+}
+function filterPeopleByGroup(group){
+  const url = new URL(location.href);
+  if(group) url.searchParams.set('group', group); else url.searchParams.delete('group');
+  url.searchParams.delete('page');
+  location.href = url.pathname + url.search;
 }
 </script>
 {% endblock %}
