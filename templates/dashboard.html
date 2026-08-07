@@ -32,8 +32,9 @@
       <a href="#attention">دیدن جزئیات ←</a>
     </div>
     <div class="briefing-actions">
+      {% if is_new_workspace %}<a class="briefing-btn" href="/nodes/create/">＋ افزودن اولین شخص مهم</a>{% endif %}
       <a class="briefing-btn" href="/checkin/">{% if checkin_done %}✓ چک‌این امروز ثبت شده{% else %}⚡ چک‌این ۶۰ ثانیه‌ای{% endif %}</a>
-      <a class="briefing-btn secondary" href="/relationship-life/">＋ ثبت سریع</a>
+      <a class="briefing-btn secondary" href="/relationship-life/?quick=1">＋ ثبت سریع</a>
       <a class="briefing-btn secondary" href="/journal/">✍ ثبت یک خاطره</a>
       <a class="briefing-btn secondary" href="/graph/">🕸 دیدن نقشهٔ رابطه‌ها</a>
     </div>

@@ -61,6 +61,18 @@ class RegistrationOnboardingTests(TestCase):
 
 
 
+class DashboardBriefingTests(TestCase):
+    def test_new_workspace_gets_a_clear_first_person_action(self):
+        user = get_user_model().objects.create_user(username='briefing-user', password='SecurePass1')
+        root = Node.objects.create(owner=user, username='briefing-me', name='من')
+        user.root_node = root
+        user.save(update_fields=['root_node'])
+        self.client.force_login(user)
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'افزودن اولین شخص مهم')
+
+
 class PublicSocialTests(TestCase):
     def setUp(self):
         User = get_user_model()

@@ -182,6 +182,7 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
             # A daily briefing should create focus, not another task list.
             'today_actions': today_actions[:3],
             'people_count': nodes.count(),
+            'is_new_workspace': not nodes.exists(),
             'relationship_count': relationships.count(),
             'onboarding_ready': bool(
                 root_id and Information.objects.filter(node_id=root_id).exists()
