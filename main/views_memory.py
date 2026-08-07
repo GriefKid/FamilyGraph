@@ -154,19 +154,25 @@ def memory_search_api(request):
               if len(token.strip('؟?!،,.')) > 1 and token.strip('؟?!،,.') not in stop]
     fact_query = Q()
     for token in tokens or [q]:
-        fact_query |= Q(value__icontains=token) | Q(node__username__icontains=token) | Q(node__name__icontains=token)
+        normalized = token.replace('ي', 'ی').replace('ك', 'ک')
+        for term in {token, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}:
+            fact_query |= Q(value__icontains=term) | Q(node__username__icontains=term) | Q(node__name__icontains=term)
     for fact in MemoryFact.objects.filter(owner=user, active=True).filter(fact_query).select_related('node')[:30]:
         results.append({'kind': 'memory', 'title': fact.node.display_name(), 'text': fact.value,
                         'source': f'{fact.source} #{fact.source_id or "—"}', 'url': f'/nodes/{fact.node_id}/'})
     journal_query = Q()
     for token in tokens or [q]:
-        journal_query |= Q(text__icontains=token)
+        normalized = token.replace('ي', 'ی').replace('ك', 'ک')
+        for term in {token, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}:
+            journal_query |= Q(text__icontains=term)
     for entry in JournalEntry.objects.filter(owner=user).filter(journal_query).prefetch_related('mentioned_nodes')[:20]:
         results.append({'kind': 'journal', 'title': 'خاطره', 'text': entry.text[:220],
                         'source': f'journal #{entry.id}', 'url': '/journal/'})
     debt_query = Q(settled=False) if any(word in q for word in ('مالی', 'قرض', 'طلب', 'بدهی')) else Q()
     for token in tokens:
-        debt_query |= Q(note__icontains=token) | Q(node__name__icontains=token)
+        normalized = token.replace('ي', 'ی').replace('ك', 'ک')
+        for term in {token, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}:
+            debt_query |= Q(note__icontains=term) | Q(node__name__icontains=term)
     for debt in Debt.objects.filter(owner=user).filter(debt_query).select_related('node')[:15]:
         results.append({'kind': 'debt', 'title': debt.node.display_name(),
                         'text': f'{debt.remaining:,} {debt.currency}', 'source': f'debt #{debt.id}', 'url': '/ledger/'})

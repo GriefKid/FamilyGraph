@@ -516,6 +516,11 @@ class MemoryIntelligenceTests(TestCase):
         fact.refresh_from_db()
         self.assertFalse(fact.ai_usable)
 
+    def test_memory_search_normalizes_arabic_and_persian_letters(self):
+        MemoryFact.objects.create(owner=self.user, node=self.ali, category='interest', value='دوستم علي')
+        results = self.client.get('/api/memory/search/?q=علی').json()['results']
+        self.assertTrue(any(row['kind'] == 'memory' for row in results))
+
     def test_assistant_uses_only_confirmed_ai_usable_memory_and_accepts_feedback(self):
         MemoryFact.objects.create(owner=self.user, node=self.ali, category='interest',
                                   value='پیاده‌روی', confidence=90, source='manual')
