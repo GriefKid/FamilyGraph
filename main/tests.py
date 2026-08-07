@@ -622,6 +622,13 @@ class PlatformQualityTests(TestCase):
         self.assertEqual(response.json()['cache'], 'ok')
         self.assertTrue(response['X-Request-ID'])
 
+    def test_daily_action_can_be_snoozed_by_its_owner(self):
+        response = self.client.post('/api/daily/snooze/', data=json.dumps({'key': 'checkin'}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertIn('checkin', self.user.feature_overrides['daily_snoozed_until'])
+
     @override_settings(WRITE_RATE_LIMIT=1, WRITE_RATE_LIMIT_WINDOW=60)
     def test_write_rate_limit_blocks_only_excess_requests(self):
         cache.clear()
