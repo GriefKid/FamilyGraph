@@ -170,6 +170,16 @@ class DashboardBriefingTests(TestCase):
         image.refresh_from_db()
         self.assertIsNone(image.entry_id)
 
+    def test_journal_image_upload_assigns_the_current_user_as_owner(self):
+        from .models import JournalImage
+        user = get_user_model().objects.create_user(username='journal-upload', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.post('/api/journal/upload-image/', {
+            'image': SimpleUploadedFile('owned.jpg', b'image-bytes', content_type='image/jpeg'),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(JournalImage.objects.get(pk=response.json()['id']).owner, user)
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):

@@ -1648,11 +1648,9 @@ def journal_view(request):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def journal_image_upload_api(request):
     """Upload an image for a journal entry (before or after entry creation)."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     image_file = request.FILES.get('image')
     if not image_file:
         return JsonResponse({'error': 'فایلی ارسال نشد'}, status=400)
