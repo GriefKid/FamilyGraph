@@ -2210,11 +2210,9 @@ def public_node_search(request):
 # ─────────────────────────────────────────────────────────────────
 
 @login_required
-@csrf_exempt
+@require_POST
 def node_quick_update(request, pk):
     """آپدیت سریع فیلدهای پایه یک نود — برای فرم inline در journal."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     try:
         data = json.loads(request.body)
     except Exception:

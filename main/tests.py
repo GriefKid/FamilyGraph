@@ -146,6 +146,15 @@ class DashboardBriefingTests(TestCase):
         self.assertFalse(ChatMessage.objects.filter(owner=user).exists())
         self.assertTrue(ChatMessage.objects.filter(owner=other).exists())
 
+    def test_quick_person_update_refuses_someone_elses_person(self):
+        user = get_user_model().objects.create_user(username='quick-write', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='quick-write-other', password='SecurePass1')
+        foreign_node = Node.objects.create(owner=other, username='quick-foreign', name='Foreign')
+        self.client.force_login(user)
+        response = self.client.post(f'/api/nodes/{foreign_node.id}/quick-update/',
+                                    data=json.dumps({'first_name': 'Changed'}), content_type='application/json')
+        self.assertEqual(response.status_code, 404)
+
 
 class PublicSocialTests(TestCase):
     def setUp(self):
