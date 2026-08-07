@@ -1692,5 +1692,20 @@ window.addEventListener('error',e=>fetch('/api/platform/frontend-error/',{method
 <script>async function enableFGNotifications(){if(!('Notification' in window)){alert('مرورگر از اعلان پشتیبانی نمی‌کند.');return}const result=await Notification.requestPermission();if(result==='granted')new Notification('FamilyGraph آماده است',{body:'یادآوری‌های رابطه‌ای فقط با اجازهٔ تو نمایش داده می‌شوند.',icon:'/static/app-icon.svg'});else alert('اجازه اعلان داده نشد.')}</script>
 <script>window.addEventListener('DOMContentLoaded',()=>{if(typeof window.send!=='function')return;const onlineSend=window.send;window.send=async(url,body)=>{if(url!='/api/relationship-life/capture/')return onlineSend(url,body);try{return await onlineSend(url,body)}catch(e){const q=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');q.push({url,body,at:new Date().toISOString()});localStorage.setItem('fg-offline-captures',JSON.stringify(q));alert('این ثبت روی دستگاه نگه داشته شد و بعد از اتصال ارسال می‌شود.')}};window.addEventListener('online',async()=>{const q=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');if(!q.length)return;localStorage.removeItem('fg-offline-captures');for(const item of q){try{await onlineSend(item.url,item.body)}catch(e){const left=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');left.push(item);localStorage.setItem('fg-offline-captures',JSON.stringify(left))}}})})</script>
 <script>async function introBrief(){const a=document.getElementById('introLeft'),b=document.getElementById('introRight'),out=document.getElementById('introResult');if(!a||!b||!out)return;const r=await fetch(`/api/relationship-life/introduction/?left=${a.value}&right=${b.value}`),d=await r.json();if(!r.ok){alert(d.error||'خطا');return}out.textContent=(d.safe_to_suggest?'موضوع مشترک: '+(d.shared_topics.join('، ')||'موضوع روشنی پیدا نشد'):'به‌خاطر حالت حساس، معرفی پیشنهاد نمی‌شود')+' · '+d.note}</script>
+<script>
+// Keep the daily path compact: advanced destinations live under “more”.
+(() => {
+  const primary = document.getElementById('g1-items');
+  const more = document.getElementById('g2-items');
+  const moreHeader = document.querySelector('#g2-hdr span');
+  if (!primary || !more || !moreHeader) return;
+  moreHeader.textContent = 'بیشتر و ابزارها';
+  const advanced = ['/social/', '/insight-center/', '/import/'];
+  const items = advanced.map(href => primary.querySelector(`a[href="${href}"]`)).filter(Boolean);
+  // Insert before creation shortcuts so related destinations stay together.
+  const firstShortcut = more.firstElementChild;
+  items.forEach(item => more.insertBefore(item, firstShortcut));
+})();
+</script>
 </body>
 </html>
