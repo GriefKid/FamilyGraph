@@ -1210,9 +1210,10 @@ function closePanel(){
 // Toolbar actions
 // ═══════════════════════════════════════════════════════════
 function highlightSearch(q){
-  q = q.trim().toLowerCase();
+  q = q.trim().toLowerCase().replace(/ي/g, "ی").replace(/ك/g, "ک");
+  const normalize = value => String(value||"").toLowerCase().replace(/ي/g, "ی").replace(/ك/g, "ک");
   nLayer.selectAll(".ng").attr("opacity", d =>
-    !q || (d.username||"").toLowerCase().includes(q) || (d.label||"").toLowerCase().includes(q) ? 1 : .08
+    !q || normalize(d.username).includes(q) || normalize(d.label).includes(q) ? 1 : .08
   );
 }
 function toggleLayout(){

@@ -82,6 +82,12 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'id="g1-hdr" type="button" aria-expanded="true"')
         self.assertContains(response, 'paletteReturnFocus')
 
+    def test_graph_search_normalizes_persian_characters(self):
+        user = get_user_model().objects.create_user(username='graph-search', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/graph/')
+        self.assertContains(response, 'replace(/ي/g, "ی")')
+
     def test_people_search_is_server_side_and_owner_scoped(self):
         user = get_user_model().objects.create_user(username='people-search', password='SecurePass1')
         other = get_user_model().objects.create_user(username='other-search', password='SecurePass1')
