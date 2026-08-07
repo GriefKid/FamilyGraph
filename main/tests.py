@@ -87,6 +87,7 @@ class DashboardBriefingTests(TestCase):
         self.client.force_login(user)
         response = self.client.get('/graph/')
         self.assertContains(response, 'replace(/ي/g, "ی")')
+        self.assertContains(response, 'aria-label="جستجوی شخص در گراف"')
 
     def test_people_search_is_server_side_and_owner_scoped(self):
         user = get_user_model().objects.create_user(username='people-search', password='SecurePass1')
