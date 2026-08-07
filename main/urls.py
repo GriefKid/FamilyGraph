@@ -60,6 +60,7 @@ from .views_relationship_life import (relationship_life_hub, meeting_briefing_ap
     safety_setting_api, person_export, csv_import_preview, csv_import_apply, service_worker,
     introduction_brief_api, person_delete_complete, trust_center_view)
 from .views_platform import (platform_tools_view, command_palette_api, onboarding_api, onboarding_complete_api,
+    onboarding_goal_api,
     ai_quality_dashboard, ai_debug_private, ai_trace_rerun, feature_flags_view, frontend_error_api,
     system_health_api, encrypted_backup_download, encrypted_backup_preview,
     encrypted_backup_restore, demo_mode_api)
@@ -139,6 +140,7 @@ urlpatterns = [
     path('platform/tools/', platform_tools_view, name='platform_tools'),
     path('api/platform/command-palette/', command_palette_api, name='command_palette'),
     path('api/platform/onboarding/', onboarding_api, name='onboarding_status'),
+    path('api/platform/onboarding/goal/', onboarding_goal_api, name='onboarding_goal'),
     path('api/platform/onboarding/complete/', onboarding_complete_api, name='onboarding_complete'),
     path('api/platform/frontend-error/', frontend_error_api, name='frontend_error'),
     path('api/platform/backup/download/', encrypted_backup_download, name='encrypted_backup_download'),

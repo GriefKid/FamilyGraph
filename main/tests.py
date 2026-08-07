@@ -528,6 +528,12 @@ class PlatformQualityTests(TestCase):
         self.assertNotIn('secret-person', [row.get('subtitle', '') for row in results])
         onboarding = self.client.get('/api/platform/onboarding/').json()
         self.assertEqual(len(onboarding['steps']), 5)
+        set_goal = self.client.post('/api/platform/onboarding/goal/', data=json.dumps({'goal': 'memories'}),
+                                    content_type='application/json')
+        self.assertEqual(set_goal.status_code, 200)
+        ordered = self.client.get('/api/platform/onboarding/').json()
+        self.assertEqual(ordered['goal'], 'memories')
+        self.assertEqual(ordered['steps'][0]['id'], 'journal')
 
     def test_feature_flag_supports_rollout_and_user_override(self):
         flag = FeatureFlag.objects.get(name='hybrid-ai')

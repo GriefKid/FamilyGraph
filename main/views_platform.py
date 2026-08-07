@@ -53,6 +53,7 @@ def command_palette_api(request):
 @login_required
 def onboarding_api(request):
     user = request.user
+    goal = (user.feature_overrides or {}).get('onboarding_goal', '')
     steps = [
         {'id': 'profile', 'title': 'معرفی خودت', 'done': bool(user.first_name and user.root_node_id), 'url': '/profile/edit/'},
         {'id': 'person', 'title': 'افزودن اولین شخص', 'done': user.nodes.exclude(pk=user.root_node_id).exists(), 'url': '/nodes/create/'},
@@ -60,7 +61,31 @@ def onboarding_api(request):
         {'id': 'journal', 'title': 'ثبت اولین خاطره', 'done': user.journal_entries.exists(), 'url': '/journal/'},
         {'id': 'approval', 'title': 'بررسی اولین پیشنهاد AI', 'done': user.extraction_suggestions.filter(status='approved').exists(), 'url': '/extractions/'},
     ]
-    return JsonResponse({'completed': all(row['done'] for row in steps), 'steps': steps})
+    goal_choices = [
+        {'id': 'family', 'label': 'خانواده‌ام', 'description': 'آدم‌ها و خاطره‌های خانوادگی را مرتب کنم.'},
+        {'id': 'friends', 'label': 'دوستانم', 'description': 'رابطه‌های مهمم را در جریان نگه دارم.'},
+        {'id': 'memories', 'label': 'خاطره‌ها', 'description': 'لحظه‌ها و اتفاق‌های مهم را ثبت کنم.'},
+    ]
+    if goal == 'memories':
+        steps.sort(key=lambda row: {'journal': 0, 'person': 1, 'relationship': 2, 'profile': 3, 'approval': 4}[row['id']])
+    elif goal in ('family', 'friends'):
+        steps.sort(key=lambda row: {'person': 0, 'relationship': 1, 'journal': 2, 'profile': 3, 'approval': 4}[row['id']])
+    return JsonResponse({'completed': all(row['done'] for row in steps), 'goal': goal,
+                         'goal_choices': goal_choices, 'steps': steps})
+
+
+@login_required
+@require_POST
+def onboarding_goal_api(request):
+    data = _body(request) or {}
+    goal = data.get('goal', '')
+    if goal not in {'family', 'friends', 'memories'}:
+        return JsonResponse({'error': 'هدف شروع نامعتبر است.'}, status=400)
+    overrides = dict(request.user.feature_overrides or {})
+    overrides['onboarding_goal'] = goal
+    request.user.feature_overrides = overrides
+    request.user.save(update_fields=['feature_overrides'])
+    return JsonResponse({'ok': True, 'goal': goal})
 
 
 @login_required
