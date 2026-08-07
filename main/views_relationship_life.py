@@ -76,6 +76,21 @@ def trust_center_view(request):
 
 
 @login_required
+def person_card_view(request, pk):
+    """A concise, private, print-friendly brief for one person."""
+    node = get_object_or_404(Node, owner=request.user, pk=pk, merged_into__isnull=True)
+    from .models import FollowUp
+    return render(request, 'relationship_life/person_card.html', {
+        'node': node,
+        'facts': MemoryFact.objects.filter(owner=request.user, node=node, active=True,
+                                            confidentiality__in=('normal', 'personal'))[:8],
+        'followups': FollowUp.objects.filter(owner=request.user, node=node, done=False)[:5],
+        'events': Event.objects.filter(owner=request.user, participants=node,
+                                       date__gte=timezone.localdate()).order_by('date')[:4],
+    })
+
+
+@login_required
 def meeting_briefing_api(request, pk):
     node = get_object_or_404(Node, owner=request.user, pk=pk, merged_into__isnull=True)
     data = _briefing(request.user, node)

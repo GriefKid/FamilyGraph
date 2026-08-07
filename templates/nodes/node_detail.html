@@ -487,6 +487,7 @@
       </div>
       {% if not is_root_node %}
       <div class="hero-quick-actions">
+        <a href="/people/{{ node.id }}/card/">🪪 کارت شخص</a>
         <button type="button" onclick="showMeetingBrief()">🧳 آمادگی ملاقات</button>
         <button type="button" onclick="startMeetingReflection()">📝 بازتاب ملاقات</button>
         {% if request.user.root_node_id %}<a href="/relationships/create/?target={{ node.id }}">🔗 ثبت رابطه با من</a>{% endif %}
