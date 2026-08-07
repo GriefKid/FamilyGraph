@@ -80,6 +80,7 @@ class DashboardBriefingTests(TestCase):
         self.assertContains(response, 'href="#main-content"')
         self.assertContains(response, 'id="main-content" tabindex="-1"')
         self.assertContains(response, 'id="g1-hdr" type="button" aria-expanded="true"')
+        self.assertContains(response, 'paletteReturnFocus')
 
     def test_people_search_is_server_side_and_owner_scoped(self):
         user = get_user_model().objects.create_user(username='people-search', password='SecurePass1')
