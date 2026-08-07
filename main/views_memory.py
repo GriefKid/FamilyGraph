@@ -68,10 +68,20 @@ def memory_hub(request):
 
 @login_required
 def memory_timeline_view(request):
+    selected_node = request.GET.get('person', '')
     entries = JournalEntry.objects.filter(owner=request.user).prefetch_related(
         'images', 'mentioned_nodes'
-    ).order_by('-entry_date', '-created_at')[:120]
-    return render(request, 'memory/timeline.html', {'entries': entries})
+    )
+    if selected_node.isdigit():
+        entries = entries.filter(mentioned_nodes__id=selected_node)
+    if request.GET.get('images') == '1':
+        entries = entries.filter(images__isnull=False).distinct()
+    return render(request, 'memory/timeline.html', {
+        'entries': entries.order_by('-entry_date', '-created_at')[:120],
+        'nodes': Node.objects.filter(owner=request.user, merged_into__isnull=True).order_by('username'),
+        'selected_node': selected_node,
+        'images_only': request.GET.get('images') == '1',
+    })
 
 
 @login_required
