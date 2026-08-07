@@ -636,6 +636,20 @@ class PlatformQualityTests(TestCase):
         self.user.refresh_from_db()
         self.assertIn('suggestions', self.user.feature_overrides['daily_muted_until'])
 
+    def test_notification_preference_is_saved_only_for_current_user(self):
+        response = self.client.post('/api/notifications/preferences/', data=json.dumps({'mode': 'weekly'}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.other.refresh_from_db()
+        self.assertEqual(self.user.feature_overrides['notification_mode'], 'weekly')
+        self.assertNotIn('notification_mode', self.other.feature_overrides)
+
+    def test_notification_preference_rejects_unknown_modes(self):
+        response = self.client.post('/api/notifications/preferences/', data=json.dumps({'mode': 'always'}),
+                                    content_type='application/json')
+        self.assertEqual(response.status_code, 400)
+
     @override_settings(WRITE_RATE_LIMIT=1, WRITE_RATE_LIMIT_WINDOW=60)
     def test_write_rate_limit_blocks_only_excess_requests(self):
         cache.clear()

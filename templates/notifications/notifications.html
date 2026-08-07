@@ -65,10 +65,19 @@
 .notif-msg{flex:1;font-size:13px;line-height:1.6;}
 .notif-ts{font-size:11px;color:var(--text-muted);flex-shrink:0;}
 .empty-state{text-align:center;padding:40px;color:var(--text-muted);font-size:13px;}
+.notification-preferences{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin:4px 0 18px}.notification-preferences strong{font-size:12px}.notification-preferences p{width:100%;margin:0;color:var(--text-muted);font-size:11px;line-height:1.7}.notification-mode{border:1px solid var(--border);border-radius:9px;padding:6px 9px;background:var(--surface);color:var(--text-muted);font:11px 'Vazirmatn',sans-serif;cursor:pointer}.notification-mode.active{border-color:rgba(99,102,241,.65);background:rgba(99,102,241,.14);color:#c7d2fe;font-weight:700}
 </style>
 {% endblock %}
 
 {% block content %}
+
+<section class="notification-preferences" aria-label="تنظیمات اعلان">
+  <strong>ریتم اطلاع‌رسانی</strong>
+  <button class="notification-mode {% if notification_mode == 'important' %}active{% endif %}" data-mode="important">فقط مهم</button>
+  <button class="notification-mode {% if notification_mode == 'daily' %}active{% endif %}" data-mode="daily">خلاصهٔ روزانه</button>
+  <button class="notification-mode {% if notification_mode == 'weekly' %}active{% endif %}" data-mode="weekly">خلاصهٔ هفتگی</button>
+  <p>درخواست‌های همگام‌سازی و تغییرهای نیازمند تأیید همیشه جدا و قابل‌مشاهده می‌مانند.</p>
+</section>
 
 <!-- ── Sync Notifications ── -->
 {% if sync_notifs %}
@@ -152,6 +161,13 @@
 {% endif %}
 
 <script>
+document.querySelectorAll('.notification-mode').forEach(button=>button.addEventListener('click',async()=>{
+  const response=await fetch('/api/notifications/preferences/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({mode:button.dataset.mode})});
+  if(!response.ok){ fgToast('ذخیرهٔ تنظیم انجام نشد.'); return; }
+  document.querySelectorAll('.notification-mode').forEach(item=>item.classList.toggle('active',item===button));
+  fgToast('ریتم اطلاع‌رسانی ذخیره شد.');
+}));
+
 async function syncRespond(id, action){
   const actionsDiv = document.getElementById(`sa-${id}`);
   actionsDiv.innerHTML = '<div class="sync-done"><span class="spinner"></span> در حال پردازش...</div>';

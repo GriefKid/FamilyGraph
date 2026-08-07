@@ -28,7 +28,32 @@ def notifications_view(request):
     return render(request, 'notifications/notifications.html', {
         'sync_notifs':    sync_notifs,
         'general_notifs': general_notifs,
+        'notification_mode': (user.feature_overrides or {}).get('notification_mode', 'important'),
     })
+
+
+@login_required
+@require_POST
+def notification_preferences_api(request):
+    """Save the user's preferred cadence for non-essential notifications.
+
+    This is deliberately separate from sync requests: those are direct data
+    changes and must remain visible until the owner responds to them.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON نامعتبر است.'}, status=400)
+
+    mode = data.get('mode')
+    if mode not in {'important', 'daily', 'weekly'}:
+        return JsonResponse({'error': 'تنظیم اعلان نامعتبر است.'}, status=400)
+
+    overrides = dict(request.user.feature_overrides or {})
+    overrides['notification_mode'] = mode
+    request.user.feature_overrides = overrides
+    request.user.save(update_fields=['feature_overrides'])
+    return JsonResponse({'ok': True, 'mode': mode})
 
 
 @login_required
