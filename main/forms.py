@@ -1,8 +1,27 @@
 from django import forms
+from django.utils.text import slugify
 from .models import Node, Information, Relationship, Event
 
 
 class NodeForm(forms.ModelForm):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A username is an internal identifier, not onboarding work for users.
+        self.fields['username'].required = False
+        self.fields['username'].widget.attrs['placeholder'] = 'اختیاری؛ خودکار ساخته می‌شود'
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username', '').strip()
+        if username:
+            return username
+        seed = ' '.join(filter(None, [
+            self.cleaned_data.get('first_name', ''),
+            self.cleaned_data.get('last_name', ''),
+            self.cleaned_data.get('nickname', ''),
+            self.cleaned_data.get('name', ''),
+        ]))
+        return slugify(seed, allow_unicode=True)[:92] or 'person'
 
     class Meta:
         model = Node

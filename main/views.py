@@ -556,6 +556,12 @@ def create_node(request):
         if form.is_valid():
             node = form.save(commit=False)
             node.owner = request.user
+            if Node.objects.filter(owner=request.user, username=node.username).exists():
+                base = node.username[:90] or 'person'
+                suffix = 2
+                while Node.objects.filter(owner=request.user, username=f'{base}-{suffix}').exists():
+                    suffix += 1
+                node.username = f'{base}-{suffix}'
             node.save()
             form.save_m2m()
             # BUGFIX مفهومی: فیلد متنی «گروه» توی فرم هیچ اثری نداشت —

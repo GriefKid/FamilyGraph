@@ -459,6 +459,12 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertTrue(Commitment.objects.filter(owner=self.user, node=self.sara).exists())
         self.assertTrue(GiftIdea.objects.filter(owner=self.user, node=self.sara).exists())
 
+    def test_person_can_be_created_without_a_technical_username(self):
+        response = self.client.post('/nodes/create/', {'first_name': 'رضا'})
+        self.assertEqual(response.status_code, 302)
+        person = Node.objects.get(owner=self.user, first_name='رضا')
+        self.assertTrue(person.username)
+
     def test_post_meeting_creates_private_timeline_and_extraction(self):
         response = self.client.post('/api/relationship-life/reflection/', data=json.dumps({
             'node_id': self.sara.id, 'summary': 'سارا عاشق کتاب‌های تاریخی است',
