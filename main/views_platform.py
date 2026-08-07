@@ -45,13 +45,12 @@ def command_palette_api(request):
         commands = [item for item in commands if q.casefold() in (item['title'] + item['subtitle']).casefold()]
     people = Node.objects.filter(owner=request.user, merged_into__isnull=True)
     if q:
-        people = people.filter(
-            Q(username__icontains=q) |
-            Q(name__icontains=q) |
-            Q(nickname__icontains=q) |
-            Q(first_name__icontains=q) |
-            Q(last_name__icontains=q)
-        )
+        normalized = q.replace('ي', 'ی').replace('ك', 'ک')
+        variants = {q, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}
+        query_filter = Q()
+        for term in variants:
+            query_filter |= Q(username__icontains=term) | Q(name__icontains=term) | Q(nickname__icontains=term) | Q(first_name__icontains=term) | Q(last_name__icontains=term)
+        people = people.filter(query_filter)
     results = commands + [{'title': node.display_name(), 'subtitle': f'@{node.username}',
                            'url': f'/nodes/{node.id}/', 'icon': '◉'} for node in people[:8]]
     return JsonResponse({'results': results[:12]})
