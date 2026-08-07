@@ -55,11 +55,9 @@ def onboarding_api(request):
     user = request.user
     goal = (user.feature_overrides or {}).get('onboarding_goal', '')
     steps = [
-        {'id': 'profile', 'title': 'معرفی خودت', 'done': bool(user.first_name and user.root_node_id), 'url': '/profile/edit/'},
         {'id': 'person', 'title': 'افزودن اولین شخص', 'done': user.nodes.exclude(pk=user.root_node_id).exists(), 'url': '/nodes/create/'},
         {'id': 'relationship', 'title': 'ساخت اولین رابطه', 'done': user.relationships.exists(), 'url': '/relationships/create/'},
-        {'id': 'journal', 'title': 'ثبت اولین خاطره', 'done': user.journal_entries.exists(), 'url': '/journal/'},
-        {'id': 'approval', 'title': 'بررسی اولین پیشنهاد AI', 'done': user.extraction_suggestions.filter(status='approved').exists(), 'url': '/extractions/'},
+        {'id': 'journal', 'title': 'ثبت یک خاطره یا لحظه', 'done': user.journal_entries.exists(), 'url': '/journal/'},
     ]
     goal_choices = [
         {'id': 'family', 'label': 'خانواده‌ام', 'description': 'آدم‌ها و خاطره‌های خانوادگی را مرتب کنم.'},
@@ -67,9 +65,9 @@ def onboarding_api(request):
         {'id': 'memories', 'label': 'خاطره‌ها', 'description': 'لحظه‌ها و اتفاق‌های مهم را ثبت کنم.'},
     ]
     if goal == 'memories':
-        steps.sort(key=lambda row: {'journal': 0, 'person': 1, 'relationship': 2, 'profile': 3, 'approval': 4}[row['id']])
+        steps.sort(key=lambda row: {'journal': 0, 'person': 1, 'relationship': 2}[row['id']])
     elif goal in ('family', 'friends'):
-        steps.sort(key=lambda row: {'person': 0, 'relationship': 1, 'journal': 2, 'profile': 3, 'approval': 4}[row['id']])
+        steps.sort(key=lambda row: {'person': 0, 'relationship': 1, 'journal': 2}[row['id']])
     return JsonResponse({'completed': all(row['done'] for row in steps), 'goal': goal,
                          'goal_choices': goal_choices, 'steps': steps})
 

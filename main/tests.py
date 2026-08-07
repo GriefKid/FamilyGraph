@@ -557,7 +557,7 @@ class PlatformQualityTests(TestCase):
         results = self.client.get('/api/platform/command-palette/?q=secret').json()['results']
         self.assertNotIn('secret-person', [row.get('subtitle', '') for row in results])
         onboarding = self.client.get('/api/platform/onboarding/').json()
-        self.assertEqual(len(onboarding['steps']), 5)
+        self.assertEqual(len(onboarding['steps']), 3)
         set_goal = self.client.post('/api/platform/onboarding/goal/', data=json.dumps({'goal': 'memories'}),
                                     content_type='application/json')
         self.assertEqual(set_goal.status_code, 200)
