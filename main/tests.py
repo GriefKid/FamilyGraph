@@ -467,6 +467,16 @@ class RelationshipLifeCycleTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.due_date, timezone.localdate() + timedelta(days=7))
 
+    def test_share_link_exposes_only_the_safe_person_card(self):
+        self.sara.phone_number = '09120000000'
+        self.sara.save(update_fields=['phone_number'])
+        created = self.client.post(f'/api/people/{self.sara.id}/share-link/', data=json.dumps({'days': 7}),
+                                   content_type='application/json')
+        self.assertEqual(created.status_code, 200)
+        public = self.client.get(f'/shared/person/{created.json()["token"]}/')
+        self.assertEqual(public.status_code, 200)
+        self.assertNotContains(public, '09120000000')
+
     def test_person_can_be_created_without_a_technical_username(self):
         form = self.client.get('/nodes/create/')
         self.assertContains(form, 'جزئیات بیشتر، برای بعد')

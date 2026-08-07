@@ -1,3 +1,5 @@
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractUser
@@ -1271,6 +1273,19 @@ class SharedItem(models.Model):
 
     def __str__(self):
         return f'{self.sender} → {self.recipient}: {self.get_item_type_display()} {self.title}'
+
+
+class ShareLink(models.Model):
+    """Revocable, time-limited public link for a deliberately small person card."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='share_links')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='share_links')
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    expires_at = models.DateTimeField()
+    revoked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
 
 # ─────────────────────────────────────────────────────────────────

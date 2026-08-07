@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -16,7 +16,7 @@ from pathlib import Path
 from .extraction import extract_text
 from .models import (Commitment, Debt, Event, GiftIdea, Information, Interaction,
                      JournalEntry, MeetingReflection, MemoryFact, Node, NodeSafetySetting,
-                     Relationship)
+                     Relationship, ShareLink)
 
 
 def _body(request):
@@ -88,6 +88,28 @@ def person_card_view(request, pk):
         'events': Event.objects.filter(owner=request.user, participants=node,
                                        date__gte=timezone.localdate()).order_by('date')[:4],
     })
+
+
+@login_required
+@require_POST
+def share_link_create_api(request, pk):
+    node = get_object_or_404(Node, owner=request.user, pk=pk, merged_into__isnull=True)
+    data = _body(request) or {}
+    try:
+        days = max(1, min(int(data.get('days', 7)), 30))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'مدت اعتبار نامعتبر است.'}, status=400)
+    link = ShareLink.objects.create(owner=request.user, node=node,
+                                    expires_at=timezone.now() + timedelta(days=days))
+    return JsonResponse({'ok': True, 'token': str(link.token), 'expires_at': link.expires_at.isoformat()})
+
+
+def shared_person_card_view(request, token):
+    link = get_object_or_404(ShareLink, token=token, revoked=False,
+                             expires_at__gt=timezone.now())
+    facts = MemoryFact.objects.filter(owner=link.owner, node=link.node, active=True,
+                                      confidentiality='normal')[:6]
+    return render(request, 'relationship_life/shared_person_card.html', {'node': link.node, 'facts': facts})
 
 
 @login_required
