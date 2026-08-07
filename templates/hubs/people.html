@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}آدم‌ها — FamilyGraph{% endblock %}{% block page_title %}👥 آدم‌ها{% endblock %}{% block nav_people_hub %}active{% endblock %}
+{% block extra_css %}{% include "hubs/_styles.html" %}{% endblock %}
+{% block content %}<main class="merge-hub"><section class="merge-hero"><div class="merge-kicker">همه‌چیز دربارهٔ آدم‌های زندگی تو</div><h1>آدم‌ها</h1><p>فهرست افراد، رابطه‌ها، نقشه و گروه‌بندی‌ها حالا یک‌جا هستند. هیچ صفحه‌ای حذف نشده؛ از اینجا سریع‌تر پیدایش می‌کنی.</p></section><div class="merge-grid">
+<a class="merge-card" href="/nodes/"><span class="merge-icon">👤</span><h2>فهرست آدم‌ها</h2><p>مشاهده، جستجو، ساخت و ویرایش پروندهٔ هر فرد.</p><span class="merge-go">دیدن آدم‌ها ←</span></a>
+<a class="merge-card" href="/graph/"><span class="merge-icon">🕸</span><h2>نقشهٔ رابطه‌ها</h2><p>نمای تصویری شبکه و فاصلهٔ آدم‌ها از تو.</p><span class="merge-go">بازکردن نقشه ←</span></a>
+<a class="merge-card" href="/relationships/"><span class="merge-icon">💞</span><h2>رابطه‌ها</h2><p>نوع، قدرت و جزئیات ارتباط بین افراد.</p><span class="merge-go">مدیریت رابطه‌ها ←</span></a>
+<a class="merge-card" href="/groups/"><span class="merge-icon">🫂</span><h2>گروه‌بندی آدم‌ها</h2><p>خانواده، همکارها، دوستان و حلقه‌های شخصی.</p><span class="merge-go">دیدن گروه‌ها ←</span></a>
+<a class="merge-card" href="/communities/"><span class="merge-icon">🔗</span><h2>جمع‌های نزدیک</h2><p>گروه‌هایی که از روی ساختار رابطه‌ها شناسایی شده‌اند.</p><span class="merge-go">بررسی جمع‌ها ←</span></a>
+<a class="merge-card" href="/nodes/create/"><span class="merge-icon">＋</span><h2>آدم جدید</h2><p>یک فرد را دستی به شبکهٔ شخصی‌ات اضافه کن.</p><span class="merge-go">افزودن آدم ←</span></a>
+</div></main>{% endblock %}

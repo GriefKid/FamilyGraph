@@ -80,6 +80,8 @@ from .views_import import (
     telegram_relation_api,
     telegram_save_relation_api,
 )
+from .views_hubs import people_hub, insight_hub, relationship_work_hub, import_hub
+from .views_whatsapp_import import whatsapp_import_view, whatsapp_scan_api, whatsapp_apply_api
 from .views_ledger import (
     ledger_view,
     debt_create_api,
@@ -154,6 +156,10 @@ urlpatterns = [
     path('logout/',      logout_view,      name='logout'),
     path('register/',    register_view,    name='register'),
     path('profile/',     profile_view,     name='profile'),
+    path('people/', people_hub, name='people_hub'),
+    path('insight-center/', insight_hub, name='insight_hub'),
+    path('relationship-work/', relationship_work_hub, name='relationship_work_hub'),
+    path('import/', import_hub, name='import_hub'),
     path('api/captcha/', captcha_refresh,  name='captcha_refresh'),
     path('api/nodes/public-search/', views.public_node_search, name='public_node_search'),
     path('api/nodes/<int:pk>/quick-update/', views.node_quick_update, name='node_quick_update'),
@@ -264,6 +270,9 @@ urlpatterns = [
     path('api/goals/create/',            goal_create_api,         name='goal_create'),
     path('api/goals/<int:pk>/close/',    goal_close_api,          name='goal_close'),
     path('import/telegram/',             telegram_import_view,    name='telegram_import'),
+    path('import/whatsapp/',             whatsapp_import_view,    name='whatsapp_import'),
+    path('api/import/whatsapp/scan/',    whatsapp_scan_api,       name='whatsapp_scan'),
+    path('api/import/whatsapp/apply/',   whatsapp_apply_api,      name='whatsapp_apply'),
     path('api/import/telegram/scan/',    telegram_scan_api,       name='telegram_scan'),
     path('api/import/telegram/apply/',   telegram_apply_api,      name='telegram_apply'),
     path('api/import/telegram/undo/',    telegram_undo_api,       name='telegram_undo'),

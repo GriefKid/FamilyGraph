@@ -1210,82 +1210,39 @@ input:focus, textarea:focus, select:focus{
   <!-- Nav -->
   <nav class="nav">
 
-    <!-- Group: امروز و شبکه -->
+    <!-- صفحه‌های مادر؛ تمام قابلیت‌های قبلی از داخل این بخش‌ها در دسترس‌اند. -->
     <div class="nav-group">
       <div class="nav-group-label" id="g1-hdr" onclick="toggleNavGroup('g1')">
-        <span>🌟 امروز و شبکه</span>
+        <span>🌟 بخش‌های اصلی</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="nav-group-items" id="g1-items">
-        <a href="/"              class="nav-item {% block nav_home %}{% endblock %}">
-          <span class="nav-icon">✨</span><span>بریفینگ امروز</span>
-        </a>
-        <a href="/checkin/"      class="nav-item {% block nav_checkin %}{% endblock %}">
-          <span class="nav-icon">⚡</span><span>چک-این سریع</span>
-        </a>
-        <a href="/graph/"        class="nav-item {% block nav_graph %}{% endblock %}">
-          <span class="nav-icon">🕸</span><span>نقشهٔ رابطه‌ها</span>
-        </a>
-        <a href="/nodes/"        class="nav-item {% block nav_nodes %}{% endblock %}">
-          <span class="nav-icon">👥</span><span>افراد</span>
-        </a>
-        <a href="/relationships/" class="nav-item {% block nav_rels %}{% endblock %}">
-          <span class="nav-icon">💞</span><span>روابط</span>
-        </a>
-        <a href="/events/"       class="nav-item {% block nav_events %}{% endblock %}">
-          <span class="nav-icon">📅</span><span>رویدادها</span>
-        </a>
-        <a href="/ledger/"       class="nav-item {% block nav_ledger %}{% endblock %}">
-          <span class="nav-icon">💰</span><span>قرض و طلب</span>
-        </a>
-        <a href="/import/telegram/" class="nav-item {% block nav_import %}{% endblock %}">
-          <span class="nav-icon">📥</span><span>ایمپورت تلگرام</span>
-        </a>
-        <a href="/journal/"      class="nav-item {% block nav_journal %}{% endblock %}">
-          <span class="nav-icon">📓</span><span>دفترچه خاطرات</span>
-        </a>
+        <a href="/" class="nav-item {% block nav_home %}{% endblock %}"><span class="nav-icon">✨</span><span>امروز من</span></a>
+        <a href="/people/" class="nav-item {% block nav_people_hub %}{% endblock %}"><span class="nav-icon">👥</span><span>آدم‌ها</span></a>
+        <a href="/social/" class="nav-item {% block nav_social %}{% endblock %}"><span class="nav-icon">💬</span><span>دوستان و ارتباطات</span></a>
+        <a href="/journal/" class="nav-item {% block nav_journal %}{% endblock %}"><span class="nav-icon">📓</span><span>خاطرات و روز من</span></a>
+        <a href="/relationship-work/" class="nav-item {% block nav_relationship_work %}{% endblock %}"><span class="nav-icon">🤝</span><span>کارهای رابطه</span></a>
+        <a href="/insight-center/" class="nav-item {% block nav_insight_hub %}{% endblock %}"><span class="nav-icon">🧠</span><span>شناخت و تحلیل</span></a>
+        <a href="/chat/" class="nav-item {% block nav_chat %}{% endblock %}"><span class="nav-icon">💜</span><span>همدم</span></a>
+        <a href="/import/" class="nav-item {% block nav_import_hub %}{% endblock %}"><span class="nav-icon">📥</span><span>ورود اطلاعات</span></a>
       </div>
     </div>
 
-    <!-- Group: حافظه و تحلیل -->
+    <!-- دسترسی سریع به کارهای پرتکرار -->
     <div class="nav-group">
       <div class="nav-group-label" id="g2-hdr" onclick="toggleNavGroup('g2')">
-        <span>🧠 حافظه و تحلیل</span>
+        <span>⚡ دسترسی سریع</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
           <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="nav-group-items" id="g2-items">
-        <a href="/psychology/"   class="nav-item {% block nav_psychology %}{% endblock %}">
-          <span class="nav-icon">🧠</span><span>روانشناسی</span>
-        </a>
-        <a href="/extractions/" class="nav-item {% block nav_extractions %}{% endblock %}">
-          <span class="nav-icon">✨</span><span>پیشنهادهای هوشمند</span>
-        </a>
-        <a href="/memory/" class="nav-item {% block nav_memory %}{% endblock %}">
-          <span class="nav-icon">🧭</span><span>حافظه و سلامت داده</span>
-        </a>
-        <a href="/memory/knowledge/" class="nav-item"><span class="nav-icon">🕸</span><span>گراف دانش</span></a>
-        <a href="/relationship-life/" class="nav-item {% block nav_relationship_life %}{% endblock %}">
-          <span class="nav-icon">🤝</span><span>ملاقات، قول و هدیه</span>
-        </a>
-        <a href="/platform/tools/" class="nav-item {% block nav_platform_tools %}{% endblock %}">
-          <span class="nav-icon">🧰</span><span>بکاپ و ابزارها</span>
-        </a>
-        <a href="/daily/"        class="nav-item {% block nav_daily %}{% endblock %}">
-          <span class="nav-icon">✨</span><span>بریفینگ روزانه</span>
-        </a>
-        <a href="/alerts/"       class="nav-item {% block nav_alerts %}{% endblock %}">
-          <span class="nav-icon">🔔</span><span>هشدارها</span>
-        </a>
-        <a href="/social/" class="nav-item {% block nav_social %}{% endblock %}">
-          <span class="nav-icon">👥</span><span>دوستان و اشتراک</span>
-        </a>
-        <a href="/chat/"         class="nav-item {% block nav_chat %}{% endblock %}">
-          <span class="nav-icon">🤖</span><span>چت AI</span>
-        </a>
+        <a href="/checkin/" class="nav-item {% block nav_checkin %}{% endblock %}"><span class="nav-icon">⚡</span><span>چک‌این سریع</span></a>
+        <a href="/nodes/create/" class="nav-item"><span class="nav-icon">＋</span><span>آدم جدید</span></a>
+        <a href="/events/create/" class="nav-item"><span class="nav-icon">📅</span><span>رویداد جدید</span></a>
+        <a href="/extractions/" class="nav-item {% block nav_extractions %}{% endblock %}"><span class="nav-icon">✓</span><span>موارد منتظر تأیید</span></a>
       </div>
     </div>
 
@@ -1304,9 +1261,9 @@ input:focus, textarea:focus, select:focus{
           <span class="nav-badge">{{ cnt }}</span>
           {% endif %}{% endwith %}
         </a>
-        <a href="/u/{{ request.user.username }}/"       class="nav-item {% block nav_settings %}{% endblock %}">
-          <span class="nav-icon">⚙</span><span>پروفایل</span>
-        </a>
+        <a href="/u/{{ request.user.username }}/" class="nav-item {% block nav_settings %}{% endblock %}"><span class="nav-icon">👤</span><span>پروفایل من</span></a>
+        <a href="/settings/" class="nav-item"><span class="nav-icon">⚙</span><span>تنظیمات</span></a>
+        <a href="/platform/tools/" class="nav-item {% block nav_platform_tools %}{% endblock %}"><span class="nav-icon">🧰</span><span>بکاپ و ابزارها</span></a>
       </div>
     </div>
 

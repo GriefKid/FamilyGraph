@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}ورود اطلاعات — FamilyGraph{% endblock %}{% block page_title %}📥 ورود اطلاعات{% endblock %}{% block nav_import_hub %}active{% endblock %}
+{% block extra_css %}{% include "hubs/_styles.html" %}{% endblock %}
+{% block content %}<main class="merge-hub"><section class="merge-hero"><div class="merge-kicker">همهٔ راه‌های اضافه‌کردن داده در یک‌جا</div><h1>ورود اطلاعات</h1><p>فرقی نمی‌کند اطلاعاتت در تلگرام، واتساپ یا فایل مخاطبان باشد؛ ابتدا پیش‌نمایش می‌بینی، افراد را تطبیق می‌دهی و فقط بعد از تأیید وارد می‌شوند.</p></section><div class="merge-grid">
+<a class="merge-card" href="/import/telegram/"><span class="merge-tag">JSON</span><span class="merge-icon">✈️</span><h2>تلگرام</h2><p>گفتگوهای خروجی Telegram Desktop را تحلیل و با آدم‌های موجود تطبیق بده.</p><span class="merge-go">ورود از تلگرام ←</span></a>
+<a class="merge-card" href="/import/whatsapp/"><span class="merge-tag">TXT / ZIP</span><span class="merge-icon">💬</span><h2>واتساپ</h2><p>فایل Export chat را اسکن کن و تعامل‌ها را بعد از تأیید وارد کن.</p><span class="merge-go">ورود از واتساپ ←</span></a>
+<a class="merge-card" href="/relationship-life/"><span class="merge-tag">CSV</span><span class="merge-icon">📄</span><h2>فایل مخاطبان</h2><p>نام، نام کاربری و شماره تلفن مخاطبان را گروهی وارد کن.</p><span class="merge-go">ورود فایل CSV ←</span></a>
+<a class="merge-card" href="/nodes/create/"><span class="merge-tag">دستی</span><span class="merge-icon">✍️</span><h2>ثبت یک آدم</h2><p>اگر فایل نداری، اطلاعات یک نفر را خودت ثبت کن.</p><span class="merge-go">افزودن دستی ←</span></a>
+</div><div class="merge-note">🔒 هیچ داده‌ای بدون پیش‌نمایش و تأیید تو وارد نمی‌شود. مسیرهای قدیمی تلگرام و CSV نیز همچنان فعال‌اند.</div></main>{% endblock %}
