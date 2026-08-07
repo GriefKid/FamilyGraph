@@ -469,6 +469,7 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertEqual(response['Location'], f'/nodes/{person.id}/')
         detail = self.client.get(response['Location'])
         self.assertContains(detail, 'لازم نیست همه‌چیز را کامل کنی')
+        self.assertContains(detail, 'قدم بعدی: اولین تعامل را ثبت کن')
         relation_form = self.client.get(f'/relationships/create/?target={person.id}')
         self.assertEqual(relation_form.status_code, 200)
         self.assertContains(relation_form, f'value="{person.id}" selected')

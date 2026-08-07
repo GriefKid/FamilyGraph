@@ -498,6 +498,11 @@
         برای شروع لازم نیست همه‌چیز را کامل کنی؛ یک تعامل، پیگیری یا خاطرهٔ کوتاه دربارهٔ این شخص ثبت کن.
       </div>
       {% endif %}
+      {% if relationship_focus %}
+      <button type="button" onclick="document.getElementById('{{ relationship_focus.target }}').scrollIntoView({behavior:'smooth',block:'start'})" style="display:block;width:100%;text-align:right;margin-top:10px;padding:10px 12px;border:1px solid rgba(52,211,153,.28);border-radius:11px;background:rgba(16,185,129,.08);color:var(--text);cursor:pointer;font:inherit">
+        <b style="display:block;font-size:12px">قدم بعدی: {{ relationship_focus.title }}</b><span style="font-size:11px;color:var(--text-muted)">{{ relationship_focus.note }}</span>
+      </button>
+      {% endif %}
     </div>
   </div>
 

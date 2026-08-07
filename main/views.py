@@ -368,6 +368,26 @@ def node_detail(request, pk):
     except Exception:
         pass
 
+    relationship_focus = None
+    if followups_open:
+        relationship_focus = {
+            'title': 'یک پیگیری باز داری',
+            'note': followups_open[0].text[:120],
+            'target': 'followup-section',
+        }
+    elif not interactions:
+        relationship_focus = {
+            'title': 'اولین تعامل را ثبت کن',
+            'note': 'یک تماس، پیام یا دیدار کوتاه کافی است.',
+            'target': 'interaction-section',
+        }
+    elif node_health and node_health.get('status') in ('yellow', 'red'):
+        relationship_focus = {
+            'title': 'یک قدم کوچک برای این رابطه',
+            'note': 'مدتی از آخرین تعامل گذشته است؛ یک پیام کوتاه هم ارزش دارد.',
+            'target': 'interaction-section',
+        }
+
     # V6: قرض و طلب با این شخص
     node_debts, node_debt_balance = [], 0
     try:
@@ -527,6 +547,7 @@ def node_detail(request, pk):
         'is_root_node':      is_root_node,
         'followups_open':    followups_open,
         'followups_done':    followups_done,
+        'relationship_focus': relationship_focus,
         'today':             timezone.localdate(),
         'node_debts':        node_debts,
         'node_debt_balance': node_debt_balance,
