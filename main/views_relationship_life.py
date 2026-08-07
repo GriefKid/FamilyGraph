@@ -60,6 +60,22 @@ def relationship_life_hub(request):
 
 
 @login_required
+def trust_center_view(request):
+    """Explain the user's private-data and AI boundaries in plain language."""
+    user = request.user
+    safety = list(NodeSafetySetting.objects.filter(owner=user, pause_contact_suggestions=True)
+                  .select_related('node').order_by('node__username'))
+    no_ai_facts = MemoryFact.objects.filter(owner=user, confidentiality='no_ai').count()
+    private_nodes = Node.objects.filter(owner=user, is_public=False).count()
+    return render(request, 'relationship_life/trust_center.html', {
+        'private_nodes': private_nodes,
+        'no_ai_facts': no_ai_facts,
+        'paused_people': safety,
+        'ai_enabled': user.ai_chat_enabled or user.ai_extraction_enabled or user.ai_journal_enabled,
+    })
+
+
+@login_required
 def meeting_briefing_api(request, pk):
     node = get_object_or_404(Node, owner=request.user, pk=pk, merged_into__isnull=True)
     data = _briefing(request.user, node)

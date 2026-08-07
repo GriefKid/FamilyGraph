@@ -58,7 +58,7 @@ from .views_memory import (memory_hub, knowledge_graph_view, memory_fact_api, me
 from .views_relationship_life import (relationship_life_hub, meeting_briefing_api,
     quick_capture_api, meeting_reflection_api, commitment_action_api,
     safety_setting_api, person_export, csv_import_preview, csv_import_apply, service_worker,
-    introduction_brief_api, person_delete_complete)
+    introduction_brief_api, person_delete_complete, trust_center_view)
 from .views_platform import (platform_tools_view, command_palette_api, onboarding_api, onboarding_complete_api,
     ai_quality_dashboard, ai_debug_private, ai_trace_rerun, feature_flags_view, frontend_error_api,
     system_health_api, encrypted_backup_download, encrypted_backup_preview,
@@ -312,6 +312,7 @@ urlpatterns = [
     path('api/memory/merge/<int:pk>/undo/', node_merge_undo_api, name='node_merge_undo'),
     path('api/memory/psychology/clear/', clear_psychology_inferences_api, name='clear_psychology_inferences'),
     path('relationship-life/',           relationship_life_hub, name='relationship_life_hub'),
+    path('trust/',                       trust_center_view, name='trust_center'),
     path('api/relationship-life/briefing/<int:pk>/', meeting_briefing_api, name='meeting_briefing'),
     path('api/relationship-life/capture/', quick_capture_api, name='quick_capture'),
     path('api/relationship-life/reflection/', meeting_reflection_api, name='meeting_reflection'),

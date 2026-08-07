@@ -493,6 +493,7 @@ class RelationshipLifeCycleTests(TestCase):
 
     def test_pwa_assets_and_hub_render(self):
         self.assertEqual(self.client.get('/relationship-life/').status_code, 200)
+        self.assertEqual(self.client.get('/trust/').status_code, 200)
         sw = self.client.get('/service-worker.js')
         self.assertEqual(sw.status_code, 200)
         self.assertIn('application/javascript', sw['Content-Type'])

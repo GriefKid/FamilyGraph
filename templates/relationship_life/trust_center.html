@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}مرکز اعتماد · FamilyGraph{% endblock %}
+{% block page_title %}مرکز اعتماد{% endblock %}
+{% block content %}
+<main style="max-width:760px;margin:0 auto">
+  <section class="card" style="padding:24px;margin-bottom:16px"><h1 style="font-size:21px;margin-top:0">داده‌هایت زیر کنترل تو هستند</h1><p style="line-height:2;color:var(--text-soft)">این صفحه به زبان ساده نشان می‌دهد چه داده‌هایی خصوصی‌اند و پیشنهادهای هوشمند از کجا محدود شده‌اند. هیچ‌چیز از این صفحه منتشر نمی‌شود.</p></section>
+  <section class="card" style="padding:20px;margin-bottom:16px"><h2 style="font-size:15px;margin-top:0">حریم خصوصی</h2><p>{{ private_nodes }} نفر فقط در گراف خصوصی تو هستند. داده‌های عمومی فقط وقتی نمایش داده می‌شوند که خودت آن‌ها را عمومی کرده باشی.</p><a class="btn btn-sm" href="/profile/">تنظیمات حساب</a></section>
+  <section class="card" style="padding:20px;margin-bottom:16px"><h2 style="font-size:15px;margin-top:0">دسترسی AI</h2><p>{% if ai_enabled %}ویژگی‌های AI برای بخش‌هایی که در تنظیمات حساب فعال کرده‌ای در دسترس‌اند.{% else %}AI برای حساب تو غیرفعال است.{% endif %} {{ no_ai_facts }} یادداشت/حافظه صریحاً از AI کنار گذاشته شده است.</p><a class="btn btn-sm" href="/memory/">مدیریت حافظه‌ها</a></section>
+  <section class="card" style="padding:20px"><h2 style="font-size:15px;margin-top:0">توقف پیشنهاد تماس</h2>{% for item in paused_people %}<div style="padding:9px 0;border-bottom:1px solid var(--border)">{{ item.node.display_name }}{% if item.no_contact_until %} · تا {{ item.no_contact_until }}{% endif %}</div>{% empty %}<p style="color:var(--text-muted)">برای هیچ‌کس توقف پیشنهاد فعال نیست.</p>{% endfor %}<a class="btn btn-sm" href="/relationship-life/">مدیریت رابطه‌ها</a></section>
+</main>
+{% endblock %}
