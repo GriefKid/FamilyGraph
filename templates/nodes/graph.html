@@ -262,7 +262,7 @@
       <svg width="13" height="13" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input id="searchInput" type="search" aria-label="جستجوی شخص در گراف" placeholder="جستجوی نود..." oninput="highlightSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';highlightSearch('');this.blur()}">
+      <input id="searchInput" type="search" aria-label="جستجوی شخص در گراف" placeholder="جستجوی نود..." oninput="highlightSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';highlightSearch('');this.blur()}else if(event.key==='Enter'){openExactGraphMatch(this.value)}">
     </div>
     <!-- Hop filter -->
     <div class="tb-glass">
@@ -1215,6 +1215,12 @@ function highlightSearch(q){
   nLayer.selectAll(".ng").attr("opacity", d =>
     !q || normalize(d.username).includes(q) || normalize(d.label).includes(q) ? 1 : .08
   );
+}
+function openExactGraphMatch(query){
+  const normalize = value => String(value||"").trim().toLowerCase().replace(/ي/g, "ی").replace(/ك/g, "ک");
+  const q = normalize(query);
+  const match = (gData?.nodes||[]).find(node => normalize(node.username) === q || normalize(node.label) === q);
+  if(match) window.location.href = `/nodes/${match.id}/`;
 }
 function toggleLayout(){
   useEgo = !useEgo;
