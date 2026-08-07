@@ -1,0 +1,26 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  django:
+    runs-on: ubuntu-latest
+    env: {USE_SQLITE: "1", DJANGO_SECRET_KEY: "ci-only-secret"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install -r requirements.txt
+      - run: python manage.py check
+      - run: python manage.py makemigrations main --check --dry-run
+      - run: python manage.py test
+  browser:
+    runs-on: ubuntu-latest
+    env: {USE_SQLITE: "1", DJANGO_SECRET_KEY: "ci-only-secret", E2E_BASE_URL: "http://127.0.0.1:8000"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install -r requirements-dev.txt
+      - run: playwright install --with-deps chromium
+      - run: python manage.py migrate
+      - run: python manage.py runserver 127.0.0.1:8000 &
+      - run: pytest e2e/test_smoke.py

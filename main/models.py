@@ -59,6 +59,9 @@ class User(AbstractUser):
     ai_journal_enabled = models.BooleanField(default=True)
     ai_checkin_enabled = models.BooleanField(default=True)
     ai_chat_enabled = models.BooleanField(default=True)
+    onboarding_completed = models.BooleanField(default=False)
+    demo_mode = models.BooleanField(default=False)
+    feature_overrides = models.JSONField(default=dict, blank=True)
 
     class Meta:
         verbose_name = 'کاربر'
@@ -162,6 +165,7 @@ class Node(models.Model):
     )
     merged_into = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name='merged_duplicates')
+    is_demo = models.BooleanField(default=False)
 
     def display_name(self):
         if self.nickname:
@@ -637,6 +641,8 @@ class JournalEntry(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['owner', '-created_at'], name='journal_owner_created'),
+                   models.Index(fields=['owner', 'entry_date'], name='journal_owner_date')]
 
 
 class RelationshipPulse(models.Model):
@@ -679,6 +685,7 @@ class ExtractionSuggestion(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['owner', 'status', '-created_at'], name='extract_owner_status')]
         constraints = [
             models.UniqueConstraint(
                 fields=['owner', 'source', 'source_id', 'fingerprint'],
@@ -736,6 +743,7 @@ class MemoryFact(models.Model):
 
     class Meta:
         ordering = ['category', '-confidence', '-observed_at']
+        indexes = [models.Index(fields=['owner', 'node', 'active'], name='memory_owner_node_active')]
         constraints = [models.UniqueConstraint(fields=['owner', 'node', 'category', 'value'],
                                                 name='unique_memory_fact_per_node')]
 
@@ -845,6 +853,84 @@ class NodeSafetySetting(models.Model):
     hide_emotional_reminders = models.BooleanField(default=False)
     boundaries = models.TextField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class FeatureFlag(models.Model):
+    name = models.SlugField(max_length=80, unique=True)
+    label = models.CharField(max_length=160)
+    enabled = models.BooleanField(default=False)
+    staff_only = models.BooleanField(default=False)
+    rollout_percent = models.PositiveSmallIntegerField(default=100)
+    description = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def is_enabled_for(self, user):
+        override = (getattr(user, 'feature_overrides', None) or {}).get(self.name)
+        if isinstance(override, bool):
+            return override and not (self.staff_only and not getattr(user, 'is_staff', False))
+        if not self.enabled or (self.staff_only and not getattr(user, 'is_staff', False)):
+            return False
+        return (getattr(user, 'pk', 0) or 0) % 100 < min(100, self.rollout_percent)
+
+
+class AIExtractionTrace(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                              on_delete=models.CASCADE, related_name='ai_extraction_traces')
+    source = models.CharField(max_length=20)
+    source_id = models.PositiveIntegerField(null=True, blank=True)
+    input_text = models.TextField(blank=True)
+    regex_output = models.JSONField(default=list)
+    ai_output = models.JSONField(default=list)
+    merged_output = models.JSONField(default=list)
+    provider = models.CharField(max_length=40, blank=True)
+    model_name = models.CharField(max_length=100, blank=True)
+    duration_ms = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, default='regex_only')
+    error_code = models.CharField(max_length=80, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['owner', '-created_at'], name='ai_trace_owner_created')]
+
+
+class KnowledgeTriple(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                              related_name='knowledge_triples')
+    subject = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='knowledge_subjects')
+    predicate = models.CharField(max_length=80)
+    object_text = models.CharField(max_length=300, blank=True)
+    object_node = models.ForeignKey(Node, null=True, blank=True, on_delete=models.CASCADE,
+                                    related_name='knowledge_objects')
+    confidence = models.PositiveSmallIntegerField(default=70)
+    source = models.CharField(max_length=20)
+    source_id = models.PositiveIntegerField(null=True, blank=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['owner', 'predicate'], name='knowledge_owner_pred')]
+        constraints = [models.UniqueConstraint(
+            fields=['owner', 'subject', 'predicate', 'object_text', 'object_node'],
+            name='unique_knowledge_triple')]
+
+
+class ObservabilityEvent(models.Model):
+    request_id = models.CharField(max_length=36, db_index=True)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                              on_delete=models.SET_NULL, related_name='observability_events')
+    level = models.CharField(max_length=10, default='error')
+    area = models.CharField(max_length=40, default='backend')
+    path = models.CharField(max_length=240, blank=True)
+    code = models.CharField(max_length=100, blank=True)
+    message = models.CharField(max_length=500)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['area', '-created_at'], name='obs_area_created')]
 
 
 # ─────────────────────────────────────────────────────────────────

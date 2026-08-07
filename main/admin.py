@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib.admin import display
 from .models import (
     ArtisticWork,
+    AIExtractionTrace,
     ChatAnalysis,
     Commitment,
     Debt,
@@ -9,16 +10,19 @@ from .models import (
     Follow,
     FollowUp,
     GiftIdea,
+    FeatureFlag,
     FriendRequest,
     Friendship,
     Information,
     Interaction,
+    KnowledgeTriple,
     MemoryFact,
     MeetingReflection,
     Node,
     NodeAlias,
     NodeMergeOperation,
     NodeSafetySetting,
+    ObservabilityEvent,
     NodeCloseness,
     ProfileMediaItem,
     Relationship,
@@ -29,6 +33,10 @@ admin.site.register(Commitment)
 admin.site.register(GiftIdea)
 admin.site.register(MeetingReflection)
 admin.site.register(NodeSafetySetting)
+admin.site.register(FeatureFlag)
+admin.site.register(AIExtractionTrace)
+admin.site.register(KnowledgeTriple)
+admin.site.register(ObservabilityEvent)
 
 
 @admin.register(MemoryFact)

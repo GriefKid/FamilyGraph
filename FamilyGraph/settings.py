@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+import importlib.util
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,10 +56,14 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'main.middleware.FeatureFlagMiddleware',
+    'main.middleware.RequestObservabilityMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'main.middleware.LoginRequiredMiddleware',
 ]
+if not DEBUG and importlib.util.find_spec('whitenoise'):
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'FamilyGraph.urls'
 
@@ -135,6 +140,11 @@ USE_L10N = True
 USE_TZ = True
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
+if importlib.util.find_spec('whitenoise'):
+    STORAGES = {
+        'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+        'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+    }
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]

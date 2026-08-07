@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Debug خصوصی AI{% endblock %}
+{% block page_title %}🧪 Debug خصوصی AI{% endblock %}
+{% block content %}
+<div style="max-width:1100px;margin:auto">
+  <div class="card" style="padding:18px;margin-bottom:12px">فقط اجرای متعلق به حساب superuser فعلی نمایش داده می‌شود؛ داده کاربران دیگر اینجا قابل مشاهده نیست.</div>
+  {% for t in traces %}<details class="card" style="padding:16px;margin-bottom:9px">
+    <summary>{{ t.source }} #{{ t.source_id }} · {{ t.status }} · {{ t.provider }} {{ t.model_name }} · {{ t.duration_ms }}ms</summary>
+    <form method="post" action="/api/platform/ai-debug/{{ t.id }}/rerun/" style="margin:10px 0">{% csrf_token %}<button class="btn btn-sm">اجرای دوباره استخراج</button></form>
+    <h4>ورودی</h4><pre style="white-space:pre-wrap">{{ t.input_text }}</pre>
+    <h4>Regex</h4><pre style="white-space:pre-wrap">{{ t.regex_output }}</pre>
+    <h4>AI</h4><pre style="white-space:pre-wrap">{{ t.ai_output }}</pre>
+    <h4>نتیجه ادغام</h4><pre style="white-space:pre-wrap">{{ t.merged_output }}</pre>
+  </details>{% empty %}<div class="card" style="padding:20px">اجرایی برای حساب تو ثبت نشده است.</div>{% endfor %}
+</div>
+{% endblock %}

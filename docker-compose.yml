@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: familygraph
+      POSTGRES_USER: familygraph
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U familygraph]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  web:
+    build: .
+    env_file: [.env]
+    environment:
+      DEBUG: "False"
+      DB_NAME: familygraph
+      DB_USER: familygraph
+      DB_HOST: db
+      DB_PORT: "5432"
+    command: sh -c "python manage.py migrate && gunicorn FamilyGraph.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    ports: ["8000:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+volumes:
+  postgres_data:

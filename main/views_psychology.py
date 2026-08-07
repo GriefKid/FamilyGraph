@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import (Debt, Event, ExtractionSuggestion, MemoryFact, Node, NodeAlias,
+from .models import (Debt, Event, ExtractionSuggestion, KnowledgeTriple, MemoryFact, Node, NodeAlias,
                      Relationship, RelationshipPulse)
 
 
@@ -177,6 +177,10 @@ def extraction_suggestion_decide_api(request, pk):
         )
         if created:
             suggestion.applied_model, suggestion.applied_object_id = 'memory', fact.id
+        KnowledgeTriple.objects.get_or_create(
+            owner=request.user, subject=node, predicate=category, object_text=value,
+            object_node=None, defaults={'confidence': fact.confidence, 'source': suggestion.source,
+                                        'source_id': suggestion.source_id})
     elif suggestion.kind == 'relationship':
         node = Node.objects.filter(owner=request.user, pk=data.get('node_id')).first()
         root = request.user.root_node
@@ -195,6 +199,10 @@ def extraction_suggestion_decide_api(request, pk):
         relationship.status = new_status if new_status in dict(Relationship.STATUS_CHOICES) else 'active'
         relationship.strength = min(5, max(1, int(data.get('strength') or suggestion.payload.get('strength') or 3)))
         relationship.save()
+        KnowledgeTriple.objects.get_or_create(
+            owner=request.user, subject=root, predicate='relationship', object_text=relationship.rel or '',
+            object_node=node, defaults={'confidence': relationship.strength * 20,
+                                        'source': suggestion.source, 'source_id': suggestion.source_id})
         suggestion.applied_model, suggestion.applied_object_id = 'relationship', relationship.id
     suggestion.status = 'approved'; suggestion.save(update_fields=['status', 'payload', 'applied_model', 'applied_object_id', 'updated_at'])
     return JsonResponse({'ok': True})

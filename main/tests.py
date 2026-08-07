@@ -1,11 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 import json
 import io
 from datetime import date, timedelta
 
-from .models import Commitment, Debt, Event, ExtractionSuggestion, Follow, Friendship, GiftIdea, Information, Interaction, JournalEntry, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
+from .models import AIExtractionTrace, Commitment, Debt, Event, ExtractionSuggestion, FeatureFlag, Follow, Friendship, GiftIdea, Information, Interaction, JournalEntry, KnowledgeTriple, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
 from .templatetags.jalali_tags import jalali_date
 
 
@@ -483,3 +484,91 @@ class RelationshipLifeCycleTests(TestCase):
         sw = self.client.get('/service-worker.js')
         self.assertEqual(sw.status_code, 200)
         self.assertIn('application/javascript', sw['Content-Type'])
+
+
+class PlatformQualityTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='platform-owner', password='SecurePass1')
+        self.other = get_user_model().objects.create_user(username='platform-other', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='platform-sara', name='سارا')
+        self.client.force_login(self.user)
+
+    def test_regex_extraction_records_private_trace(self):
+        from .extraction import extract_text
+        extract_text(self.user, 'سارا عاشق کتاب تاریخی است', 'journal', 501)
+        trace = AIExtractionTrace.objects.get(owner=self.user)
+        self.assertEqual(trace.status, 'regex_only')
+        self.assertEqual(trace.source_id, 501)
+        self.assertTrue(trace.regex_output)
+
+    def test_manual_memory_also_builds_knowledge_triple(self):
+        response = self.client.post('/api/memory/facts/', data=json.dumps({
+            'action': 'create', 'node_id': self.node.id, 'category': 'interest', 'value': 'نجوم'}),
+            content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        triple = KnowledgeTriple.objects.get(owner=self.user)
+        self.assertEqual((triple.subject, triple.predicate, triple.object_text), (self.node, 'interest', 'نجوم'))
+
+    def test_command_palette_and_onboarding_are_tenant_scoped(self):
+        Node.objects.create(owner=self.other, username='secret-person', name='نباید دیده شود')
+        results = self.client.get('/api/platform/command-palette/?q=secret').json()['results']
+        self.assertNotIn('secret-person', [row.get('subtitle', '') for row in results])
+        onboarding = self.client.get('/api/platform/onboarding/').json()
+        self.assertEqual(len(onboarding['steps']), 5)
+
+    def test_feature_flag_supports_rollout_and_user_override(self):
+        flag = FeatureFlag.objects.get(name='hybrid-ai')
+        flag.enabled = False
+        flag.save(update_fields=['enabled'])
+        self.assertFalse(flag.is_enabled_for(self.user))
+        self.user.feature_overrides = {'hybrid-ai': True}
+        self.user.save(update_fields=['feature_overrides'])
+        self.assertTrue(flag.is_enabled_for(self.user))
+        suggestions = FeatureFlag.objects.get(name='relationship-suggestions')
+        suggestions.enabled = False
+        suggestions.save(update_fields=['enabled'])
+        blocked = self.client.get(f'/api/memory/assistant/{self.node.id}/')
+        self.assertEqual(blocked.status_code, 404)
+
+    def test_public_health_and_request_id_do_not_require_login(self):
+        self.client.logout()
+        response = self.client.get('/api/system/health/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['database'], 'ok')
+        self.assertTrue(response['X-Request-ID'])
+
+    def test_demo_data_can_be_created_and_reset_without_touching_real_node(self):
+        created = self.client.post('/api/platform/demo/', data=json.dumps({'action': 'create'}),
+                                   content_type='application/json')
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(Node.objects.filter(owner=self.user, is_demo=True).count(), 3)
+        self.client.post('/api/platform/demo/', data=json.dumps({'action': 'reset'}),
+                         content_type='application/json')
+        self.assertTrue(Node.objects.filter(pk=self.node.id).exists())
+        self.assertFalse(Node.objects.filter(owner=self.user, is_demo=True).exists())
+
+    def test_ai_debug_never_exposes_another_users_raw_text(self):
+        superuser = get_user_model().objects.create_superuser(username='debug-root', password='SecurePass1')
+        AIExtractionTrace.objects.create(owner=self.other, source='journal', input_text='متن خیلی خصوصی')
+        self.client.force_login(superuser)
+        response = self.client.get('/platform/ai-debug/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'متن خیلی خصوصی')
+
+    def test_encrypted_backup_requires_password_and_round_trips_preview(self):
+        download = self.client.post('/api/platform/backup/download/', {'password': 'StrongBackupPass1'})
+        self.assertEqual(download.status_code, 200)
+        self.assertTrue(download.content.startswith(b'FGB1'))
+        encrypted = SimpleUploadedFile('backup.fgb', download.content, 'application/octet-stream')
+        preview = self.client.post('/api/platform/backup/preview/', {
+            'password': 'StrongBackupPass1', 'file': encrypted})
+        self.assertEqual(preview.status_code, 200)
+        self.assertTrue(preview.json()['valid'])
+        restore_file = SimpleUploadedFile('backup.fgb', download.content, 'application/octet-stream')
+        restored = self.client.post('/api/platform/backup/restore/', {
+            'password': 'StrongBackupPass1', 'file': restore_file})
+        self.assertEqual(restored.status_code, 200)
+        self.assertTrue(restored.json()['ok'])
+        wrong_file = SimpleUploadedFile('backup.fgb', download.content, 'application/octet-stream')
+        wrong = self.client.post('/api/platform/backup/preview/', {'password': 'wrong-pass', 'file': wrong_file})
+        self.assertEqual(wrong.status_code, 400)

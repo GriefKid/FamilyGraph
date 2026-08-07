@@ -2,10 +2,12 @@
 import hashlib
 import json
 import re
+import os
+import time
 
 from django.db import models
 
-from .models import ExtractionSuggestion, Node, NodeAlias
+from .models import AIExtractionTrace, ExtractionSuggestion, FeatureFlag, Node, NodeAlias
 from .persian_datetime import parse_persian_datetime
 
 
@@ -148,8 +150,39 @@ def extract_text(owner, text, source, source_id=None):
                     'chat': owner.ai_chat_enabled}
     if source in source_flags and not source_flags[source]:
         return []
+    started = time.monotonic()
+    regex_items = _collect(owner, text)
+    ai_items, provider, model_name, trace_status, trace_error = [], '', '', 'regex_only', ''
+    hybrid_flag = FeatureFlag.objects.filter(name='hybrid-ai').first()
+    hybrid_enabled = os.environ.get('AI_HYBRID_ENABLED', '0') == '1' or bool(hybrid_flag and hybrid_flag.is_enabled_for(owner))
+    if hybrid_enabled and text.strip():
+        try:
+            from .views_smart_features import _ai_client, _extract_json, _model
+            client, configured, provider = _ai_client()
+            model_name = _model()
+            if client and configured:
+                prompt = ('فقط JSON بده. از متن فارسی، موارد قطعی را استخراج کن. '
+                          'خروجی: {"suggestions":[{"kind":"event|debt|person|relationship|memory|commitment",'
+                          '"payload":{...},"confidence":0-100}]}. تشخیص پزشکی و حدس هویتی ممنوع.\nمتن: ' + text[:4000])
+                response = client.chat.completions.create(
+                    model=model_name, messages=[{'role': 'user', 'content': prompt}],
+                    temperature=0.1, max_tokens=900)
+                parsed = _extract_json(response.choices[0].message.content)
+                for row in parsed.get('suggestions', [])[:20]:
+                    if row.get('kind') in {'event','debt','person','relationship','memory','commitment'} and isinstance(row.get('payload'), dict):
+                        payload = {**row['payload'], 'ai_confidence': min(100, max(0, int(row.get('confidence', 60)))),
+                                   'explanation': row['payload'].get('explanation', 'این پیشنهاد توسط موتور AI استخراج شد.')}
+                        ai_items.append((row['kind'], payload))
+                trace_status = 'hybrid'
+        except Exception as exc:
+            trace_status, trace_error = 'ai_failed', type(exc).__name__
+    combined, seen = [], set()
+    for kind, payload in [*regex_items, *ai_items]:
+        marker = _fingerprint(kind, payload)
+        if marker not in seen:
+            seen.add(marker); combined.append((kind, payload))
     created = []
-    for kind, payload in _collect(owner, text):
+    for kind, payload in combined:
         fingerprint = _fingerprint(kind, payload)
         row, was_created = ExtractionSuggestion.objects.get_or_create(
             owner=owner, source=source, source_id=source_id, fingerprint=fingerprint,
@@ -157,4 +190,15 @@ def extract_text(owner, text, source, source_id=None):
         )
         if was_created:
             created.append(row)
+    try:
+        AIExtractionTrace.objects.create(
+            owner=owner, source=source, source_id=source_id, input_text=text[:4000],
+            regex_output=[{'kind': k, 'payload': p} for k, p in regex_items],
+            ai_output=[{'kind': k, 'payload': p} for k, p in ai_items],
+            merged_output=[{'kind': k, 'payload': p} for k, p in combined],
+            provider=provider, model_name=model_name,
+            duration_ms=round((time.monotonic() - started) * 1000), status=trace_status,
+            error_code=trace_error)
+    except Exception:
+        pass
     return created

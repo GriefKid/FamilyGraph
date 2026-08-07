@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .models import (Debt, Event, ExtractionSuggestion, FollowUp, Interaction, JournalEntry,
-                     MemoryFact, Node, NodeAlias, NodeMergeOperation, Relationship,
+                     KnowledgeTriple, MemoryFact, Node, NodeAlias, NodeMergeOperation, Relationship,
                      RelationshipRecommendation, NodeSafetySetting)
 
 
@@ -67,6 +67,13 @@ def memory_hub(request):
 
 
 @login_required
+def knowledge_graph_view(request):
+    triples = KnowledgeTriple.objects.filter(owner=request.user, active=True).select_related(
+        'subject', 'object_node')[:500]
+    return render(request, 'memory/knowledge.html', {'triples': triples})
+
+
+@login_required
 @require_POST
 def memory_fact_api(request, pk=None):
     data = _body(request)
@@ -85,6 +92,9 @@ def memory_fact_api(request, pk=None):
                       'source': 'manual', 'ai_usable': bool(data.get('ai_usable', True)),
                       'confidentiality': data.get('confidentiality') if data.get('confidentiality') in dict(MemoryFact._meta.get_field('confidentiality').choices) else 'personal',
                       'active': True})
+        KnowledgeTriple.objects.get_or_create(
+            owner=request.user, subject=node, predicate=category, object_text=value,
+            object_node=None, defaults={'confidence': fact.confidence, 'source': 'manual'})
     elif action == 'update' and fact:
         if data.get('category') in dict(MemoryFact.CATEGORY_CHOICES):
             fact.category = data['category']
