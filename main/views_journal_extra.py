@@ -109,7 +109,7 @@ def journal_save_api(request):
 
     image_ids = body.get('image_ids', [])
     if image_ids:
-        JournalImage.objects.filter(id__in=image_ids, entry__isnull=True).update(entry=entry)
+        JournalImage.objects.filter(id__in=image_ids, entry__isnull=True, owner=request.user).update(entry=entry)
 
     _extract_profile_media_from_journal(entry)
     from .extraction import extract_text

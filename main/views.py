@@ -1656,7 +1656,7 @@ def journal_image_upload_api(request):
     image_file = request.FILES.get('image')
     if not image_file:
         return JsonResponse({'error': 'فایلی ارسال نشد'}, status=400)
-    img = JournalImage.objects.create(image=image_file)
+    img = JournalImage.objects.create(image=image_file, owner=request.user)
     return JsonResponse({'id': img.id, 'url': img.image.url})
 
 
@@ -1827,7 +1827,7 @@ def journal_analyze_api(request):
         # Link any pre-uploaded images to this entry
         image_ids = body.get('image_ids', [])
         if image_ids:
-            JournalImage.objects.filter(id__in=image_ids, entry__isnull=True).update(entry=entry)
+            JournalImage.objects.filter(id__in=image_ids, entry__isnull=True, owner=request.user).update(entry=entry)
 
         try:
             from .views_journal_extra import _extract_profile_media_from_journal

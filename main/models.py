@@ -1333,6 +1333,8 @@ class JournalImage(models.Model):
     entry       = models.ForeignKey(JournalEntry, on_delete=models.CASCADE,
                                      related_name='images', null=True, blank=True)
     image       = models.ImageField(upload_to='journal/', verbose_name='تصویر')
+    owner       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                    related_name='journal_images', null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
