@@ -270,7 +270,10 @@ class NodeListView(LoginRequiredMixin, ListView):
         group_id = self.request.GET.get('group', '').strip()
         if group_id.isdigit():
             queryset = queryset.filter(groups__id=group_id, groups__owner=self.request.user).distinct()
-        if self.request.GET.get('focus') == 'attention':
+        focus = self.request.GET.get('focus')
+        if focus == 'pinned':
+            queryset = queryset.filter(is_pinned=True)
+        elif focus == 'attention':
             try:
                 from .health import compute_health
                 attention_ids = [node_id for node_id, item in compute_health(self.request.user).items()

@@ -156,6 +156,21 @@ class DashboardBriefingTests(TestCase):
         self.assertLess(response.content.find(b'z-pinned'), response.content.find(b'a-normal'))
         self.assertContains(response, 'title="پین‌شده"')
 
+    def test_people_directory_can_filter_to_own_pinned_people(self):
+        user = get_user_model().objects.create_user(username='pinned-filter-user', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='pinned-filter-other', password='SecurePass1')
+        Node.objects.create(owner=user, username='pinned-visible', name='Pinned visible', is_pinned=True)
+        Node.objects.create(owner=user, username='unpinned-hidden', name='Unpinned hidden')
+        Node.objects.create(owner=other, username='foreign-pinned-hidden', name='Foreign pinned', is_pinned=True)
+        self.client.force_login(user)
+
+        response = self.client.get('/nodes/?focus=pinned')
+
+        self.assertContains(response, 'pinned-visible')
+        self.assertNotContains(response, 'unpinned-hidden')
+        self.assertNotContains(response, 'foreign-pinned-hidden')
+        self.assertEqual(response.context['selected_focus'], 'pinned')
+
     def test_people_directory_group_filter_is_owner_scoped(self):
         from .models import Group
         user = get_user_model().objects.create_user(username='group-list', password='SecurePass1')

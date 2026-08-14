@@ -341,6 +341,7 @@
   </select>
   <select id="peopleFocusFilter" aria-label="فیلتر اولویت افراد" onchange="filterPeopleByFocus(this.value)">
     <option value="">همهٔ افراد</option>
+    <option value="pinned" {% if selected_focus == 'pinned' %}selected{% endif %}>فقط پین‌شده‌ها</option>
     <option value="attention" {% if selected_focus == 'attention' %}selected{% endif %}>نیازمند توجه</option>
   </select>
   <div class="view-toggle">
