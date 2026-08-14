@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -319,6 +319,15 @@ class PublicSocialTests(TestCase):
 
 
 class JournalMomentTests(TestCase):
+    def test_checkin_submission_requires_a_csrf_token(self):
+        user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(user)
+
+        response = client.post('/api/checkin/', data=json.dumps({}), content_type='application/json')
+
+        self.assertEqual(response.status_code, 403)
+
     def test_quick_moment_keeps_the_event_time_and_is_private_to_its_owner(self):
         User = get_user_model()
         user = User.objects.create_user(username='journal-owner', password='SecurePass1')

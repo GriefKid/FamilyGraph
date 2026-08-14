@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from .models import Node, Relationship
 
@@ -138,7 +138,7 @@ def connect_info_api(request, pk):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
+@require_POST
 def connect_plan_api(request, pk):
     """پلن قدم‌به‌قدم AI برای ساختن رابطه با هدف."""
     if request.method != 'POST':

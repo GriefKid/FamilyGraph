@@ -1214,7 +1214,7 @@ def chat_clear_api(request):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def chat_to_journal_api(request):
     """POST → حرف‌های امروزِ کاربر در چت → یادداشت ژورنال.
     این‌طوری درد دل‌ها وارد موتور mood-alert و روانشناسی می‌شن."""
@@ -1684,7 +1684,7 @@ def journal_image_upload_api(request):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def journal_analyze_api(request):
     """Diary text → rich structured extraction with root-node awareness."""
     if request.method != 'POST':
@@ -1866,7 +1866,7 @@ def journal_analyze_api(request):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def journal_apply_api(request):
     """Apply extracted entities + rich attributes to DB."""
     if request.method != 'POST':
@@ -2264,7 +2264,7 @@ def node_quick_update(request, pk):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def node_create_from_image(request):
     """ایجاد نود از عکس drag-drop شده روی گراف — wizard step per image."""
     if request.method != 'POST':
@@ -2346,7 +2346,7 @@ def node_create_from_image(request):
 
 
 @login_required
-@csrf_exempt
+@require_POST
 def relationship_quick_create(request):
     """ایجاد یا merge یال از طریق drag روی گراف."""
     if request.method != 'POST':
