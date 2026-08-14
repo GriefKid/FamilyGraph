@@ -192,6 +192,7 @@ def journal_entries_api(request):
     if has_img == '1':
         qs = qs.filter(images__isnull=False).distinct()
 
+    total = qs.count()
     entries = []
     for e in qs[:60]:
         first_img = e.images.first()
@@ -209,4 +210,4 @@ def journal_entries_api(request):
             'image':      first_img.image.url if first_img else None,
             'mentioned':  [n.username for n in e.mentioned_nodes.all()[:5]],
         })
-    return JsonResponse({'entries': entries})
+    return JsonResponse({'entries': entries, 'total': total})

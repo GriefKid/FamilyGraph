@@ -355,6 +355,14 @@ class JournalMomentTests(TestCase):
         response = self.client.get('/api/journal/entries/?q=علی')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()['entries']), 1)
+        self.assertEqual(response.json()['total'], 1)
+
+    def test_journal_filtering_has_a_result_status_and_recovery_action(self):
+        user = get_user_model().objects.create_user(username='journal-filter-ui', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/journal/')
+        self.assertContains(response, 'id="entriesStatus"')
+        self.assertContains(response, 'با این فیلترها یادداشتی پیدا نشد')
 
 
 class JalaliPresentationTests(TestCase):
