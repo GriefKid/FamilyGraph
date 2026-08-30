@@ -664,6 +664,37 @@ class OccasionGreetingTests(TestCase):
         self.assertEqual(fake[0].chat.completions.create.call_count, 1)
 
 
+class ChatRetrievalTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='rag', password='SecurePass1')
+        self.sara = Node.objects.create(owner=self.user, username='sara', name='سارا')
+        self.old = JournalEntry.objects.create(
+            owner=self.user, entry_date=date(2024, 1, 5),
+            text='با سارا رفتیم کافه و درباره سفر شمال حرف زدیم.',
+        )
+        self.old.mentioned_nodes.add(self.sara)
+        for i in range(12):
+            JournalEntry.objects.create(
+                owner=self.user, entry_date=date(2025, 6, i + 1),
+                text=f'یادداشت روزمرهٔ بی‌ربط شمارهٔ {i}',
+            )
+
+    def test_retrieval_surfaces_an_old_entry_the_recent_window_would_miss(self):
+        from main.views import _retrieve_context
+        ctx = _retrieve_context(self.user, 'آخرین بار کی با سارا رفتم کافه؟')
+        self.assertIn('کافه', ctx)
+        self.assertIn('2024-01-05', ctx)
+
+    def test_retrieval_is_empty_for_a_contentless_question(self):
+        from main.views import _retrieve_context
+        self.assertEqual(_retrieve_context(self.user, 'سلام'), '')
+
+    def test_retrieval_stays_within_the_owner(self):
+        from main.views import _retrieve_context
+        other = get_user_model().objects.create_user(username='rag-other', password='SecurePass1')
+        self.assertEqual(_retrieve_context(other, 'سارا کافه شمال'), '')
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

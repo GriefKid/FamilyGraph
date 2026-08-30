@@ -1433,6 +1433,96 @@ def chat_to_journal_api(request):
                          'msg': 'ذخیره شد — از صفحه ژورنال می‌تونی تحلیل AI هم بزنی'})
 
 
+def _fa_norm(text):
+    return (str(text or '')
+            .replace('ي', 'ی').replace('ك', 'ک').replace('‌', ' ')
+            .lower())
+
+
+_FA_STOPWORDS = {
+    'من', 'تو', 'او', 'ما', 'شما', 'با', 'به', 'از', 'که', 'را', 'رو', 'در',
+    'این', 'اون', 'آن', 'یه', 'یک', 'و', 'یا', 'کی', 'چی', 'چه', 'کجا', 'کِی',
+    'آخرین', 'بار', 'کِیه', 'بود', 'شد', 'کرد', 'های', 'هست', 'برای', 'چطور',
+}
+
+
+def _retrieve_context(user, query, limit=8):
+    """Keyword + name retrieval over the owner's own history for the chat.
+
+    Local, no embeddings — for a personal graph a normalised term match over
+    journals, interactions and memory facts is enough to answer questions
+    about things that are older than the 'recent' windows already in the
+    prompt (e.g. 'آخرین بار کی سارا را دیدم؟').
+    """
+    from .models import Interaction, MemoryFact
+    qn = _fa_norm(query)
+    terms = {t for t in qn.replace('؟', ' ').replace('?', ' ').split()
+             if len(t) >= 2 and t not in _FA_STOPWORDS}
+    if not terms:
+        return ''
+
+    # People named in the question
+    named_ids, named_names = [], []
+    for node in Node.objects.filter(owner=user).only(
+            'id', 'username', 'name', 'first_name', 'last_name', 'nickname'):
+        blob = _fa_norm(' '.join(filter(None, [
+            node.username, node.name, node.first_name, node.last_name, node.nickname,
+        ])))
+        if blob and any(t in blob or blob_word in qn
+                        for t in terms
+                        for blob_word in blob.split()):
+            if any(w and w in qn for w in blob.split()):
+                named_ids.append(node.id)
+                named_names.append(node.display_name())
+
+    def _score(text):
+        tn = _fa_norm(text)
+        return sum(tn.count(t) for t in terms)
+
+    lines = []
+
+    jq = JournalEntry.objects.filter(owner=user)
+    if named_ids:
+        jq = jq.filter(Q(mentioned_nodes__id__in=named_ids) | Q(text__icontains=query[:60]))
+    scored = sorted(
+        ((_score(j.text), j) for j in jq.order_by('-entry_date')[:400]),
+        key=lambda p: -p[0],
+    )
+    for s, j in scored[:limit]:
+        if s <= 0:
+            break
+        lines.append(f"- یادداشت {j.entry_date}: {j.text[:280]}"
+                     + (f" [حال: {j.mood}]" if j.mood else ""))
+
+    try:
+        iq = Interaction.objects.filter(owner=user).select_related('node')
+        if named_ids:
+            iq = iq.filter(node_id__in=named_ids)
+        for it in iq.order_by('-date')[:limit]:
+            who = it.node.display_name() if it.node_id else '—'
+            note = f" — {it.note}" if getattr(it, 'note', '') else ''
+            lines.append(f"- تعامل {it.date} با {who} ({it.get_kind_display()}){note}")
+            if len(lines) >= limit * 2:
+                break
+    except Exception:
+        pass
+
+    try:
+        mq = MemoryFact.objects.filter(owner=user, active=True).select_related('node')
+        if named_ids:
+            mq = mq.filter(node_id__in=named_ids)
+        for mf in mq.order_by('-confidence')[:limit]:
+            if named_ids or _score(mf.value) > 0:
+                lines.append(f"- دربارهٔ {mf.node.display_name()}: {mf.value}")
+    except Exception:
+        pass
+
+    if not lines:
+        return ''
+    header = "## مرتبط با سؤالت (از کل تاریخچه، نه فقط اخیر):\n"
+    return header + "\n".join(lines[:limit * 2]) + "\n\n"
+
+
 @login_required
 def chat_api(request):
     if request.method != 'POST':
@@ -1624,6 +1714,7 @@ def chat_api(request):
         f"## روابطش:\n{rels_text}\n\n"
         f"## افراد شبکه‌اش:\n{nodes_text}\n\n"
         f"## شناخت‌نامه افراد (تحلیل‌های ذخیره‌شده — نمره دوستی، شخصیت، هشدارها):\n{info_text}\n\n"
+        f"{_retrieve_context(request.user, user_message)}"
         f"## یادداشت‌های اخیرش:\n{journal_text}\n\n"
         f"## اقدامات اخیرش:\n{actions_text}\n\n"
         f"## قرض و طلب‌های باز:\n{ledger_text}\n\n"
