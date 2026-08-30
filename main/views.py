@@ -1772,7 +1772,8 @@ def chat_api(request):
             max_tokens=1024,
             temperature=0.6,
         )
-        reply = normalize_persian_reply(response.choices[0].message.content)
+        from .views_smart_features import _strip_reasoning
+        reply = normalize_persian_reply(_strip_reasoning(response.choices[0].message.content))
 
         # یک فرصت بازنویسی سبک و محدود برای خروجی انگلیسی، رباتیک یا بیش‌ازحد بلند.
         # این مرحله داده‌های خصوصی گراف را دوباره ارسال نمی‌کند.

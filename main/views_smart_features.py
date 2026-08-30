@@ -74,10 +74,50 @@ def _ollama_client():
 # Gemini   (1,500 req/day - بلاک در ایران بدون VPN)
 # ─────────────────────────────────────────────────────────────────────────
 
+_PROVIDER_BASE_URLS = {
+    'openrouter': 'https://openrouter.ai/api/v1',
+    'gemini': 'https://generativelanguage.googleapis.com/v1beta/openai/',
+    'mistral': 'https://api.mistral.ai/v1',
+    'groq': 'https://api.groq.com/openai/v1',
+}
+_PROVIDER_KEY_ENV = {
+    'openrouter': 'OPENROUTER_API_KEY',
+    'gemini': 'GEMINI_API_KEY',
+    'mistral': 'MISTRAL_API_KEY',
+    'groq': 'GROQ_API_KEY',
+}
+
+
+def _forced_provider():
+    """AI_PROVIDER in the environment pins the provider and skips auto-priority."""
+    name = os.environ.get('AI_PROVIDER', '').strip().lower()
+    if not name:
+        return None
+    if name == 'ollama':
+        client, _m = _ollama_client()
+        return client, 'ollama', 'ollama'
+    if name in _PROVIDER_BASE_URLS:
+        key = os.environ.get(_PROVIDER_KEY_ENV[name], '')
+        if not key:
+            return None  # fall through to auto so the app still works
+        primary = OpenAI(base_url=_PROVIDER_BASE_URLS[name], api_key=key)
+        if name == 'openrouter' and os.environ.get('OLLAMA_ENABLED', '1') == '1':
+            fb, fbm = _ollama_client()
+            primary = _AIClientFailover(primary, fb, fbm)
+        return primary, key, name
+    return None
+
+
 def _ai_client():
     """Return (OpenAI client, api_key, provider).
+
+    If AI_PROVIDER is set it wins. Otherwise:
     Priority: OpenRouter → Gemini → Mistral → Groq → local Ollama
     """
+    forced = _forced_provider()
+    if forced:
+        return forced
+
     # Prefer the project's free cloud provider when a key is configured.
     # OpenRouter accepts the OpenAI client already used by this project.
     openrouter_key = os.environ.get('OPENROUTER_API_KEY', '')
@@ -115,19 +155,32 @@ def _ai_client():
     return None, '', ''
 
 
+_PROVIDER_DEFAULT_MODEL = {
+    'openrouter': 'openrouter/free',
+    'gemini': 'gemini-2.5-flash',
+    'mistral': 'mistral-small-latest',      # رایگان، بدون بلاک ایران
+    'groq': 'llama-3.3-70b-versatile',      # 14,400 req/day رایگان، سریع
+}
+
+
 def _model():
-    """Pick correct model name for active provider."""
+    """Pick the model name for the active provider."""
     configured_model = os.environ.get('AI_MODEL', '').strip()
     if configured_model:
         return configured_model
+    forced = os.environ.get('AI_PROVIDER', '').strip().lower()
+    if forced == 'ollama':
+        return os.environ.get('OLLAMA_MODEL', 'qwen2.5:3b')
+    if forced in _PROVIDER_DEFAULT_MODEL:
+        return _PROVIDER_DEFAULT_MODEL[forced]
     if os.environ.get('OPENROUTER_API_KEY'):
         return 'openrouter/free'
     if os.environ.get('GEMINI_API_KEY'):
         return "gemini-2.5-flash"
     if os.environ.get('MISTRAL_API_KEY'):
-        return "mistral-small-latest"       # رایگان، بدون بلاک ایران
+        return "mistral-small-latest"
     if os.environ.get('GROQ_API_KEY'):
-        return "llama-3.3-70b-versatile"   # 14,400 req/day free
+        return "llama-3.3-70b-versatile"
     return os.environ.get('OLLAMA_MODEL', 'qwen2.5:3b')
 
 
@@ -139,14 +192,31 @@ def _rate_limit_msg(e: Exception) -> str:
     return f'خطای AI: {s[:200]}'
 
 
+def _strip_reasoning(raw: str) -> str:
+    """Drop <think>...</think> blocks that reasoning models (deepseek-r1,
+    qwen-r1, …) prepend — they break JSON parsing and leak into replies."""
+    import re
+    raw = re.sub(r'<think>.*?</think>', '', raw or '', flags=re.S | re.I).strip()
+    raw = re.sub(r'^<think>.*$', '', raw, flags=re.S | re.I).strip()  # unclosed
+    return raw
+
+
 def _extract_json(raw: str) -> dict:
-    """Pull JSON from AI output (may be wrapped in ```json)."""
-    raw = raw.strip()
+    """Pull JSON from AI output (may be wrapped in ```json or a <think> block)."""
+    raw = _strip_reasoning(raw).strip()
     if '```json' in raw:
         raw = raw.split('```json')[1].split('```')[0]
     elif '```' in raw:
         raw = raw.split('```')[1].split('```')[0]
-    return json.loads(raw.strip())
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # last resort: the outermost {...}
+        start, end = raw.find('{'), raw.rfind('}')
+        if start != -1 and end > start:
+            return json.loads(raw[start:end + 1])
+        raise
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -902,6 +902,32 @@ class DirectoryAppUserTests(TestCase):
         self.assertNotContains(r, 'chatWith(event')
 
 
+class AIProviderConfigTests(TestCase):
+    def test_ai_provider_env_pins_the_backend(self):
+        from main.views_smart_features import _ai_client, _model
+        with mock.patch.dict('os.environ', {
+            'AI_PROVIDER': 'groq', 'GROQ_API_KEY': 'k', 'OPENROUTER_API_KEY': 'stale',
+        }, clear=False):
+            _client, _key, provider = _ai_client()
+            self.assertEqual(provider, 'groq')
+            self.assertEqual(_model(), 'llama-3.3-70b-versatile')
+
+    def test_forced_provider_without_its_key_falls_back_to_auto(self):
+        from main.views_smart_features import _ai_client
+        with mock.patch.dict('os.environ', {
+            'AI_PROVIDER': 'mistral', 'MISTRAL_API_KEY': '', 'GROQ_API_KEY': 'g',
+            'OPENROUTER_API_KEY': '', 'GEMINI_API_KEY': '',
+        }, clear=False):
+            _client, _key, provider = _ai_client()
+            self.assertEqual(provider, 'groq')
+
+    def test_reasoning_blocks_are_stripped_before_parsing(self):
+        from main.views_smart_features import _strip_reasoning, _extract_json
+        self.assertEqual(_strip_reasoning('<think>ummm</think>\n{"ok": 1}'), '{"ok": 1}')
+        self.assertEqual(_extract_json('<think>x</think> noise {"v": 3} tail'), {'v': 3})
+        self.assertEqual(_extract_json('```json\n{"z": 9}\n```'), {'z': 9})
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

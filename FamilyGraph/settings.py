@@ -5,10 +5,12 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load a project-local .env first, while retaining the former parent-directory
-# location for existing deployments. Existing environment variables always win.
-load_dotenv(BASE_DIR / '.env')
+# The project-local .env is authoritative — it overrides stale shell/OS
+# environment variables (e.g. a leftover OPENROUTER_API_KEY) so that editing
+# .env actually changes behaviour. The parent-directory location is kept for
+# older deployments and does not override.
 load_dotenv(BASE_DIR.parent / '.env')
+load_dotenv(BASE_DIR / '.env', override=True)
 
 SECRET_KEY = os.environ.get(
     'DJANGO_SECRET_KEY',
