@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.db.models.signals import pre_delete
+from django.db.models.signals import m2m_changed, pre_delete
 from django.dispatch import receiver
 
 
@@ -200,6 +200,17 @@ class Node(models.Model):
 # ─────────────────────────────────────────────────────────────────
 
 
+@receiver(m2m_changed, sender=Node.groups.through)
+def enforce_node_group_ownership(sender, instance, action, pk_set, **kwargs):
+    """Keep direct ORM group assignments inside the node owner's tenant."""
+    if action != 'pre_add' or not instance.owner_id or not pk_set:
+        return
+    if Group.objects.filter(pk__in=pk_set, owner__isnull=False).exclude(
+        owner_id=instance.owner_id,
+    ).exists():
+        raise ValidationError('Node groups must belong to the same owner.')
+
+
 class Relationship(models.Model):
     STATUS_CHOICES = [
         ('active',   'فعال'),
@@ -316,6 +327,17 @@ class Event(models.Model):
         indexes = [
             models.Index(fields=['owner', 'date'], name='event_owner_date'),
         ]
+
+
+@receiver(m2m_changed, sender=Event.participants.through)
+def enforce_event_participant_ownership(sender, instance, action, pk_set, **kwargs):
+    """Keep direct ORM participant assignments inside the event owner's tenant."""
+    if action != 'pre_add' or not instance.owner_id or not pk_set:
+        return
+    if Node.objects.filter(pk__in=pk_set, owner__isnull=False).exclude(
+        owner_id=instance.owner_id,
+    ).exists():
+        raise ValidationError('Event participants must belong to the same owner.')
 
 
 
@@ -672,6 +694,17 @@ class JournalEntry(models.Model):
         ordering = ['-created_at']
         indexes = [models.Index(fields=['owner', '-created_at'], name='journal_owner_created'),
                    models.Index(fields=['owner', 'entry_date'], name='journal_owner_date')]
+
+
+@receiver(m2m_changed, sender=JournalEntry.mentioned_nodes.through)
+def enforce_journal_node_ownership(sender, instance, action, pk_set, **kwargs):
+    """Keep direct ORM journal mentions inside the entry owner's tenant."""
+    if action != 'pre_add' or not instance.owner_id or not pk_set:
+        return
+    if Node.objects.filter(pk__in=pk_set, owner__isnull=False).exclude(
+        owner_id=instance.owner_id,
+    ).exists():
+        raise ValidationError('Journal mentions must belong to the same owner.')
 
 
 

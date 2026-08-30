@@ -4,6 +4,7 @@
 {% block page_title %}◉ افراد <span class="page-title-sep">›</span> {{ node.display_name }}{% endblock %}
 {% block nav_nodes %}active{% endblock %}
 {% block topbar_actions %}
+  <button type="button" class="btn btn-sm" id="nodePinButton" onclick="toggleNodePin()">{% if node.is_pinned %}★ پین‌شده{% else %}☆ پین‌کردن{% endif %}</button>
   <a href="{% url 'node_update' node.id %}" class="btn btn-sm">✎ ویرایش</a>
   <a href="{% url 'node_delete' node.id %}" class="btn btn-sm btn-danger">✕ حذف</a>
 {% endblock %}
@@ -1379,7 +1380,13 @@ async function npersonaLoad(fresh){
     const r = await fetch(fresh ? '/api/persona/node/{{ node.id }}/synthesize/' : '/api/persona/node/{{ node.id }}/',
       fresh ? {method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}} : {});
     const d = await r.json();
-    if(!d.ok){ box.innerHTML = `<span style="color:#f87171">${d.error||'خطا'}</span>`; return; }
+    if(!d.ok){
+      const error=document.createElement('span');
+      error.style.color='#f87171';
+      error.textContent=d.error||'خطا';
+      box.replaceChildren(error);
+      return;
+    }
     npersonaRender(d.persona);
   }catch(e){ box.textContent = 'خطا در ارتباط با سرور'; }
 }
@@ -1577,6 +1584,45 @@ async function loadSummary(){
     btn.disabled = false;
     btn.textContent = '↺ تولید دوباره';
   }
+}
+
+async function toggleNodePin(){
+  const button = document.getElementById('nodePinButton');
+  if(!button) return;
+  button.disabled = true;
+  try{
+    const response = await fetch('/api/nodes/{{ node.id }}/pin/', {
+      method:'POST',
+      headers:{'X-CSRFToken': getCookie('csrftoken')}
+    });
+    const data = await response.json();
+    if(!response.ok) throw new Error(data.error || 'خطا');
+    button.textContent = data.is_pinned ? '★ پین‌شده' : '☆ پین‌کردن';
+  }catch(error){
+    button.textContent = 'خطا؛ دوباره تلاش کن';
+  }finally{
+    button.disabled = false;
+  }
+}
+</script>
+<script>
+window.loadSummary=async function(){
+  const btn=document.getElementById('aiBtn'),body=document.getElementById('aiBody');
+  if(!btn||!body)return;
+  btn.disabled=true;btn.textContent='در حال تحلیل...';body.textContent='در حال پردازش...';
+  try{
+    const res=await fetch('/api/node/{{ node.id }}/summary/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+    const data=await res.json();
+    if(data.summary){
+      body.replaceChildren();
+      String(data.summary).split(/\n\n+/).forEach(paragraph=>{
+        const p=document.createElement('p');
+        paragraph.split(/\n/).forEach((line,index)=>{if(index)p.appendChild(document.createElement('br'));p.appendChild(document.createTextNode(line))});
+        body.appendChild(p);
+      });
+    }else{body.textContent='خطا: '+String(data.error||'نامشخص')}
+  }catch(e){body.textContent='خطا در ارتباط با سرور'}
+  finally{btn.disabled=false;btn.textContent='تولید دوباره'}
 }
 </script>
 <script>

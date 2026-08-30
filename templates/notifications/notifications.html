@@ -142,6 +142,9 @@
 
 <!-- ── General Notifications ── -->
 <div class="notif-section-title">📢 اطلاعیه‌های سیستم</div>
+<div style="font-size:12px;color:var(--text-muted);margin:-3px 0 10px">
+  اعلان‌های خوانده‌نشده: <b id="unreadCount">{{ unread_count }}</b>
+</div>
 {% if general_notifs %}
 <button type="button" class="btn btn-sm" style="margin:-3px 0 10px" onclick="markAllNotificationsRead(this)">خوانده‌شدن همه</button>
 {% for n in general_notifs %}
@@ -173,6 +176,8 @@ async function markAllNotificationsRead(button){
   const response=await fetch('/api/notifications/mark-read/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}});
   if(!response.ok){fgToast('صندوق به‌روزرسانی نشد.',true);return;}
   document.querySelectorAll('.notif-item.unread').forEach(item=>{item.classList.remove('unread');item.querySelector('.notif-dot')?.classList.add('read')});
+  const unreadCount=document.getElementById('unreadCount');
+  if(unreadCount) unreadCount.textContent='0';
   button.remove(); fgToast('همهٔ اعلان‌ها خوانده شدند.');
 }
 

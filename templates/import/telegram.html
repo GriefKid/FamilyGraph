@@ -229,8 +229,9 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ node_opts_json|json_script:"telegram-node-options" }}
 <script>
-let NODE_OPTS = {{ node_opts_json|safe }};
+let NODE_OPTS = JSON.parse(document.getElementById('telegram-node-options').textContent||'[]');
 const ROOT_ID = "{{ root_id }}";
 let tgFileObj = null, tgContacts = [], wzIndex = null, wzStrength = 3;
 

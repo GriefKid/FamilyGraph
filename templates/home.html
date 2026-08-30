@@ -366,6 +366,7 @@ relTypes.forEach((r, i) => {
 
 /* safe marker id */
 const mId = rel => "arr" + relIdx[rel]
+const escGraph = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
 
 /* node dominant colour */
 function dominantRel(d) {
@@ -400,7 +401,7 @@ relTypes.forEach((rel, i) => {
   div.innerHTML = `
     <input type="checkbox" id="chk${i}" checked>
     <span class="fp-swatch" style="background:${relColor[rel]}"></span>
-    <span class="fp-label">${rel}</span>
+    <span class="fp-label">${escGraph(rel)}</span>
     <span class="fp-count">${count}</span>
   `
   const chk = div.querySelector("input")

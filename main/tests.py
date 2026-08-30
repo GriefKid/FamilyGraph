@@ -1,14 +1,17 @@
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection, transaction
 from django.utils import timezone
 from unittest import mock
 import json
 import io
 from datetime import date, timedelta
+from pathlib import Path
 
-from .models import AIExtractionTrace, Commitment, Debt, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftIdea, Information, Interaction, JournalEntry, KnowledgeTriple, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
+from .models import AIExtractionTrace, Commitment, Debt, DirectMessage, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftBox, GiftIdea, Information, Interaction, JournalEntry, JournalImage, KnowledgeTriple, LifeEvent, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
 from .templatetags.jalali_tags import jalali_date
 
 
@@ -96,10 +99,15 @@ class DashboardBriefingTests(TestCase):
 
     def test_relationship_search_normalizes_persian_characters(self):
         user = get_user_model().objects.create_user(username='relationship-search', password='SecurePass1')
+        source = Node.objects.create(owner=user, username='relationship-source', name='علي')
+        target = Node.objects.create(owner=user, username='relationship-target', name='رضا')
+        relationship = Relationship.objects.create(
+            owner=user, source=source, target=target, rel='دوست',
+        )
         self.client.force_login(user)
-        response = self.client.get('/relationships/')
-        self.assertContains(response, "replace(/ي/g, 'ی')")
-        self.assertContains(response, 'id="rlSearchStatus"')
+        response = self.client.get('/relationships/?q=علی')
+        self.assertEqual(list(response.context['relationships']), [relationship])
+        self.assertContains(response, 'rlParams')
 
     def test_people_search_is_server_side_and_owner_scoped(self):
         user = get_user_model().objects.create_user(username='people-search', password='SecurePass1')
@@ -183,7 +191,9 @@ class DashboardBriefingTests(TestCase):
         visible = Node.objects.create(owner=user, username='group-visible', name='Visible')
         hidden = Node.objects.create(owner=user, username='group-hidden', name='Hidden')
         visible.groups.add(own_group)
-        hidden.groups.add(foreign_group)
+        # Simulate a legacy inconsistent through-row without bypassing the
+        # current direct-write ownership guard in normal application code.
+        Node.groups.through.objects.create(node_id=hidden.id, group_id=foreign_group.id)
         self.client.force_login(user)
         response = self.client.get(f'/nodes/?group={own_group.id}')
         self.assertContains(response, 'group-visible')
@@ -252,6 +262,1007 @@ class DashboardBriefingTests(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(JournalImage.objects.get(pk=response.json()['id']).owner, user)
+
+
+class PinnedPeopleTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='pin-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='pin-other', password='SecurePass1')
+        self.pinned = Node.objects.create(owner=self.user, username='z-pinned', name='Pinned')
+        self.normal = Node.objects.create(owner=self.user, username='a-normal', name='Normal')
+        self.foreign = Node.objects.create(owner=self.other, username='foreign', name='Foreign')
+        self.client.force_login(self.user)
+
+    def test_toggle_pin_is_owner_scoped_and_reversible(self):
+        response = self.client.post(f'/api/nodes/{self.pinned.id}/pin/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['is_pinned'])
+        self.pinned.refresh_from_db()
+        self.assertTrue(self.pinned.is_pinned)
+
+        response = self.client.post(f'/api/nodes/{self.pinned.id}/pin/')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['is_pinned'])
+
+        self.assertEqual(self.client.post(f'/api/nodes/{self.foreign.id}/pin/').status_code, 404)
+        self.foreign.refresh_from_db()
+        self.assertFalse(self.foreign.is_pinned)
+
+    def test_pinned_filter_excludes_unpinned_and_foreign_people(self):
+        self.pinned.is_pinned = True
+        self.pinned.save(update_fields=['is_pinned'])
+        response = self.client.get('/nodes/?focus=pinned')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'z-pinned')
+        self.assertNotContains(response, 'a-normal')
+        self.assertNotContains(response, 'foreign')
+
+    def test_directory_sorts_pinned_first_and_pin_endpoint_requires_post(self):
+        self.pinned.is_pinned = True
+        self.pinned.save(update_fields=['is_pinned'])
+        response = self.client.get('/nodes/')
+        self.assertLess(response.content.find(b'z-pinned'), response.content.find(b'a-normal'))
+        self.assertEqual(self.client.get(f'/api/nodes/{self.pinned.id}/pin/').status_code, 405)
+
+    def test_dashboard_shows_only_owned_pinned_people(self):
+        self.pinned.is_pinned = True
+        self.pinned.save(update_fields=['is_pinned'])
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'افراد مهم')
+        self.assertContains(response, 'Pinned')
+        self.assertNotContains(response, 'Foreign')
+
+
+class DashboardFollowupTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='dashboard-followup-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='dashboard-followup-other', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='dashboard-person', name='Dashboard person')
+        self.foreign_node = Node.objects.create(owner=self.other, username='foreign-dashboard-person', name='Foreign dashboard person')
+        self.client.force_login(self.user)
+
+    def test_dashboard_highlights_only_owned_overdue_followups(self):
+        FollowUp.objects.create(
+            owner=self.user, node=self.node, text='Owner overdue task',
+            due_date=timezone.localdate() - timedelta(days=2),
+        )
+        FollowUp.objects.create(
+            owner=self.other, node=self.foreign_node, text='Foreign overdue secret',
+            due_date=timezone.localdate() - timedelta(days=2),
+        )
+
+        response = self.client.get('/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Owner overdue task')
+        self.assertContains(response, 'پیگیری عقب‌افتاده')
+        self.assertNotContains(response, 'Foreign overdue secret')
+        self.assertEqual(len(response.context['overdue_followups']), 1)
+
+    def test_dashboard_overdue_summary_is_empty_when_all_open_items_are_future(self):
+        FollowUp.objects.create(
+            owner=self.user, node=self.node, text='Future task',
+            due_date=timezone.localdate() + timedelta(days=2),
+        )
+
+        response = self.client.get('/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context['overdue_followups'])
+        self.assertNotContains(response, 'پیگیری عقب‌افتاده')
+
+
+class InteractionAPIContractTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='interaction-api-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='interaction-api-other', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='interaction-api-node')
+        self.foreign_node = Node.objects.create(owner=self.other, username='private-interaction-node')
+        self.client.force_login(self.user)
+
+    def test_log_returns_serialized_interaction_and_health(self):
+        response = self.client.post('/api/interactions/log/', data=json.dumps({
+            'node_id': self.node.id, 'kind': 'call', 'feeling': 1,
+            'note': 'A short note', 'date': str(timezone.localdate()),
+        }), content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['interaction']['node_id'], self.node.id)
+        self.assertEqual(payload['interaction']['note'], 'A short note')
+        self.assertIn('health', payload)
+
+    def test_log_rejects_future_dates_and_foreign_nodes(self):
+        future = self.client.post('/api/interactions/log/', data=json.dumps({
+            'node_id': self.node.id, 'date': str(timezone.localdate() + timedelta(days=1)),
+        }), content_type='application/json')
+        foreign = self.client.post('/api/interactions/log/', data=json.dumps({
+            'node_id': self.foreign_node.id,
+        }), content_type='application/json')
+
+        self.assertEqual(future.status_code, 400)
+        self.assertEqual(foreign.status_code, 404)
+        self.assertFalse(Interaction.objects.exists())
+
+    def test_recent_does_not_return_inconsistent_foreign_node_records(self):
+        Interaction.objects.bulk_create([Interaction(
+            owner=self.user, node=self.foreign_node, kind='call', date=timezone.localdate(),
+        )])
+
+        response = self.client.get('/api/interactions/recent/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['interactions'], [])
+
+
+class DirectorySearchTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='directory-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='directory-other', password='SecurePass1')
+        self.client.force_login(self.user)
+
+    def test_search_finds_records_beyond_first_page(self):
+        for index in range(30):
+            Node.objects.create(
+                owner=self.user,
+                username=f'server-search-{index:02d}',
+                name='Directory result',
+            )
+
+        response = self.client.get('/nodes/?q=server-search')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 30)
+        self.assertTrue(response.context['is_paginated'])
+        self.assertContains(response, 'value="server-search"')
+
+    def test_search_normalizes_arabic_and_persian_kaf_and_yeh(self):
+        Node.objects.create(
+            owner=self.user,
+            username='persian-person',
+            name='\u06a9\u06cc\u0627\u0646',
+        )
+
+        response = self.client.get('/nodes/', {'q': '\u0643\u064a\u0627\u0646'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'persian-person')
+
+    def test_group_filter_is_owner_scoped(self):
+        from .models import Group
+        own_group = Group.objects.create(owner=self.user, name='My group')
+        foreign_group = Group.objects.create(owner=self.other, name='Other group')
+        own_node = Node.objects.create(owner=self.user, username='group-member', name='Member')
+        own_node.groups.add(own_group)
+        Node.objects.create(owner=self.user, username='ungrouped-person', name='No group')
+        foreign_node = Node.objects.create(owner=self.other, username='foreign-member', name='Private')
+        foreign_node.groups.add(foreign_group)
+
+        response = self.client.get('/nodes/', {'group': own_group.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'group-member')
+        self.assertNotContains(response, 'ungrouped-person')
+        self.assertNotContains(response, 'foreign-member')
+        self.assertNotContains(response, 'Other group')
+
+    def test_pagination_script_preserves_search_group_and_pin_filters(self):
+        from .models import Group
+        group = Group.objects.create(owner=self.user, name='Paged group')
+        for index in range(30):
+            node = Node.objects.create(
+                owner=self.user,
+                username=f'paged-person-{index:02d}',
+                name='Paged result',
+                is_pinned=True,
+            )
+            node.groups.add(group)
+
+        response = self.client.get('/nodes/', {
+            'q': 'paged-person', 'group': group.id, 'focus': 'pinned',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'activePeopleFilters')
+        self.assertContains(response, 'value="paged-person"')
+        self.assertEqual(response.context['page_obj'].paginator.count, 30)
+
+
+class RelationshipDirectoryTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='relationship-directory-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='relationship-directory-other', password='SecurePass1')
+        self.client.force_login(self.user)
+
+    def test_relationship_search_is_server_side_and_tenant_scoped(self):
+        left = Node.objects.create(owner=self.user, username='search-left', name='Search left')
+        right = Node.objects.create(owner=self.user, username='search-right', name='Search right')
+        Relationship.objects.create(owner=self.user, source=left, target=right, rel='colleague')
+        foreign_left = Node.objects.create(owner=self.other, username='private-left', name='Private')
+        foreign_right = Node.objects.create(owner=self.other, username='private-right', name='Private')
+        Relationship.objects.create(owner=self.other, source=foreign_left, target=foreign_right, rel='private-match')
+
+        response = self.client.get('/relationships/', {'q': 'search-right'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Search left')
+        self.assertNotContains(response, 'private-match')
+        self.assertEqual(response.context['paginator'].count, 1)
+
+    def test_relationship_status_filter_and_pagination_preserve_query(self):
+        left = Node.objects.create(owner=self.user, username='status-left', name='Status left')
+        right = Node.objects.create(owner=self.user, username='status-right', name='Status right')
+        for index in range(26):
+            Relationship.objects.create(
+                owner=self.user,
+                source=left,
+                target=right,
+                rel=f'status-{index}',
+                status='distant' if index == 0 else 'active',
+            )
+
+        response = self.client.get('/relationships/', {'q': 'status-', 'status': 'active'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['paginator'].count, 25)
+        self.assertNotContains(response, 'status-0')
+        self.assertContains(response, 'rlParams')
+        self.assertContains(response, 'status')
+
+    def test_relationship_directory_hides_legacy_foreign_endpoints(self):
+        own_node = Node.objects.create(owner=self.user, username='visible-relationship-node')
+        foreign_node = Node.objects.create(owner=self.other, username='private-relationship-node')
+        Relationship.objects.bulk_create([Relationship(
+            owner=self.user, source=own_node, target=foreign_node, rel='legacy-secret-edge',
+        )])
+
+        response = self.client.get('/relationships/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'legacy-secret-edge')
+        self.assertEqual(response.context['paginator'].count, 0)
+
+
+class EventDirectoryTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='event-directory-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='event-directory-other', password='SecurePass1')
+        self.client.force_login(self.user)
+
+    def test_event_search_and_participants_are_owner_scoped(self):
+        own_node = Node.objects.create(owner=self.user, username='event-person', name='Event person')
+        foreign_node = Node.objects.create(owner=self.other, username='private-participant', name='Private participant')
+        event = Event.objects.create(
+            owner=self.user,
+            title='Planning session',
+            description='A searchable event',
+            date=timezone.localdate(),
+        )
+        event.participants.add(own_node)
+        # Simulate a legacy/inconsistent through-table row; reads must still hide it.
+        Event.participants.through.objects.bulk_create([
+            Event.participants.through(event_id=event.id, node_id=foreign_node.id),
+        ])
+        Event.objects.create(owner=self.other, title='Private event', date=timezone.localdate())
+
+        response = self.client.get('/events/', {'q': 'Planning'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Planning session')
+        self.assertContains(response, 'Event person')
+        self.assertNotContains(response, 'Private participant')
+        self.assertNotContains(response, 'Private event')
+
+    def test_event_scope_filter_returns_only_future_or_past(self):
+        Event.objects.create(owner=self.user, title='Future event', date=timezone.localdate() + timedelta(days=2))
+        Event.objects.create(owner=self.user, title='Past event', date=timezone.localdate() - timedelta(days=2))
+
+        response = self.client.get('/events/', {'scope': 'upcoming'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Future event')
+        self.assertNotContains(response, 'Past event')
+        self.assertEqual(response.context['current_scope'], 'upcoming')
+
+    def test_event_pagination_preserves_search_and_scope_filters(self):
+        for index in range(25):
+            Event.objects.create(
+                owner=self.user,
+                title=f'Paged planning {index:02d}',
+                date=timezone.localdate() + timedelta(days=index + 1),
+            )
+
+        response = self.client.get('/events/', {
+            'q': 'Paged planning', 'scope': 'upcoming', 'page': '2',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].number, 2)
+        self.assertEqual(response.context['page_obj'].paginator.count, 25)
+        self.assertContains(response, 'Paged planning 24')
+        self.assertContains(response, 'q=Paged+planning')
+        self.assertContains(response, 'scope=upcoming')
+
+    def test_event_completion_does_not_create_interactions_for_legacy_foreign_participants(self):
+        own_node = Node.objects.create(owner=self.user, username='completion-owner-node')
+        foreign_node = Node.objects.create(owner=self.other, username='completion-foreign-node')
+        event = Event.objects.create(owner=self.user, title='Completion event', date=timezone.localdate())
+        event.participants.add(own_node)
+        Event.participants.through.objects.bulk_create([
+            Event.participants.through(event_id=event.id, node_id=foreign_node.id),
+        ])
+
+        response = self.client.post(f'/api/events/{event.id}/complete/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['logged'], 1)
+        self.assertTrue(Interaction.objects.filter(owner=self.user, node=own_node).exists())
+        self.assertFalse(Interaction.objects.filter(owner=self.user, node=foreign_node).exists())
+
+
+class QueryIndexCoverageTests(TestCase):
+    def test_hot_owner_queries_have_composite_indexes(self):
+        expected = {
+            Node: {'node_owner_username', 'node_owner_merge_pin'},
+            Relationship: {'rel_owner_status_strength', 'rel_owner_source', 'rel_owner_target'},
+            Event: {'event_owner_date'},
+            FollowUp: {'follow_owner_done_due'},
+            MemoryFact: {'memory_owner_node_active'},
+        }
+        for model, names in expected.items():
+            with self.subTest(model=model.__name__):
+                actual = {index.name for index in model._meta.indexes}
+                self.assertTrue(names <= actual)
+
+    def test_tenant_models_have_an_owner_leading_index(self):
+        for model in (Node, Relationship, Event, FollowUp, MemoryFact):
+            with self.subTest(model=model.__name__):
+                self.assertTrue(
+                    any(index.fields and index.fields[0] == 'owner' for index in model._meta.indexes),
+                    f'{model.__name__} should index owner-scoped queries',
+                )
+
+
+class RelationshipDataIntegrityTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.owner = User.objects.create_user(username='integrity-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='integrity-other', password='SecurePass1')
+        self.own_node = Node.objects.create(owner=self.owner, username='integrity-own')
+        self.foreign_node = Node.objects.create(owner=self.other, username='integrity-foreign')
+
+    def test_relationship_endpoints_must_match_relationship_owner(self):
+        with self.assertRaisesMessage(Exception, 'Relationship endpoints must belong to the same owner.'):
+            Relationship.objects.create(
+                owner=self.owner, source=self.own_node, target=self.foreign_node, rel='invalid',
+            )
+
+    def test_person_linked_records_reject_foreign_nodes(self):
+        cases = [
+            (Interaction, {
+                'node': self.foreign_node, 'kind': 'call', 'date': timezone.localdate(),
+                'owner': self.owner,
+            }),
+            (FollowUp, {'node': self.foreign_node, 'text': 'invalid follow-up', 'owner': self.owner}),
+            (Debt, {
+                'node': self.foreign_node, 'direction': 'i_owe', 'amount': 100,
+                'date': timezone.localdate(), 'owner': self.owner,
+            }),
+            (LifeEvent, {
+                'node': self.foreign_node, 'kind': 'other', 'date': timezone.localdate(),
+                'owner': self.owner,
+            }),
+        ]
+        for model, fields in cases:
+            with self.subTest(model=model.__name__):
+                with self.assertRaises(Exception):
+                    model.objects.create(**fields)
+
+    def test_person_linked_records_allow_their_owner_node(self):
+        Interaction.objects.create(
+            node=self.own_node, kind='call', date=timezone.localdate(), owner=self.owner,
+        )
+        FollowUp.objects.create(node=self.own_node, text='valid follow-up', owner=self.owner)
+        Debt.objects.create(
+            node=self.own_node, direction='i_owe', amount=100,
+            date=timezone.localdate(), owner=self.owner,
+        )
+        LifeEvent.objects.create(
+            node=self.own_node, kind='other', date=timezone.localdate(), owner=self.owner,
+        )
+
+    def test_event_rejects_foreign_participant_on_direct_m2m_write(self):
+        event = Event.objects.create(owner=self.owner, title='Owner event', date=timezone.localdate())
+
+        with self.assertRaisesMessage(Exception, 'Event participants must belong to the same owner.'):
+            with transaction.atomic():
+                event.participants.add(self.foreign_node)
+
+        self.assertFalse(event.participants.exists())
+
+    def test_secondary_owner_models_reject_foreign_nodes_and_relationships(self):
+        from .models import (
+            Commitment, GiftIdea, KnowledgeTriple, MeetingReflection, NodeCloseness,
+            NodeMergeOperation, NodeSafetySetting, PersonaProfile, RelationshipGoal,
+            RelationshipProfile, RelationshipRecommendation, RelationshipPulse,
+        )
+        foreign_target = Node.objects.create(owner=self.other, username='integrity-foreign-target')
+        foreign_relationship = Relationship.objects.create(
+            owner=self.other, source=self.foreign_node, target=foreign_target,
+            rel='foreign',
+        )
+        cases = [
+            (RelationshipRecommendation, {
+                'owner': self.owner, 'node': self.foreign_node,
+                'title': 'invalid', 'suggestion': 'invalid',
+            }),
+            (NodeMergeOperation, {
+                'owner': self.owner, 'primary_node': self.own_node,
+                'duplicate_node': self.foreign_node, 'snapshot': {},
+            }),
+            (Commitment, {
+                'owner': self.owner, 'node': self.foreign_node,
+                'responsible': 'me', 'text': 'invalid',
+            }),
+            (GiftIdea, {'owner': self.owner, 'node': self.foreign_node, 'title': 'invalid'}),
+            (MeetingReflection, {
+                'owner': self.owner, 'node': self.foreign_node, 'summary': 'invalid',
+            }),
+            (NodeSafetySetting, {'owner': self.owner, 'node': self.foreign_node}),
+            (KnowledgeTriple, {
+                'owner': self.owner, 'subject': self.foreign_node,
+                'predicate': 'interest', 'source': 'manual',
+            }),
+            (NodeCloseness, {'owner': self.owner, 'node': self.foreign_node, 'tier': 'friend'}),
+            (RelationshipGoal, {'owner': self.owner, 'node': self.foreign_node, 'text': 'invalid'}),
+            (PersonaProfile, {'owner': self.owner, 'node': self.foreign_node}),
+            (RelationshipProfile, {'owner': self.owner, 'relationship': foreign_relationship}),
+            (RelationshipPulse, {'owner': self.owner, 'node': self.foreign_node}),
+        ]
+        for model, fields in cases:
+            with self.subTest(model=model.__name__):
+                with self.assertRaises(Exception):
+                    model.objects.create(**fields)
+
+    def test_node_and_journal_many_to_many_links_reject_foreign_records(self):
+        from .models import Group
+        own_group = Group.objects.create(owner=self.owner, name='own group')
+        foreign_group = Group.objects.create(owner=self.other, name='foreign group')
+        with self.assertRaisesMessage(Exception, 'Node groups must belong to the same owner.'):
+            with transaction.atomic():
+                self.own_node.groups.add(foreign_group)
+        self.assertFalse(self.own_node.groups.filter(pk=foreign_group.pk).exists())
+
+        journal = JournalEntry.objects.create(owner=self.owner, text='owner journal')
+        with self.assertRaisesMessage(Exception, 'Journal mentions must belong to the same owner.'):
+            with transaction.atomic():
+                journal.mentioned_nodes.add(self.foreign_node)
+        self.assertFalse(journal.mentioned_nodes.filter(pk=self.foreign_node.pk).exists())
+        self.own_node.groups.add(own_group)
+
+
+class NodeDetailTenantSafetyTests(TestCase):
+    def test_node_detail_hides_foreign_events_journals_and_participants(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='detail-owner', password='SecurePass1')
+        other = User.objects.create_user(username='detail-other', password='SecurePass1')
+        node = Node.objects.create(owner=user, username='detail-person', name='Detail person')
+        own_participant = Node.objects.create(owner=user, username='own-participant', name='Own participant')
+        foreign_participant = Node.objects.create(owner=other, username='foreign-participant', name='Foreign participant')
+        own_event = Event.objects.create(owner=user, title='Owner detail event', date=timezone.localdate())
+        own_event.participants.add(node, own_participant)
+        Event.participants.through.objects.bulk_create([
+            Event.participants.through(event_id=own_event.id, node_id=foreign_participant.id),
+        ])
+        foreign_event = Event.objects.create(owner=other, title='Foreign detail event', date=timezone.localdate())
+        Event.participants.through.objects.bulk_create([
+            Event.participants.through(event_id=foreign_event.id, node_id=node.id),
+        ])
+        JournalEntry.objects.create(owner=user, text='Owner detail note', entry_date=timezone.localdate()).mentioned_nodes.add(node)
+        foreign_journal = JournalEntry.objects.create(
+            owner=other, text='FOREIGN DETAIL SECRET', entry_date=timezone.localdate()
+        )
+        JournalEntry.mentioned_nodes.through.objects.bulk_create([
+            JournalEntry.mentioned_nodes.through(
+                journalentry_id=foreign_journal.id, node_id=node.id,
+            ),
+        ])
+        self.client.force_login(user)
+
+        response = self.client.get(f'/nodes/{node.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Owner detail event')
+        self.assertContains(response, 'Owner detail note')
+        self.assertNotContains(response, 'Foreign detail event')
+        self.assertNotContains(response, 'FOREIGN DETAIL SECRET')
+
+    def test_contact_named_after_another_account_stays_in_private_detail(self):
+        User = get_user_model()
+        owner = User.objects.create_user(username='contact-owner', password='SecurePass1')
+        account = User.objects.create_user(username='existing-account', password='SecurePass1')
+        contact = Node.objects.create(owner=owner, username=account.username, name='Private contact')
+        self.client.force_login(owner)
+
+        response = self.client.get(f'/nodes/{contact.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Private contact')
+
+    def test_persona_does_not_match_another_account_by_contact_username(self):
+        from .models import ProfileMediaItem
+        from .views_persona import gather_person_signals
+        User = get_user_model()
+        owner = User.objects.create_user(username='persona-contact-owner', password='SecurePass1')
+        account = User.objects.create_user(username='persona-account', password='SecurePass1', is_public=True)
+        contact = Node.objects.create(owner=owner, username=account.username, name='Private persona contact')
+        ProfileMediaItem.objects.create(user=account, kind='book', title='Account-only media', is_public=True)
+
+        signals = gather_person_signals(owner, contact)
+
+        self.assertFalse(any('Account-only media' in signal for signal in signals))
+
+
+class GraphInteractionTests(TestCase):
+    def test_psychology_graph_build_batches_node_and_relationship_queries(self):
+        user = get_user_model().objects.create_user(username='graph-query-owner', password='SecurePass1')
+        first = Node.objects.create(owner=user, username='query-first')
+        second = Node.objects.create(owner=user, username='query-second')
+        Relationship.objects.create(owner=user, source=first, target=second, rel='friend')
+
+        from .views_smart_features import _build_nx
+        with CaptureQueriesContext(connection) as queries:
+            graph, nodes, relationships = _build_nx(user)
+
+        self.assertEqual(len(nodes), 2)
+        self.assertEqual(len(relationships), 1)
+        self.assertEqual(graph.number_of_edges(), 1)
+        self.assertEqual(len(queries), 2)
+
+    def test_graph_page_exposes_keyboard_search_and_focus_zoom_behavior(self):
+        user = get_user_model().objects.create_user(username='graph-owner', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/graph/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'searchStatus')
+        self.assertContains(response, 'openExactGraphMatch')
+        self.assertContains(response, 'focusGraphMatches')
+        self.assertContains(response, 'zoom.transform')
+        self.assertContains(response, "event.key==='Enter'")
+
+    def test_graph_api_is_tenant_scoped(self):
+        User = get_user_model()
+        other = User.objects.create_user(username='graph-other', password='SecurePass1')
+        Node.objects.create(owner=other, username='private-graph-node', name='Private')
+        user = get_user_model().objects.get(username='graph-owner') if get_user_model().objects.filter(username='graph-owner').exists() else User.objects.create_user(username='graph-viewer', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/api/graph/all/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('private-graph-node', [node['username'] for node in response.json()['nodes']])
+
+    def test_graph_omits_merged_people_and_edges_to_them(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='graph-merged-owner', password='SecurePass1')
+        active = Node.objects.create(owner=user, username='active-graph-node', name='Active')
+        merged = Node.objects.create(owner=user, username='merged-graph-node', name='Merged')
+        merged.merged_into = active
+        merged.save(update_fields=['merged_into'])
+        Relationship.objects.create(owner=user, source=active, target=merged, rel='hidden-edge')
+        self.client.force_login(user)
+
+        response = self.client.get('/api/graph/all/')
+
+        self.assertEqual(response.status_code, 200)
+        usernames = [node['username'] for node in response.json()['nodes']]
+        self.assertIn('active-graph-node', usernames)
+        self.assertNotIn('merged-graph-node', usernames)
+        self.assertEqual(response.json()['edges'], [])
+
+    def test_graph_omits_legacy_edges_to_foreign_people(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='graph-legacy-owner', password='SecurePass1')
+        other = User.objects.create_user(username='graph-legacy-other', password='SecurePass1')
+        own_node = Node.objects.create(owner=user, username='graph-safe-node')
+        foreign_node = Node.objects.create(owner=other, username='graph-private-node')
+        Relationship.objects.bulk_create([Relationship(
+            owner=user, source=own_node, target=foreign_node, rel='legacy-private-edge',
+        )])
+        self.client.force_login(user)
+
+        response = self.client.get('/api/graph/all/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['edges'], [])
+
+    def test_psychology_analysis_omits_legacy_edges_to_foreign_people(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='psychology-legacy-owner', password='SecurePass1')
+        other = User.objects.create_user(username='psychology-legacy-other', password='SecurePass1')
+        own_node = Node.objects.create(owner=user, username='psychology-safe-node')
+        foreign_node = Node.objects.create(owner=other, username='psychology-private-node')
+        Relationship.objects.bulk_create([Relationship(
+            owner=user, source=own_node, target=foreign_node, rel='legacy-private-edge',
+        )])
+        self.client.force_login(user)
+
+        response = self.client.get('/psychology/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'psychology-private-node')
+
+
+class JournalFilterUXTests(TestCase):
+    def test_filtered_journal_results_are_owner_scoped(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='journal-filter-owner', password='SecurePass1')
+        other = User.objects.create_user(username='journal-filter-other', password='SecurePass1')
+        JournalEntry.objects.create(owner=user, text='جلسه با سارا', entry_date=date(2026, 8, 30))
+        JournalEntry.objects.create(owner=other, text='یادداشت خصوصی سارا', entry_date=date(2026, 8, 30))
+        self.client.force_login(user)
+        response = self.client.get('/api/journal/entries/?q=سارا')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([entry['text'] for entry in response.json()['entries']], ['جلسه با سارا'])
+
+    def test_journal_list_has_result_count_empty_recovery_and_debounced_search(self):
+        user = get_user_model().objects.create_user(username='journal-filter-page', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.get('/journal/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'journalResultSummary')
+        self.assertContains(response, 'پاک‌کردن فیلترها')
+        self.assertContains(response, 'scheduleLoadEntries')
+        self.assertContains(response, 'تعداد نتایج')
+
+
+class ReviewReportTests(TestCase):
+    def test_weekly_and_monthly_reviews_include_owned_events_and_memories(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='review-owner', password='SecurePass1')
+        other = User.objects.create_user(username='review-other', password='SecurePass1')
+        node = Node.objects.create(owner=user, username='review-sara', name='سارا')
+        foreign_node = Node.objects.create(owner=other, username='review-foreign', name='نباید دیده شود')
+        Event.objects.create(owner=user, title='قرار کتاب', date=timezone.localdate())
+        Event.objects.create(owner=other, title='رویداد خصوصی دیگران', date=timezone.localdate())
+        MemoryFact.objects.create(owner=user, node=node, category='interest', value='کتاب تاریخی', source='manual')
+        MemoryFact.objects.create(owner=other, node=foreign_node, category='interest', value='نباید دیده شود', source='manual')
+        self.client.force_login(user)
+
+        weekly = self.client.get('/weekly/')
+        self.assertEqual(weekly.status_code, 200)
+        self.assertContains(weekly, 'class="review-switch"')
+        self.assertContains(weekly, 'href="/relationship-work/"')
+        self.assertContains(weekly, 'قرار کتاب')
+        self.assertContains(weekly, 'کتاب تاریخی')
+        self.assertNotContains(weekly, 'رویداد خصوصی دیگران')
+        self.assertNotContains(weekly, 'نباید دیده شود')
+
+        monthly = self.client.get('/monthly/')
+        self.assertEqual(monthly.status_code, 200)
+        self.assertContains(monthly, 'class="review-switch"')
+        self.assertContains(monthly, 'href="/relationship-work/"')
+        self.assertContains(monthly, 'حافظه‌های')
+        self.assertContains(monthly, 'کتاب تاریخی')
+        self.assertNotContains(monthly, 'نباید دیده شود')
+
+
+class CSRFProtectionTests(TestCase):
+    def setUp(self):
+        from .models import Notification
+        self.user = get_user_model().objects.create_user(username='csrf-owner', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='csrf-node', name='CSRF')
+        self.notification = Notification.objects.create(user=self.user, message='CSRF notification')
+        self.client = Client(enforce_csrf_checks=True)
+        self.client.force_login(self.user)
+
+    def test_internal_state_changes_require_csrf_token(self):
+        pin_response = self.client.post(f'/api/nodes/{self.node.id}/pin/')
+        journal_response = self.client.post(
+            '/api/journal/save/',
+            data=json.dumps({'text': 'بدون توکن نباید ذخیره شود'}),
+            content_type='application/json',
+        )
+        notification_response = self.client.post(
+            f'/api/notifications/{self.notification.id}/read/'
+        )
+        read_all_response = self.client.post('/api/notifications/read-all/')
+        self.assertEqual(pin_response.status_code, 403)
+        self.assertEqual(journal_response.status_code, 403)
+        self.assertEqual(notification_response.status_code, 403)
+        self.assertEqual(read_all_response.status_code, 403)
+        self.node.refresh_from_db()
+        self.notification.refresh_from_db()
+        self.assertFalse(self.node.is_pinned)
+        self.assertFalse(self.notification.is_read)
+        self.assertFalse(JournalEntry.objects.filter(owner=self.user).exists())
+
+
+class NotificationReadTests(TestCase):
+    def setUp(self):
+        from .models import Notification
+        User = get_user_model()
+        self.user = User.objects.create_user(username='notification-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='notification-other', password='SecurePass1')
+        self.notification = Notification.objects.create(
+            user=self.user, message='Unread owner notification', notif_type='system',
+        )
+        self.foreign = Notification.objects.create(
+            user=self.other, message='Foreign notification', notif_type='system',
+        )
+        self.client.force_login(self.user)
+
+    def test_opening_notifications_does_not_mark_them_read(self):
+        response = self.client.get('/notifications/')
+        self.assertEqual(response.status_code, 200)
+        self.notification.refresh_from_db()
+        self.assertFalse(self.notification.is_read)
+        self.assertContains(response, 'Unread owner notification')
+        self.assertContains(response, 'unreadCount')
+
+    def test_sidebar_badge_includes_unread_general_notifications(self):
+        response = self.client.get('/notifications/')
+        self.assertContains(response, '<span class="nav-badge">1</span>')
+
+    def test_read_endpoint_is_post_only_and_owner_scoped(self):
+        self.assertEqual(self.client.get(f'/api/notifications/{self.notification.id}/read/').status_code, 405)
+        response = self.client.post(f'/api/notifications/{self.notification.id}/read/')
+        self.assertEqual(response.status_code, 200)
+        self.notification.refresh_from_db()
+        self.assertTrue(self.notification.is_read)
+        self.assertEqual(response.json()['unread_count'], 0)
+        self.assertEqual(self.client.post(f'/api/notifications/{self.foreign.id}/read/').status_code, 404)
+        self.foreign.refresh_from_db()
+        self.assertFalse(self.foreign.is_read)
+
+    def test_read_all_changes_only_current_users_notifications(self):
+        from .models import Notification
+        Notification.objects.create(user=self.user, message='Second unread')
+        response = self.client.post('/api/notifications/read-all/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['updated'], 2)
+        self.assertFalse(Notification.objects.filter(user=self.user, is_read=False).exists())
+        self.assertTrue(Notification.objects.filter(pk=self.foreign.id, is_read=False).exists())
+
+
+class RelationshipWorkHubTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='hub-owner', password='SecurePass1')
+        self.other = User.objects.create_user(username='hub-other', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='hub-sara', name='سارا')
+        self.foreign_node = Node.objects.create(owner=self.other, username='hub-foreign', name='نباید دیده شود')
+        self.client.force_login(self.user)
+
+    def test_relationship_work_hub_is_single_entry_point_for_review_cycles(self):
+        response = self.client.get('/relationship-work/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/weekly/"')
+        self.assertContains(response, 'href="/monthly/"')
+        self.assertContains(response, 'href="/daily/"')
+        self.assertContains(response, 'href="/relationship-life/"')
+
+    def test_review_queue_combines_owned_work_and_filters_by_due_window(self):
+        today = timezone.localdate()
+        FollowUp.objects.create(
+            owner=self.user, node=self.node, text='پیگیری عقب‌افتاده من',
+            due_date=today - timedelta(days=1),
+        )
+        Commitment.objects.create(
+            owner=self.user, node=self.node, responsible='me',
+            text='تعهد هفته من', due_date=today + timedelta(days=2),
+        )
+        Debt.objects.create(
+            owner=self.user, node=self.node, direction='they_owe',
+            amount=500000, currency='تومان', date=today, note='حساب بدون تاریخ',
+        )
+        Event.objects.create(owner=self.user, title='قرار امروز من', date=today)
+
+        FollowUp.objects.create(
+            owner=self.other, node=self.foreign_node, text='پیگیری خصوصی دیگری',
+            due_date=today - timedelta(days=2),
+        )
+        Commitment.objects.create(
+            owner=self.other, node=self.foreign_node, responsible='me',
+            text='تعهد خصوصی دیگری', due_date=today + timedelta(days=1),
+        )
+        Debt.objects.create(
+            owner=self.other, node=self.foreign_node, direction='i_owe',
+            amount=900000, currency='تومان', date=today, note='حساب خصوصی دیگری',
+        )
+        Event.objects.create(owner=self.other, title='رویداد خصوصی دیگری', date=today)
+
+        focus = self.client.get('/relationship-work/')
+        self.assertEqual(focus.status_code, 200)
+        self.assertContains(focus, 'پیگیری عقب‌افتاده من')
+        self.assertContains(focus, 'تعهد هفته من')
+        self.assertContains(focus, 'حساب بدون تاریخ')
+        self.assertContains(focus, 'قرار امروز من')
+        self.assertNotContains(focus, 'خصوصی دیگری')
+        self.assertEqual(focus.context['counts'], {
+            'followups': 1, 'commitments': 1, 'debts': 1, 'events': 1,
+        })
+        self.assertEqual(focus.context['queue'][0]['due_state'], 'overdue')
+
+        overdue = self.client.get('/relationship-work/?scope=overdue')
+        self.assertContains(overdue, 'پیگیری عقب‌افتاده من')
+        self.assertNotContains(overdue, 'تعهد هفته من')
+        self.assertNotContains(overdue, 'قرار امروز من')
+        self.assertNotContains(overdue, 'حساب بدون تاریخ')
+
+        week = self.client.get('/relationship-work/?scope=week')
+        self.assertContains(week, 'تعهد هفته من')
+        self.assertContains(week, 'قرار امروز من')
+        self.assertNotContains(week, 'پیگیری عقب‌افتاده من')
+        self.assertNotContains(week, 'حساب بدون تاریخ')
+
+    def test_review_quick_actions_use_owned_post_endpoints(self):
+        today = timezone.localdate()
+        followup = FollowUp.objects.create(
+            owner=self.user, node=self.node, text='تکمیل سریع پیگیری',
+        )
+        commitment = Commitment.objects.create(
+            owner=self.user, node=self.node, responsible='me', text='تکمیل سریع تعهد',
+        )
+        foreign = Commitment.objects.create(
+            owner=self.other, node=self.foreign_node, responsible='me', text='تعهد خارجی',
+        )
+        event = Event.objects.create(owner=self.user, title='قرار قابل تکمیل', date=today)
+        event.participants.add(self.node)
+        foreign_event = Event.objects.create(
+            owner=self.other, title='رویداد خارجی', date=today,
+        )
+
+        followup_response = self.client.post(f'/api/followups/{followup.id}/toggle/')
+        commitment_response = self.client.post(
+            f'/api/relationship-life/commitments/{commitment.id}/',
+            data=json.dumps({'action': 'done'}),
+            content_type='application/json',
+        )
+        foreign_response = self.client.post(
+            f'/api/relationship-life/commitments/{foreign.id}/',
+            data=json.dumps({'action': 'done'}),
+            content_type='application/json',
+        )
+        event_response = self.client.post(f'/api/events/{event.id}/complete/')
+        foreign_event_response = self.client.post(f'/api/events/{foreign_event.id}/complete/')
+
+        self.assertEqual(followup_response.status_code, 200)
+        self.assertEqual(commitment_response.status_code, 200)
+        self.assertEqual(foreign_response.status_code, 404)
+        self.assertEqual(event_response.status_code, 200)
+        self.assertEqual(foreign_event_response.status_code, 404)
+        followup.refresh_from_db()
+        commitment.refresh_from_db()
+        foreign.refresh_from_db()
+        self.assertTrue(followup.done)
+        self.assertEqual(commitment.status, 'done')
+        self.assertEqual(foreign.status, 'open')
+        self.assertTrue(Interaction.objects.filter(
+            owner=self.user, node=self.node, kind='meet', date=today,
+        ).exists())
+        self.assertNotContains(self.client.get('/relationship-work/'), 'قرار قابل تکمیل')
+
+        from django.template.loader import get_template
+        source = get_template('hubs/relationship_work.html').template.source
+        self.assertIn("document.querySelectorAll('[data-review-complete]')", source)
+        self.assertIn("body:{action:'done'}", source)
+        self.assertIn("headers:{'X-CSRFToken':getCookie('csrftoken')}", source)
+
+    def test_review_hub_requires_login_and_handles_scope_edges(self):
+        today = timezone.localdate()
+        later_followup = FollowUp.objects.create(
+            owner=self.user,
+            node=self.node,
+            text='پیگیری خارج از بازه تمرکز',
+            due_date=today + timedelta(days=12),
+        )
+        future_event = Event.objects.create(
+            owner=self.user,
+            title='قرار آینده غیرقابل تکمیل',
+            date=today + timedelta(days=12),
+        )
+
+        self.client.logout()
+        anonymous = self.client.get('/relationship-work/')
+        self.assertEqual(anonymous.status_code, 302)
+        self.assertIn('/login/', anonymous.url)
+
+        self.client.force_login(self.user)
+        invalid_scope = self.client.get('/relationship-work/?scope=unexpected')
+        self.assertEqual(invalid_scope.status_code, 200)
+        self.assertEqual(invalid_scope.context['scope'], 'focus')
+        self.assertNotContains(invalid_scope, later_followup.text)
+        self.assertNotContains(invalid_scope, future_event.title)
+
+        all_scope = self.client.get('/relationship-work/?scope=all')
+        self.assertContains(all_scope, later_followup.text)
+        self.assertContains(all_scope, future_event.title)
+        future_row = next(
+            item for item in all_scope.context['queue']
+            if item['kind'] == 'event' and item['object_id'] == future_event.id
+        )
+        self.assertFalse(future_row['can_complete'])
+
+    def test_review_queue_prefetches_event_participants(self):
+        today = timezone.localdate()
+        for index in range(15):
+            event = Event.objects.create(
+                owner=self.user, title=f'قرار {index}', date=today + timedelta(days=index % 7),
+            )
+            event.participants.add(self.node)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get('/relationship-work/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(queries), 25)
+        self.assertContains(response, 'قرار 0')
+
+
+class FollowupInboxTests(TestCase):
+    def test_followup_inbox_is_owner_scoped_and_supports_status_filters(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='followup-inbox-owner', password='SecurePass1')
+        other = User.objects.create_user(username='followup-inbox-other', password='SecurePass1')
+        node = Node.objects.create(owner=user, username='inbox-sara', name='سارا')
+        foreign_node = Node.objects.create(owner=other, username='inbox-foreign', name='دیگری')
+        from .models import FollowUp
+        FollowUp.objects.create(owner=user, node=node, text='موضوع باز من')
+        FollowUp.objects.create(owner=user, node=node, text='موضوع انجام‌شده', done=True, done_at=timezone.now())
+        FollowUp.objects.create(owner=other, node=foreign_node, text='موضوع خصوصی دیگران')
+        self.client.force_login(user)
+
+        response = self.client.get('/followups/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'موضوع باز من')
+        self.assertNotContains(response, 'موضوع انجام‌شده')
+        self.assertNotContains(response, 'موضوع خصوصی دیگران')
+        response = self.client.get('/followups/?show=done')
+        self.assertContains(response, 'موضوع انجام‌شده')
+        self.assertNotContains(response, 'موضوع باز من')
+
+
+class FollowupOverdueFilterTests(TestCase):
+    def test_overdue_filter_excludes_done_and_foreign_items(self):
+        from .models import FollowUp
+        User = get_user_model()
+        user = User.objects.create_user(username='overdue-owner', password='SecurePass1')
+        other = User.objects.create_user(username='overdue-other', password='SecurePass1')
+        node = Node.objects.create(owner=user, username='overdue-person', name='Overdue person')
+        foreign_node = Node.objects.create(owner=other, username='foreign-overdue-person', name='Foreign')
+        FollowUp.objects.create(
+            owner=user, node=node, text='Overdue owner item',
+            due_date=timezone.localdate() - timedelta(days=1),
+        )
+        FollowUp.objects.create(
+            owner=user, node=node, text='Future owner item',
+            due_date=timezone.localdate() + timedelta(days=1),
+        )
+        FollowUp.objects.create(
+            owner=user, node=node, text='Done overdue owner item', done=True,
+            due_date=timezone.localdate() - timedelta(days=2), done_at=timezone.now(),
+        )
+        FollowUp.objects.create(
+            owner=other, node=foreign_node, text='Foreign overdue item',
+            due_date=timezone.localdate() - timedelta(days=1),
+        )
+        self.client.force_login(user)
+
+        response = self.client.get('/followups/?show=overdue')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Overdue owner item')
+        self.assertNotContains(response, 'Future owner item')
+        self.assertNotContains(response, 'Done overdue owner item')
+        self.assertNotContains(response, 'Foreign overdue item')
+        self.assertEqual(response.context['show'], 'overdue')
 
 
 class PublicSocialTests(TestCase):
@@ -980,7 +1991,8 @@ class JournalMomentTests(TestCase):
         user = get_user_model().objects.create_user(username='journal-filter-ui', password='SecurePass1')
         self.client.force_login(user)
         response = self.client.get('/journal/')
-        self.assertContains(response, 'id="entriesStatus"')
+        self.assertContains(response, 'id="journalResultSummary"')
+        self.assertContains(response, 'scheduleLoadEntries')
         self.assertContains(response, 'با این فیلترها یادداشتی پیدا نشد')
 
 

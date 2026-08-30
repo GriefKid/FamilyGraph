@@ -1156,6 +1156,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ recent_moods_json|json_script:"psychology-moods-data" }}
 <script>
 function toggleTheoryLibrary(button){
   const library = button.closest('.theory-library');
@@ -1232,7 +1233,7 @@ async function decideExtraction(id,action){await fetch('/api/extractions/'+id+'/
 
 // Mood cloud
 (function(){
-  const moods = {{ recent_moods_json|safe }};
+  const moods = JSON.parse(document.getElementById('psychology-moods-data').textContent||'[]');
   const wrap = document.getElementById('moodCloudWrap');
   if(!wrap || !moods.length) return;
   const freq = {};
@@ -1265,16 +1266,26 @@ async function runAIAnalysis(){
     const r=await fetch('/api/psychology/analyze/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrf()},body:'{}'});
     const d=await r.json();
     if(d.ok&&d.result) renderAI(d.result,d.from_cache);
-    else cont.innerHTML=`<div style="color:var(--danger);padding:16px">${d.error||'خطا در تحلیل'}</div>`;
-  }catch(e){ cont.innerHTML=`<div style="color:var(--danger);padding:16px">خطا: ${e.message}</div>`; }
+    else renderPsychologyError(cont,d.error||'خطا در تحلیل');
+  }catch(e){ renderPsychologyError(cont,'خطا: '+e.message); }
   btn.innerHTML='✦ تحلیل AI جامع'; btn.disabled=false;
+}
+
+function renderPsychologyError(container,message){
+  const error=document.createElement('div');
+  error.style.cssText='color:var(--danger);padding:16px';
+  error.textContent=String(message||'خطا');
+  container.replaceChildren(error);
 }
 
 function getCsrf(){
   return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
 }
 
-function renderAI(res,fromCache){
+function escPsych(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function escapeAIValue(value){if(typeof value==='string')return escPsych(value);if(Array.isArray(value))return value.map(escapeAIValue);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,escapeAIValue(item)]));return value}
+function renderAI(res,fromCache){legacyRenderAI(escapeAIValue(res),fromCache)}
+function legacyRenderAI(res,fromCache){
   const cont=document.getElementById('aiContent');
   let html='';
   if(fromCache) html+=`<div style="font-size:10px;color:var(--text-muted);margin-bottom:12px;text-align:center">📦 از کش امروز</div>`;

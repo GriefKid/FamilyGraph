@@ -240,17 +240,18 @@ async function lgBorrow(){
   try{
     const r = await fetch('/api/borrow/suggest/');
     const d = await r.json();
-    if(!d.ok){ box.innerHTML = `<div class="lg-empty" style="color:#f87171">${d.error||'خطا'}</div>`; return; }
+    if(!d.ok){ box.innerHTML = `<div class="lg-empty" style="color:#f87171">${escLedger(d.error||'خطا')}</div>`; return; }
     if(!d.suggestions.length){ box.innerHTML = '<div class="lg-empty">هنوز رابطه‌ای ثبت نشده</div>'; return; }
     box.innerHTML = d.suggestions.map((s,i) => `
       <div class="lg-sug">
         <div class="lg-sug-rank">${i+1}</div>
         <div>
-          <a href="/nodes/${s.node_id}/" style="font-weight:800;font-size:13px;color:var(--text);text-decoration:none;">${s.name}</a>
-          <div class="lg-note" style="margin-top:2px;">${s.reasons.map(x=>`<span>· ${x}</span>`).join(' ')}</div>
+          <a href="/nodes/${encodeURIComponent(String(s.node_id||''))}/" style="font-weight:800;font-size:13px;color:var(--text);text-decoration:none;">${escLedger(s.name)}</a>
+          <div class="lg-note" style="margin-top:2px;">${(s.reasons||[]).map(x=>`<span>· ${escLedger(x)}</span>`).join(' ')}</div>
         </div>
       </div>`).join('');
   }catch(e){ box.innerHTML = '<div class="lg-empty" style="color:#f87171">خطای سرور</div>'; }
 }
+function escLedger(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 </script>
 {% endblock %}

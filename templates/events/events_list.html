@@ -79,6 +79,16 @@
 
 {% block content %}
 {% load tz %}
+<form method="get" action="{% url 'events_list' %}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
+  <input class="search-input" type="search" name="q" value="{{ current_query }}" placeholder="جست‌وجوی عنوان، توضیح یا شرکت‌کننده" aria-label="جست‌وجوی رویدادها">
+  <select class="form-control" name="scope" aria-label="محدوده رویداد">
+    <option value="">همه رویدادها</option>
+    <option value="upcoming" {% if current_scope == 'upcoming' %}selected{% endif %}>آینده</option>
+    <option value="past" {% if current_scope == 'past' %}selected{% endif %}>گذشته</option>
+  </select>
+  <button class="btn btn-sm btn-primary" type="submit">جست‌وجو</button>
+  {% if current_query or current_scope %}<a class="btn btn-sm" href="{% url 'events_list' %}">پاک‌کردن فیلترها</a>{% endif %}
+</form>
 {% if not events %}
   <div class="empty-state">
     هیچ رویدادی ثبت نشده —
@@ -180,6 +190,14 @@
 
   {% endwith %}
 
+{% endif %}
+
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+<nav aria-label="صفحه‌های رویداد" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:24px 0 8px;flex-wrap:wrap">
+  {% if page_obj.has_previous %}<a class="btn btn-sm" href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
+  <span style="font-size:12px;color:var(--text-muted)">صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a class="btn btn-sm" href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
+</nav>
 {% endif %}
 
 <script>
