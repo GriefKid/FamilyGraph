@@ -14,7 +14,6 @@ from django.db.utils import OperationalError, ProgrammingError
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node, Relationship
 from .utils_jalali import jalali_str
@@ -91,7 +90,6 @@ def node_balance(user, node_id):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def debt_create_api(request):
     """POST {node_id, direction, amount, currency?, date?, due_date?, note?}"""
     if request.method != 'POST':
@@ -148,7 +146,6 @@ def debt_create_api(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def debt_pay_api(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -180,7 +177,6 @@ def debt_pay_api(request, pk):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def debt_delete_api(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)

@@ -133,6 +133,8 @@ def whatsapp_apply_api(request):
         body = json.loads(request.body)
     except (TypeError, ValueError):
         return JsonResponse({'error': 'درخواست نامعتبر است'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
     scanned = cache.get(f'wa_scan_{request.user.id}')
     if not scanned:
         return JsonResponse({'error': 'پیش‌نمایش منقضی شده؛ فایل را دوباره اسکن کن'}, status=410)
@@ -140,7 +142,11 @@ def whatsapp_apply_api(request):
     root = request.user.root_node
     stats = {'contacts': 0, 'nodes_created': 0, 'interactions': 0, 'skipped': 0}
     with transaction.atomic():
-        for choice in body.get('mapping') or []:
+        mapping = body.get('mapping')
+        for choice in mapping if isinstance(mapping, list) else []:
+            if not isinstance(choice, dict):
+                stats['skipped'] += 1
+                continue
             name = str(choice.get('name') or '').strip()
             action = str(choice.get('action') or 'skip')
             info = scanned.get(name)

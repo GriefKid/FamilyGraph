@@ -22,6 +22,18 @@ def _body(request):
         return None
 
 
+def _search_spellings(value):
+    """Return common Persian/Arabic keyboard spellings for a search term."""
+    normalized = value.replace('ي', 'ی').replace('ك', 'ک')
+    return {
+        value,
+        normalized,
+        normalized.replace('ی', 'ي'),
+        normalized.replace('ک', 'ك'),
+        normalized.replace('ی', 'ي').replace('ک', 'ك'),
+    }
+
+
 def _duplicates(user):
     nodes = list(Node.objects.filter(owner=user, merged_into__isnull=True).exclude(pk=user.root_node_id))
     pairs = []
@@ -136,19 +148,26 @@ def memory_search_api(request):
               if len(token.strip('؟?!،,.')) > 1 and token.strip('؟?!،,.') not in stop]
     fact_query = Q()
     for token in tokens or [q]:
-        fact_query |= Q(value__icontains=token) | Q(node__username__icontains=token) | Q(node__name__icontains=token)
+        for spelling in _search_spellings(token):
+            fact_query |= (
+                Q(value__icontains=spelling)
+                | Q(node__username__icontains=spelling)
+                | Q(node__name__icontains=spelling)
+            )
     for fact in MemoryFact.objects.filter(owner=user, active=True).filter(fact_query).select_related('node')[:30]:
         results.append({'kind': 'memory', 'title': fact.node.display_name(), 'text': fact.value,
                         'source': f'{fact.source} #{fact.source_id or "—"}', 'url': f'/nodes/{fact.node_id}/'})
     journal_query = Q()
     for token in tokens or [q]:
-        journal_query |= Q(text__icontains=token)
+        for spelling in _search_spellings(token):
+            journal_query |= Q(text__icontains=spelling)
     for entry in JournalEntry.objects.filter(owner=user).filter(journal_query).prefetch_related('mentioned_nodes')[:20]:
         results.append({'kind': 'journal', 'title': 'خاطره', 'text': entry.text[:220],
                         'source': f'journal #{entry.id}', 'url': '/journal/'})
     debt_query = Q(settled=False) if any(word in q for word in ('مالی', 'قرض', 'طلب', 'بدهی')) else Q()
     for token in tokens:
-        debt_query |= Q(note__icontains=token) | Q(node__name__icontains=token)
+        for spelling in _search_spellings(token):
+            debt_query |= Q(note__icontains=spelling) | Q(node__name__icontains=spelling)
     for debt in Debt.objects.filter(owner=user).filter(debt_query).select_related('node')[:15]:
         results.append({'kind': 'debt', 'title': debt.node.display_name(),
                         'text': f'{debt.remaining:,} {debt.currency}', 'source': f'debt #{debt.id}', 'url': '/ledger/'})

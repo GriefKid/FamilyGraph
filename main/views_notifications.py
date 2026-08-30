@@ -23,12 +23,33 @@ def notifications_view(request):
     ).order_by('-created_at')[:30]
 
     # علامت‌گذاری همه general به عنوان خوانده‌شده
-    Notification.objects.filter(user=user, is_read=False).update(is_read=True)
-
     return render(request, 'notifications/notifications.html', {
         'sync_notifs':    sync_notifs,
         'general_notifs': general_notifs,
+        'unread_count': Notification.objects.filter(user=user, is_read=False).count(),
     })
+
+
+@login_required
+@require_POST
+def notification_read_api(request, pk):
+    notification = get_object_or_404(Notification, pk=pk, user=request.user)
+    if not notification.is_read:
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+    unread_count = Notification.objects.filter(
+        user=request.user, is_read=False,
+    ).count()
+    return JsonResponse({'ok': True, 'id': notification.id, 'unread_count': unread_count})
+
+
+@login_required
+@require_POST
+def notifications_read_all_api(request):
+    updated = Notification.objects.filter(
+        user=request.user, is_read=False,
+    ).update(is_read=True)
+    return JsonResponse({'ok': True, 'updated': updated, 'unread_count': 0})
 
 
 @login_required
@@ -36,10 +57,12 @@ def notifications_view(request):
 def sync_respond_api(request, notif_id):
     """پاسخ به SyncNotification: accepted / ignored / flagged"""
     try:
-        data   = json.loads(request.body)
-        action = data.get('action')   # 'accepted' | 'ignored' | 'flagged'
+        data = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    action = data.get('action')   # 'accepted' | 'ignored' | 'flagged'
 
     if action not in ('accepted', 'ignored', 'flagged'):
         return JsonResponse({'error': 'action نامعتبر'}, status=400)

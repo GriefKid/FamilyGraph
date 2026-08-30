@@ -10,7 +10,6 @@ from django.db.utils import OperationalError, ProgrammingError
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node, JournalEntry
 from .utils_jalali import jalali_str
@@ -30,7 +29,6 @@ def _body(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def life_event_create_api(request):
     """POST {node_id, kind, date?, title?}"""
     if request.method != 'POST':
@@ -73,7 +71,6 @@ def life_event_create_api(request):
 
 
 @login_required
-@csrf_exempt
 def life_event_delete_api(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -90,7 +87,6 @@ def life_event_delete_api(request, pk):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def goal_create_api(request):
     """POST {node_id, text} — baseline از سلامت فعلی گرفته می‌شه."""
     if request.method != 'POST':
@@ -128,7 +124,6 @@ def goal_create_api(request):
 
 
 @login_required
-@csrf_exempt
 def goal_close_api(request, pk):
     """POST {status: achieved|abandoned}"""
     if request.method != 'POST':
@@ -231,6 +226,29 @@ def weekly_view(request):
     except Exception:
         pass
 
+    # ── رویدادها و حافظه‌های تازه: مواد خامی که گزارش را قابل‌اقدام می‌کنند ──
+    event_count = 0
+    event_highlights = []
+    memory_count = 0
+    memory_highlights = []
+    try:
+        from .models import Event
+        event_qs = Event.objects.filter(owner=user, date__gt=week_ago, date__lte=today)
+        event_count = event_qs.count()
+        event_highlights = list(event_qs.prefetch_related('participants').order_by('date', 'event_time')[:4])
+    except Exception:
+        pass
+    try:
+        from .models import MemoryFact
+        memory_qs = MemoryFact.objects.filter(
+            owner=user, created_at__date__gt=week_ago, created_at__date__lte=today,
+            active=True,
+        ).select_related('node').order_by('-confidence', '-created_at')
+        memory_count = memory_qs.count()
+        memory_highlights = list(memory_qs[:5])
+    except Exception:
+        pass
+
     # ── برنامه هفته بعد: ۳ نفر که بیشترین نیاز رو دارن ──
     plan = []
     try:
@@ -290,6 +308,10 @@ def weekly_view(request):
         'best_moment':    best_moment,
         'streak':         streak,
         'checkins':       checkins,
+        'event_count':    event_count,
+        'event_highlights': event_highlights,
+        'memory_count':   memory_count,
+        'memory_highlights': memory_highlights,
         'plan':           plan,
         'goals':          goals,
         'narrative':      narrative,
@@ -307,6 +329,7 @@ def monthly_recap_view(request):
     previous_month_start = previous_month_end.replace(day=1)
 
     from .models import Commitment, Event, FollowUp, Interaction
+    from .models import MemoryFact
 
     interactions = Interaction.objects.filter(owner=user, date__range=(month_start, today))
     previous_interactions = Interaction.objects.filter(
@@ -321,6 +344,10 @@ def monthly_recap_view(request):
     }
     for row in most_present:
         row['name'] = names.get(row['node_id'], 'بدون نام')
+
+    month_memories = MemoryFact.objects.filter(
+        owner=user, active=True, created_at__date__range=(month_start, today),
+    ).select_related('node').order_by('-confidence', '-created_at')
 
     next_steps = []
     try:
@@ -348,5 +375,7 @@ def monthly_recap_view(request):
         ).count(),
         'journal_count': JournalEntry.objects.filter(owner=user, entry_date__range=(month_start, today)).count(),
         'event_count': Event.objects.filter(owner=user, date__range=(month_start, today)).count(),
+        'memory_count': month_memories.count(),
+        'memory_highlights': list(month_memories[:5]),
         'next_steps': next_steps,
     })

@@ -3,7 +3,10 @@ from . import views
 from .views_auth import (
     login_view, logout_view, register_view, profile_view, captcha_refresh,
 )
-from .views_notifications import notifications_view, sync_respond_api
+from .views_notifications import (
+    notifications_view, notification_read_api, notifications_read_all_api,
+    sync_respond_api,
+)
 from .views import (
     groups_view,
     assign_group_api,
@@ -26,6 +29,7 @@ from .views_interactions import (
     node_relation_analyze_api,
 )
 from .views_followups import (
+    followups_view,
     followup_create_api,
     followup_toggle_api,
     followup_delete_api,
@@ -164,9 +168,12 @@ urlpatterns = [
     path('api/captcha/', captcha_refresh,  name='captcha_refresh'),
     path('api/nodes/public-search/', views.public_node_search, name='public_node_search'),
     path('api/nodes/<int:pk>/quick-update/', views.node_quick_update, name='node_quick_update'),
+    path('api/nodes/<int:pk>/pin/', views.toggle_node_pin_api, name='node_pin'),
     path('api/nodes/create-from-image/',    views.node_create_from_image, name='node_create_from_image'),
     path('api/relationships/quick-create/', views.relationship_quick_create, name='relationship_quick_create'),
     path('notifications/',           notifications_view,       name='notifications'),
+    path('api/notifications/<int:pk>/read/', notification_read_api, name='notification_read'),
+    path('api/notifications/read-all/', notifications_read_all_api, name='notifications_read_all'),
     path('api/sync/<int:notif_id>/respond/', sync_respond_api, name='sync_respond'),
     path('export/',                  views.export_graph,       name='export_graph'),
 
@@ -251,6 +258,7 @@ urlpatterns = [
     path('api/followups/<int:pk>/toggle/', followup_toggle_api,   name='followup_toggle'),
     path('api/followups/<int:pk>/delete/', followup_delete_api,   name='followup_delete'),
     path('api/followups/',               followups_list_api,      name='followups_list'),
+    path('followups/',                   followups_view,          name='followups'),
     path('checkin/',                     checkin_view,            name='checkin'),
     path('api/checkin/',                 checkin_submit_api,      name='checkin_submit'),
     path('api/connect/<int:pk>/',        connect_info_api,        name='connect_info'),

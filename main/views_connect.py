@@ -14,7 +14,6 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node, Relationship
 
@@ -138,7 +137,6 @@ def connect_info_api(request, pk):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def connect_plan_api(request, pk):
     """پلن قدم‌به‌قدم AI برای ساختن رابطه با هدف."""
     if request.method != 'POST':
@@ -151,6 +149,8 @@ def connect_plan_api(request, pk):
     try:
         body = json.loads(request.body or '{}')
     except Exception:
+        body = {}
+    if not isinstance(body, dict):
         body = {}
     goal = 'work' if body.get('goal') == 'work' else 'friendship'
     goal_fa = 'رابطه کاری/حرفه‌ای' if goal == 'work' else 'دوستی'

@@ -64,6 +64,7 @@
 .notif-dot.read{background:var(--border);}
 .notif-msg{flex:1;font-size:13px;line-height:1.6;}
 .notif-ts{font-size:11px;color:var(--text-muted);flex-shrink:0;}
+.notif-read-btn{flex-shrink:0;min-width:28px;padding:3px 7px;color:var(--primary-light);}
 .empty-state{text-align:center;padding:40px;color:var(--text-muted);font-size:13px;}
 </style>
 {% endblock %}
@@ -133,9 +134,14 @@
 
 <!-- ── General Notifications ── -->
 <div class="notif-section-title">📢 اطلاعیه‌های سیستم</div>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+  <span style="font-size:12px;color:var(--text-muted);">اعلان‌های خوانده‌نشده: <b id="unreadCount">{{ unread_count }}</b></span>
+  {% if unread_count %}<button class="btn btn-sm" type="button" onclick="markAllNotificationsRead()">خواندن همه</button>{% endif %}
+</div>
 {% if general_notifs %}
 {% for n in general_notifs %}
-<div class="notif-item {% if not n.is_read %}unread{% endif %}">
+<div class="notif-item {% if not n.is_read %}unread{% endif %}" id="notification-{{ n.id }}">
+  {% if not n.is_read %}<button class="btn btn-sm notif-read-btn" type="button" data-notification-id="{{ n.id }}" onclick="markNotificationRead({{ n.id }}, this)" aria-label="خوانده شد">✓</button>{% endif %}
   <div class="notif-dot {% if n.is_read %}read{% endif %}"></div>
   <div class="notif-msg">{{ n.message }}</div>
   <div class="notif-ts">{{ n.created_at|timesince }} پیش</div>
@@ -178,6 +184,34 @@ async function syncRespond(id, action){
 function getCookie(name){
   const v = document.cookie.match('(^|;) ?'+name+'=([^;]*)(;|$)');
   return v ? v[2] : null;
+}
+
+async function markNotificationRead(id, button){
+  button.disabled = true;
+  const response = await fetch(`/api/notifications/${id}/read/`, {
+    method:'POST',
+    headers:{'X-CSRFToken': getCookie('csrftoken')}
+  });
+  if(!response.ok){ button.disabled = false; return; }
+  const card = document.getElementById(`notification-${id}`);
+  card?.classList.remove('unread');
+  button.remove();
+  const count = document.getElementById('unreadCount');
+  if(count) count.textContent = Math.max(0, Number(count.textContent || 0) - 1);
+}
+
+async function markAllNotificationsRead(){
+  const response = await fetch('/api/notifications/read-all/', {
+    method:'POST',
+    headers:{'X-CSRFToken': getCookie('csrftoken')}
+  });
+  if(!response.ok) return;
+  document.querySelectorAll('.notif-item.unread').forEach(card => {
+    card.classList.remove('unread');
+    card.querySelector('.notif-read-btn')?.remove();
+  });
+  const count = document.getElementById('unreadCount');
+  if(count) count.textContent = '0';
 }
 </script>
 {% endblock %}

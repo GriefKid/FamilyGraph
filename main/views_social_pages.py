@@ -14,7 +14,6 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import (Follow, FriendRequest, Friendship, GiftBox, Information,
                      Node, ProfileMediaItem, Relationship)
@@ -224,7 +223,6 @@ def _apply_info_share(recipient, payload):
 
 
 @login_required
-@csrf_exempt
 def share_send_api(request):
     """POST {item_type: node|edge|info, item_id, recipient_ids[]}
     فقط به فالوئرها. اگه گیرنده داشته باشه هیچی، نداشته باشه اضافه می‌شه."""
@@ -236,6 +234,8 @@ def share_send_api(request):
         body = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     me = request.user
     item_type = body.get('item_type')
@@ -265,7 +265,12 @@ def share_send_api(request):
         title = n.display_name()
     elif item_type == 'edge':
         try:
-            r = Relationship.objects.select_related('source', 'target').get(pk=item_id, owner=me)
+            r = Relationship.objects.select_related('source', 'target').get(
+                pk=item_id,
+                owner=me,
+                source__owner=me,
+                target__owner=me,
+            )
         except Relationship.DoesNotExist:
             return JsonResponse({'error': 'یال پیدا نشد'}, status=404)
         payload = {'source': node_payload(r.source), 'target': node_payload(r.target),
@@ -466,45 +471,49 @@ def gifbox_view(request):
     inbox = GiftBox.objects.filter(recipient=me).select_related('sender', 'recipient')
     sent  = GiftBox.objects.filter(sender=me).select_related('sender', 'recipient')
 
-    inbox_json = json.dumps([_box_to_dict(b, me.id) for b in inbox], ensure_ascii=False)
-    sent_json  = json.dumps([_box_to_dict(b, me.id) for b in sent],  ensure_ascii=False)
+    inbox_json = [_box_to_dict(b, me.id) for b in inbox]
+    sent_json  = [_box_to_dict(b, me.id) for b in sent]
 
     follower_ids = set(Follow.objects.filter(target=me).values_list('follower_id', flat=True))
     friend_ids   = set(Friendship.objects.filter(user=me).values_list('friend_id', flat=True))
     recip_ids    = follower_ids | friend_ids
     recip_users  = User.objects.filter(id__in=recip_ids).exclude(id=me.id)
-    recipients_json = json.dumps([
+    recipients_json = [
         {'id': u.id, 'name': u.get_full_name() or u.username,
          'avatar': (u.username or '?')[0].upper(),
          'trust': getattr(u, 'trust_score', 80)}
         for u in recip_users
-    ], ensure_ascii=False)
+    ]
 
     my_nodes = Node.objects.filter(owner=me).order_by('username')
-    nodes_json = json.dumps([
+    nodes_json = [
         {'id': n.id, 'display_name': n.display_name(),
          'career': n.career or '', 'username': n.username}
         for n in my_nodes
-    ], ensure_ascii=False)
+    ]
 
-    my_rels = Relationship.objects.filter(owner=me).select_related('source', 'target')
-    edges_json = json.dumps([
+    my_rels = Relationship.objects.filter(
+        owner=me,
+        source__owner=me,
+        target__owner=me,
+    ).select_related('source', 'target')
+    edges_json = [
         {'id': r.id,
          'label': f'{r.source.display_name()} {r.emoji()} {r.target.display_name()}',
          'rel': r.rel or '', 'strength': r.strength,
          'source_name': r.source.display_name(),
          'target_name': r.target.display_name()}
         for r in my_rels
-    ], ensure_ascii=False)
+    ]
 
     my_infos = Information.objects.filter(node__owner=me).select_related('node')
-    infos_json = json.dumps([
+    infos_json = [
         {'id': i.id,
          'about': i.node.display_name(),
          'about_username': i.node.username,
          'keys': [k for k in (i.data or {}) if not k.startswith('_')][:5]}
         for i in my_infos if i.data
-    ], ensure_ascii=False)
+    ]
 
     unread_count = inbox.filter(opened=False).count()
     all_user_ids = recip_ids | {me.id}
@@ -528,7 +537,6 @@ def gifbox_view(request):
 
 
 @login_required
-@csrf_exempt
 def gifbox_send_api(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -536,6 +544,8 @@ def gifbox_send_api(request):
         data = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     me           = request.user
     recipient_id = data.get('recipient_id')
@@ -545,6 +555,24 @@ def gifbox_send_api(request):
 
     if share_type not in ('node', 'edge', 'data'):
         return JsonResponse({'error': 'نوع شیر نامعتبره'}, status=400)
+    if (
+        not isinstance(recipient_id, int) or isinstance(recipient_id, bool) or recipient_id < 1 or
+        not isinstance(source_id, int) or isinstance(source_id, bool) or source_id < 1
+    ):
+        return JsonResponse({'error': 'شناسه نامعتبره'}, status=400)
+
+    if (
+        not isinstance(cube_faces, list) or len(cube_faces) != 6 or
+        any(
+            not isinstance(face, dict) or
+            not isinstance(face.get('ci'), int) or isinstance(face.get('ci'), bool) or
+            not 0 <= face['ci'] < 6 or
+            not isinstance(face.get('emo'), str) or len(face['emo']) > 12 or
+            not isinstance(face.get('lbl'), str) or len(face['lbl']) > 40
+            for face in cube_faces
+        )
+    ):
+        return JsonResponse({'error': 'پیکربندی مکعب نامعتبره'}, status=400)
 
     ts = getattr(me, 'trust_score', 80)
     if ts < 30:
@@ -566,7 +594,12 @@ def gifbox_send_api(request):
             node    = Node.objects.get(pk=source_id, owner=me)
             payload = _node_snapshot(node)
         elif share_type == 'edge':
-            rel     = Relationship.objects.select_related('source', 'target').get(pk=source_id, owner=me)
+            rel     = Relationship.objects.select_related('source', 'target').get(
+                pk=source_id,
+                owner=me,
+                source__owner=me,
+                target__owner=me,
+            )
             payload = {
                 'source':   _node_snapshot(rel.source),
                 'target':   _node_snapshot(rel.target),
@@ -582,10 +615,17 @@ def gifbox_send_api(request):
     except (Node.DoesNotExist, Relationship.DoesNotExist, Information.DoesNotExist):
         return JsonResponse({'error': 'آیتم پیدا نشد'}, status=404)
 
-    try:
-        recipient = User.objects.get(pk=recipient_id)
-    except User.DoesNotExist:
+    recipient = User.objects.filter(pk=recipient_id).first()
+    if recipient is None:
         return JsonResponse({'error': 'گیرنده پیدا نشد'}, status=404)
+    is_allowed_recipient = (
+        recipient.id != me.id and (
+            Follow.objects.filter(target=me, follower=recipient).exists() or
+            Friendship.objects.filter(user=me, friend=recipient).exists()
+        )
+    )
+    if not is_allowed_recipient:
+        return JsonResponse({'error': 'گیرنده در ارتباطات مجاز شما نیست'}, status=403)
 
     box = GiftBox.objects.create(
         sender=me,
@@ -598,7 +638,6 @@ def gifbox_send_api(request):
 
 
 @login_required
-@csrf_exempt
 def gifbox_react_api(request, box_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -606,6 +645,8 @@ def gifbox_react_api(request, box_id):
         data = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     reaction = data.get('reaction')
     if reaction not in ('true', 'false', 'accept', 'reject'):
@@ -652,7 +693,6 @@ def gifbox_react_api(request, box_id):
 
 
 @login_required
-@csrf_exempt
 def gifbox_open_api(request, box_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)

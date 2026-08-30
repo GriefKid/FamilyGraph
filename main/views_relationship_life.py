@@ -37,7 +37,10 @@ def _briefing(user, node):
         'facts': facts,
         'commitments': Commitment.objects.filter(owner=user, node=node, status='open')[:10],
         'debts': Debt.objects.filter(owner=user, node=node, settled=False)[:10],
-        'events': Event.objects.filter(owner=user, participants=node, date__gte=timezone.localdate())[:8],
+        'events': Event.objects.filter(
+            owner=user, participants=node, participants__owner=user,
+            date__gte=timezone.localdate(),
+        ).distinct()[:8],
         'last_interaction': Interaction.objects.filter(owner=user, node=node).first(),
         'safety': NodeSafetySetting.objects.filter(owner=user, node=node).first(),
     }

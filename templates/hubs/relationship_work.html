@@ -1,9 +1,117 @@
 {% extends "base.html" %}
-{% block title %}کارهای رابطه — FamilyGraph{% endblock %}{% block page_title %}🤝 کارهای رابطه{% endblock %}{% block nav_relationship_work %}active{% endblock %}
-{% block extra_css %}{% include "hubs/_styles.html" %}{% endblock %}
-{% block content %}<main class="merge-hub"><section class="merge-hero"><div class="merge-kicker">قرارها و تعهدهای پراکنده را یک‌جا ببین</div><h1>کارهای رابطه</h1><p>ملاقات، قول، هدیه، رویداد و حساب‌های مشترک در یک ورودی واحد قرار گرفته‌اند و قابلیت‌های قبلی بدون حذف ادامه دارند.</p></section><div class="merge-grid">
-<a class="merge-card" href="/relationship-life/"><span class="merge-icon">🤝</span><h2>ملاقات، قول و هدیه</h2><p>قبل و بعد از ملاقات، قول‌های باز، مرزها و ایده‌های هدیه.</p><span class="merge-go">بازکردن چرخه ارتباط ←</span></a>
-<a class="merge-card" href="/events/"><span class="merge-icon">📅</span><h2>رویدادها</h2><p>قرارها، مناسبت‌ها و اتفاق‌های مهم مربوط به آدم‌ها.</p><span class="merge-go">دیدن رویدادها ←</span></a>
-<a class="merge-card" href="/ledger/"><span class="merge-icon">💰</span><h2>قرض و طلب</h2><p>حساب‌های باز و پرداخت‌های مربوط به هر رابطه.</p><span class="merge-go">مدیریت حساب‌ها ←</span></a>
-<a class="merge-card" href="/weekly/"><span class="merge-icon">🗓</span><h2>مرور هفتگی</h2><p>هدف‌های رابطه‌ای و اتفاق‌های مهم هفته را مرور کن.</p><span class="merge-go">شروع مرور هفته ←</span></a>
-</div></main>{% endblock %}
+{% load jalali_tags %}
+{% block title %}مرکز مرور رابطه‌ها — FamilyGraph{% endblock %}
+{% block page_title %}🤝 مرکز مرور رابطه‌ها{% endblock %}
+{% block nav_relationship_work %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+.review{max-width:980px;margin:0 auto}.review-hero{padding:24px;border:1px solid rgba(99,102,241,.32);border-radius:22px;background:linear-gradient(135deg,rgba(99,102,241,.16),rgba(6,182,212,.07));margin-bottom:14px}.review-kicker{font-size:11px;color:#a5b4fc;font-weight:800}.review-hero h1{font-size:23px;margin:7px 0}.review-hero p{margin:0;color:var(--text-soft);font-size:12.5px;line-height:1.9}.review-alert{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 10px;border-radius:999px;background:rgba(244,63,94,.1);color:#fda4af;font-size:11px;font-weight:800}.review-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:14px 0}.review-stat{padding:13px;border-radius:14px;background:var(--card);border:1px solid var(--border)}.review-stat strong{display:block;font-size:20px;color:#c7d2fe}.review-stat span{font-size:10px;color:var(--text-muted)}.review-panel{background:var(--card);border:1px solid var(--border);border-radius:19px;padding:18px;margin-bottom:14px}.review-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:13px}.review-panel h2{font-size:15px;margin:0}.review-sub{font-size:10.5px;color:var(--text-muted);margin-top:4px}.review-scopes{display:flex;gap:6px;flex-wrap:wrap}.review-scope{padding:6px 10px;border-radius:999px;border:1px solid var(--border);color:var(--text-soft);font-size:10.5px;text-decoration:none}.review-scope.active,.review-scope:hover{background:var(--primary-glow);border-color:var(--primary-border);color:var(--primary-light)}.review-list{display:grid;gap:8px}.review-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:11px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--surface);transition:.18s}.review-item:hover{border-color:var(--primary-border);transform:translateY(-1px)}.review-item.finished{opacity:.55;transform:scale(.99)}.review-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--primary-glow);font-size:18px}.review-main{min-width:0}.review-title{font-size:12.5px;font-weight:800;line-height:1.7}.review-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10.5px;color:var(--text-muted);margin-top:3px}.review-person{color:var(--primary-light);text-decoration:none}.review-tag{padding:2px 7px;border-radius:999px;background:rgba(255,255,255,.04)}.review-tag.overdue{color:#fda4af;background:rgba(244,63,94,.1)}.review-tag.today{color:#fde68a;background:rgba(245,158,11,.1)}.review-tag.week{color:#a7f3d0;background:rgba(16,185,129,.1)}.review-actions{display:flex;align-items:center;gap:6px}.review-action{border:1px solid var(--border);background:transparent;color:var(--text-soft);border-radius:9px;padding:7px 9px;font:inherit;font-size:10.5px;text-decoration:none;cursor:pointer}.review-action:hover{border-color:var(--primary-border);color:var(--primary-light)}.review-action.primary{background:var(--primary);border-color:var(--primary);color:#fff}.review-action:disabled{opacity:.6;cursor:wait}.review-empty{text-align:center;padding:38px 16px;color:var(--text-muted);font-size:12px}.review-modules{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.review-module{padding:12px;border:1px solid var(--border);border-radius:13px;text-decoration:none;color:var(--text);font-size:11px;font-weight:800}.review-module span{display:block;color:var(--text-muted);font-weight:400;font-size:9.5px;margin-top:4px}.review-module:hover{border-color:var(--primary-border);background:var(--primary-glow)}@media(max-width:760px){.review-stats,.review-modules{grid-template-columns:repeat(2,1fr)}.review-panel-head{display:block}.review-scopes{margin-top:10px}.review-item{grid-template-columns:auto 1fr}.review-actions{grid-column:1/-1;justify-content:flex-end}}@media(max-width:430px){.review-stats{grid-template-columns:1fr 1fr}.review-item{padding:10px}.review-actions{justify-content:stretch}.review-action{flex:1;text-align:center}}
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="review">
+  <section class="review-hero">
+    <div class="review-kicker">یک صف واحد برای چیزهایی که نباید بین صفحه‌ها گم شوند</div>
+    <h1>امروز کدام رابطه به یک قدم کوچک نیاز دارد؟</h1>
+    <p>پیگیری‌ها، تعهدها، رویدادهای نزدیک و حساب‌های باز از بخش‌های قبلی جمع شده‌اند؛ هیچ داده‌ای کپی نمی‌شود و هر اقدام به همان منبع اصلی برمی‌گردد.</p>
+    {% if overdue_count %}<div class="review-alert">⚠ {{ overdue_count }} مورد از موعد گذشته</div>{% endif %}
+  </section>
+
+  {% include "daily/_review_nav.html" %}
+
+  <section class="review-stats" aria-label="خلاصه کارهای باز">
+    <div class="review-stat"><strong>{{ counts.followups }}</strong><span>پیگیری باز</span></div>
+    <div class="review-stat"><strong>{{ counts.commitments }}</strong><span>تعهد باز</span></div>
+    <div class="review-stat"><strong>{{ counts.events }}</strong><span>رویداد نیازمند اقدام</span></div>
+    <div class="review-stat"><strong>{{ counts.debts }}</strong><span>حساب مالی باز</span></div>
+  </section>
+
+  <section class="review-panel">
+    <div class="review-panel-head">
+      <div><h2>صف اقدام</h2><div class="review-sub">{{ queue_count }} مورد در نمای فعلی · موارد مهم‌تر بالاتر هستند</div></div>
+      <nav class="review-scopes" aria-label="فیلتر صف اقدام">
+        <a class="review-scope {% if scope == 'focus' %}active{% endif %}" href="?scope=focus">تمرکز</a>
+        <a class="review-scope {% if scope == 'overdue' %}active{% endif %}" href="?scope=overdue">عقب‌افتاده</a>
+        <a class="review-scope {% if scope == 'week' %}active{% endif %}" href="?scope=week">۷ روز آینده</a>
+        <a class="review-scope {% if scope == 'all' %}active{% endif %}" href="?scope=all">همه</a>
+      </nav>
+    </div>
+
+    {% if queue %}
+    <div class="review-list">
+      {% for item in queue %}
+      <article class="review-item" data-review-item>
+        <div class="review-icon" aria-hidden="true">{{ item.icon }}</div>
+        <div class="review-main">
+          <div class="review-title">{{ item.title }}</div>
+          <div class="review-meta">
+            <span class="review-tag">{{ item.kind_label }}</span>
+            {% if item.node %}<a class="review-person" href="/nodes/{{ item.node.id }}/">{{ item.node.display_name }}</a>{% elif item.people %}<span>{{ item.people }}</span>{% endif %}
+            {% if item.responsible %}<span>{{ item.responsible }}</span>{% endif %}
+            {% if item.note %}<span>{{ item.note|truncatechars:65 }}</span>{% endif %}
+            {% if item.due_date %}
+              <span class="review-tag {{ item.due_state }}">
+                {% if item.due_state == 'overdue' %}عقب‌افتاده · {% elif item.due_state == 'today' %}امروز · {% endif %}{{ item.due_date|jalali_date:"long" }}
+              </span>
+            {% else %}<span class="review-tag">بدون تاریخ</span>{% endif %}
+          </div>
+        </div>
+        <div class="review-actions">
+          <a class="review-action" href="{{ item.url }}">جزئیات</a>
+          {% if item.can_complete %}<button type="button" class="review-action primary" data-review-complete data-kind="{{ item.kind }}" data-id="{{ item.object_id }}">{% if item.kind == 'event' %}برگزار شد{% else %}انجام شد{% endif %}</button>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="review-empty">در این فیلتر کاری باقی نمانده است. یک مرور هفتگی کوتاه می‌تواند قدم بعدی را روشن کند.</div>
+    {% endif %}
+  </section>
+
+  <section class="review-panel">
+    <div class="review-panel-head"><div><h2>ابزارهای اصلی</h2><div class="review-sub">برای جزئیات و ثبت مورد تازه وارد بخش تخصصی شو</div></div></div>
+    <div class="review-modules">
+      <a class="review-module" href="/followups/">📌 موضوعات باز<span>پیگیری و سؤال نیمه‌تمام</span></a>
+      <a class="review-module" href="/relationship-life/">🤝 ملاقات و تعهد<span>چرخه کامل رابطه</span></a>
+      <a class="review-module" href="/events/">📅 رویدادها<span>قرار و مناسبت</span></a>
+      <a class="review-module" href="/ledger/">💰 قرض و طلب<span>حساب‌های مشترک</span></a>
+      <a class="review-module" href="/daily/">✨ بریفینگ امروز<span>یک قدم کوچک برای امروز</span></a>
+    </div>
+  </section>
+</main>
+
+<script>
+document.querySelectorAll('[data-review-complete]').forEach(button=>{
+  button.addEventListener('click',async()=>{
+    const kind=button.dataset.kind,id=Number(button.dataset.id);
+    if(!Number.isInteger(id)) return;
+    const configs={
+      followup:{url:`/api/followups/${id}/toggle/`,body:null},
+      commitment:{url:`/api/relationship-life/commitments/${id}/`,body:{action:'done'}},
+      event:{url:`/api/events/${id}/complete/`,body:null},
+    };
+    const config=configs[kind];
+    if(!config) return;
+    button.disabled=true;
+    button.textContent='در حال ثبت…';
+    try{
+      const options={method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}};
+      if(config.body){options.headers['Content-Type']='application/json';options.body=JSON.stringify(config.body)}
+      const response=await fetch(config.url,options);
+      const data=await response.json();
+      if(!response.ok||!data.ok) throw new Error(data.error||'ثبت انجام نشد');
+      const row=button.closest('[data-review-item]');
+      row?.classList.add('finished');
+      button.textContent='✓ ثبت شد';
+      setTimeout(()=>location.reload(),350);
+    }catch(error){
+      button.disabled=false;
+      button.textContent='تلاش دوباره';
+      alert(error.message||'خطا در ثبت');
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.db.models.signals import pre_delete
+from django.db.models.signals import m2m_changed, pre_delete
 from django.dispatch import receiver
 
 
@@ -165,6 +165,7 @@ class Node(models.Model):
     )
     merged_into = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name='merged_duplicates')
+    is_pinned       = models.BooleanField(default=False)
     is_demo = models.BooleanField(default=False)
 
     def display_name(self):
@@ -180,11 +181,28 @@ class Node(models.Model):
 
     class Meta:
         ordering = ['username']
+        indexes = [
+            models.Index(fields=['owner', 'username'], name='node_owner_username'),
+            models.Index(fields=['owner', 'merged_into', 'is_pinned'], name='node_owner_merge_pin'),
+        ]
 
 
 # ─────────────────────────────────────────────────────────────────
 # 4. Relationship
 # ─────────────────────────────────────────────────────────────────
+
+@receiver(m2m_changed, sender=Node.groups.through)
+def enforce_node_group_ownership(sender, instance, action, pk_set, **kwargs):
+    """Do not attach a user's node to another user's owned group."""
+    if action not in {'pre_add', 'pre_set'} or not instance.owner_id or not pk_set:
+        return
+    foreign_exists = Group.objects.filter(
+        pk__in=pk_set,
+        owner__isnull=False,
+    ).exclude(owner_id=instance.owner_id).exists()
+    if foreign_exists:
+        raise ValidationError('Node groups must belong to the same owner.')
+
 
 class Relationship(models.Model):
     STATUS_CHOICES = [
@@ -235,11 +253,16 @@ class Relationship(models.Model):
     def clean(self):
         if self.source == self.target:
             raise ValidationError("A node cannot have a relationship with itself.")
+        if self.owner_id:
+            for node in (self.source, self.target):
+                if node.owner_id and node.owner_id != self.owner_id:
+                    raise ValidationError('Relationship endpoints must belong to the same owner.')
 
     def save(self, *args, **kwargs):
         # جلوگیری از self-loop حتی در create برنامه‌نویسی (clean فقط در form صدا زده میشه)
         if self.source_id == self.target_id:
             raise ValidationError("A node cannot have a relationship with itself.")
+        self.clean()
         # تشخیص تغییر strength برای ثبت تاریخچه
         if self.pk:
             try:
@@ -259,6 +282,11 @@ class Relationship(models.Model):
 
     class Meta:
         unique_together = ('source', 'target', 'rel')
+        indexes = [
+            models.Index(fields=['owner', 'status', '-strength'], name='rel_owner_status_strength'),
+            models.Index(fields=['owner', 'source'], name='rel_owner_source'),
+            models.Index(fields=['owner', 'target'], name='rel_owner_target'),
+        ]
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -288,6 +316,22 @@ class Event(models.Model):
 
     class Meta:
         ordering = ['date']  # event_time جداگانه در view مدیریت می‌شه
+        indexes = [
+            models.Index(fields=['owner', 'date'], name='event_owner_date'),
+        ]
+
+
+@receiver(m2m_changed, sender=Event.participants.through)
+def enforce_event_participant_ownership(sender, instance, action, pk_set, **kwargs):
+    """Keep event participants inside the event owner's tenant on direct ORM writes."""
+    if action not in {'pre_add', 'pre_set'} or not instance.owner_id or not pk_set:
+        return
+    foreign_exists = Node.objects.filter(
+        pk__in=pk_set,
+        owner__isnull=False,
+    ).exclude(owner_id=instance.owner_id).exists()
+    if foreign_exists:
+        raise ValidationError('Event participants must belong to the same owner.')
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -645,6 +689,19 @@ class JournalEntry(models.Model):
                    models.Index(fields=['owner', 'entry_date'], name='journal_owner_date')]
 
 
+@receiver(m2m_changed, sender=JournalEntry.mentioned_nodes.through)
+def enforce_journal_node_ownership(sender, instance, action, pk_set, **kwargs):
+    """Keep mentioned people inside the journal entry owner's tenant."""
+    if action not in {'pre_add', 'pre_set'} or not instance.owner_id or not pk_set:
+        return
+    foreign_exists = Node.objects.filter(
+        pk__in=pk_set,
+        owner__isnull=False,
+    ).exclude(owner_id=instance.owner_id).exists()
+    if foreign_exists:
+        raise ValidationError('Journal mentions must belong to the same owner.')
+
+
 class RelationshipPulse(models.Model):
     """Optional, private self-report used by relationship theory monitors."""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
@@ -667,6 +724,13 @@ class RelationshipPulse(models.Model):
         for field in ('support', 'autonomy', 'belonging', 'trust', 'voice'):
             if not 1 <= getattr(self, field) <= 5:
                 raise ValidationError({field: 'امتیاز باید بین ۱ تا ۵ باشد.'})
+
+
+    def save(self, *args, **kwargs):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Relationship pulse and node must belong to the same owner.')
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 class ExtractionSuggestion(models.Model):
@@ -784,6 +848,14 @@ class RelationshipRecommendation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     acted_at = models.DateTimeField(null=True, blank=True)
 
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Recommendation and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ['-created_at']
 
@@ -797,6 +869,17 @@ class NodeMergeOperation(models.Model):
     status = models.CharField(max_length=12, default='applied')
     created_at = models.DateTimeField(auto_now_add=True)
     undone_at = models.DateTimeField(null=True, blank=True)
+
+    def clean(self):
+        for node in (self.primary_node, self.duplicate_node):
+            if self.owner_id and node.owner_id and node.owner_id != self.owner_id:
+                raise ValidationError('Merge nodes must belong to the same owner.')
+        if self.primary_node_id and self.duplicate_node_id and self.primary_node_id == self.duplicate_node_id:
+            raise ValidationError('A node cannot be merged into itself.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 class Commitment(models.Model):
@@ -812,6 +895,14 @@ class Commitment(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Commitment and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ['status', 'due_date', '-created_at']
 
@@ -826,6 +917,14 @@ class GiftIdea(models.Model):
     status = models.CharField(max_length=15, default='idea')
     notes = models.CharField(max_length=300, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Gift idea and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['status', '-created_at']
@@ -843,6 +942,16 @@ class MeetingReflection(models.Model):
     relationship_change = models.CharField(max_length=10, default='same')
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Reflection and node must belong to the same owner.')
+        if self.owner_id and self.event_id and self.event.owner_id and self.event.owner_id != self.owner_id:
+            raise ValidationError('Reflection and event must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
 
 class NodeSafetySetting(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
@@ -853,6 +962,14 @@ class NodeSafetySetting(models.Model):
     hide_emotional_reminders = models.BooleanField(default=False)
     boundaries = models.TextField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Safety setting and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 class FeatureFlag(models.Model):
@@ -908,6 +1025,15 @@ class KnowledgeTriple(models.Model):
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def clean(self):
+        for node in (self.subject, self.object_node):
+            if self.owner_id and node and node.owner_id and node.owner_id != self.owner_id:
+                raise ValidationError('Knowledge nodes must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     class Meta:
         indexes = [models.Index(fields=['owner', 'predicate'], name='knowledge_owner_pred')]
         constraints = [models.UniqueConstraint(
@@ -940,6 +1066,14 @@ class ObservabilityEvent(models.Model):
 # هیچ صفحه‌ی موجودی نشکنه — فقط فیچرهای V4 با fallback کار می‌کنن.
 
 class NodeCloseness(models.Model):
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Closeness setting and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     node  = models.OneToOneField(Node, on_delete=models.CASCADE,
                                   related_name='closeness_setting', verbose_name='شخص')
     tier  = models.CharField(max_length=15, choices=CLOSENESS_CHOICES,
@@ -1006,6 +1140,14 @@ class Interaction(models.Model):
     def __str__(self):
         return f"{self.get_kind_display()} با {self.node} — {self.date}"
 
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Interaction and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
 
 # ─────────────────────────────────────────────────────────────────
 # 8c. FollowUp  (V4 — موضوعات باز / قول‌ها)
@@ -1028,11 +1170,22 @@ class FollowUp(models.Model):
 
     class Meta:
         ordering = ['done', 'due_date', '-created_at']
+        indexes = [
+            models.Index(fields=['owner', 'done', 'due_date'], name='follow_owner_done_due'),
+        ]
         verbose_name = 'موضوع باز'
         verbose_name_plural = 'موضوعات باز'
 
     def __str__(self):
         return f"{self.text[:50]} — {self.node}"
+
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Follow-up and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -1083,6 +1236,14 @@ class Debt(models.Model):
 
     def __str__(self):
         return f"{self.get_direction_display()} {self.amount:,} {self.currency} — {self.node}"
+
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Debt and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -1164,6 +1325,14 @@ class LifeEvent(models.Model):
     def __str__(self):
         return f"{self.get_kind_display()} — {self.node} ({self.date})"
 
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Life event and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
 
 # ─────────────────────────────────────────────────────────────────
 # 8g. RelationshipGoal  (V10 — هدف روی رابطه)
@@ -1190,6 +1359,14 @@ class RelationshipGoal(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         null=True, blank=True, related_name='relationship_goals', verbose_name='صاحب')
 
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Relationship goal and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ['status', '-created_at']
         verbose_name = 'هدف رابطه'
@@ -1215,6 +1392,14 @@ class PersonaProfile(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         null=True, blank=True, related_name='personas', verbose_name='صاحب')
 
+    def clean(self):
+        if self.owner_id and self.node_id and self.node.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Persona and node must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     class Meta:
         verbose_name = 'شناخت شخص'
         verbose_name_plural = 'شناخت اشخاص'
@@ -1233,6 +1418,14 @@ class RelationshipProfile(models.Model):
     owner        = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         null=True, blank=True, related_name='relationship_profiles', verbose_name='صاحب')
+
+    def clean(self):
+        if self.owner_id and self.relationship_id and self.relationship.owner_id and self.relationship.owner_id != self.owner_id:
+            raise ValidationError('Relationship profile and relationship must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     class Meta:
         verbose_name = 'شناخت رابطه'
@@ -1310,6 +1503,10 @@ class AlertAction(models.Model):
 # ─────────────────────────────────────────────────────────────────
 
 class JournalImage(models.Model):
+    owner       = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='journal_images', null=True, blank=True,
+    )
     entry       = models.ForeignKey(JournalEntry, on_delete=models.CASCADE,
                                      related_name='images', null=True, blank=True)
     image       = models.ImageField(upload_to='journal/', verbose_name='تصویر')
@@ -1319,6 +1516,16 @@ class JournalImage(models.Model):
         ordering = ['uploaded_at']
         verbose_name = 'یادداشت روزانه'
         verbose_name_plural = 'یادداشت‌های روزانه'
+
+    def clean(self):
+        if self.entry_id and self.owner_id and self.entry.owner_id != self.owner_id:
+            raise ValidationError('Journal image and entry must belong to the same owner.')
+
+    def save(self, *args, **kwargs):
+        if self.entry_id and not self.owner_id:
+            self.owner_id = self.entry.owner_id
+        self.clean()
+        return super().save(*args, **kwargs)
 
 
 # ─────────────────────────────────────────────────────────────────

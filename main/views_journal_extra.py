@@ -4,7 +4,6 @@ Extra journal views — imported in urls.py alongside main views.
 import json
 from datetime import datetime, timedelta
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.utils import timezone
@@ -46,7 +45,6 @@ def _extract_profile_media_from_journal(entry):
                 )
 
 
-@csrf_exempt
 @login_required
 def journal_save_api(request):
     """Save a journal entry without AI analysis."""
@@ -56,8 +54,13 @@ def journal_save_api(request):
         body = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
-    text = body.get('text', '').strip()
+    text = body.get('text')
+    if not isinstance(text, str):
+        return JsonResponse({'error': 'text must be a string'}, status=400)
+    text = text.strip()
     if not text:
         return JsonResponse({'error': 'متن خالی است'}, status=400)
 
@@ -74,7 +77,8 @@ def journal_save_api(request):
         return JsonResponse({'error': 'همین لحظه را همین چند دقیقه پیش ثبت کرده‌ای.'}, status=400)
 
     from datetime import date as _date
-    entry_date_str = body.get('entry_date', '').strip()
+    entry_date_str = body.get('entry_date')
+    entry_date_str = entry_date_str.strip() if isinstance(entry_date_str, str) else ''
     entry_date = None
     if entry_date_str:
         try:
@@ -85,6 +89,10 @@ def journal_save_api(request):
     raw_tags = body.get('tags', [])
     if isinstance(raw_tags, str):
         raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
+    elif isinstance(raw_tags, list):
+        raw_tags = [str(tag).strip()[:80] for tag in raw_tags if str(tag).strip()][:30]
+    else:
+        raw_tags = []
 
     occurred_at = timezone.now()
     raw_occurred_at = body.get('occurred_at', '')
@@ -107,9 +115,15 @@ def journal_save_api(request):
         ai_analyzed=False, owner=request.user,
     )
 
-    image_ids = body.get('image_ids', [])
+    image_ids = body.get('image_ids')
+    image_ids = [
+        image_id for image_id in image_ids
+        if isinstance(image_id, int) and not isinstance(image_id, bool)
+    ] if isinstance(image_ids, list) else []
     if image_ids:
-        JournalImage.objects.filter(id__in=image_ids, entry__isnull=True).update(entry=entry)
+        JournalImage.objects.filter(
+            id__in=image_ids, owner=request.user, entry__isnull=True,
+        ).update(entry=entry)
 
     _extract_profile_media_from_journal(entry)
     from .extraction import extract_text

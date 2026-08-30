@@ -10,7 +10,6 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import (
     ArtisticWork,
@@ -51,9 +50,10 @@ def _spam_error(retry_after):
 
 def _body(request):
     try:
-        return json.loads(request.body or '{}')
+        body = json.loads(request.body or '{}')
     except Exception:
-        return {}
+        return None
+    return body if isinstance(body, dict) else None
 
 
 def _friend_ids(user):
@@ -205,7 +205,6 @@ def discover_api(request):
 
 
 @login_required
-@csrf_exempt
 def follow_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -228,7 +227,6 @@ def follow_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def unfollow_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -237,7 +235,6 @@ def unfollow_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def friend_request_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -258,6 +255,8 @@ def friend_request_api(request, user_id):
         return JsonResponse({'ok': True, 'accepted': True})
 
     body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
     FriendRequest.objects.get_or_create(
         sender=request.user,
         receiver=target,
@@ -268,12 +267,14 @@ def friend_request_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def friend_respond_api(request, request_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     fr = get_object_or_404(FriendRequest, pk=request_id, receiver=request.user, status='pending')
-    action = _body(request).get('action')
+    body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    action = body.get('action')
     if action == 'accept':
         _accept_request(fr)
         return JsonResponse({'ok': True, 'accepted': True})
@@ -416,14 +417,16 @@ def _chat_analysis_for(user, friend):
 
 
 @login_required
-@csrf_exempt
 def message_send_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     friend = get_object_or_404(User, pk=user_id)
     if not Friendship.objects.filter(user=request.user, friend=friend).exists():
         return JsonResponse({'error': 'فقط با دوست‌هایت می‌توانی چت کنی'}, status=403)
-    content = (_body(request).get('content') or '').strip()
+    body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    content = (body.get('content') or '').strip()
     if not content:
         return JsonResponse({'error': 'پیام خالی است'}, status=400)
     msg = DirectMessage.objects.create(sender=request.user, receiver=friend, content=content[:3000])
@@ -438,7 +441,6 @@ def message_send_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def chat_analyze_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -452,12 +454,13 @@ def chat_analyze_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def information_share_api(request, info_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     info = get_object_or_404(Information, pk=info_id, node__owner=request.user)
     body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
     visibility = body.get('visibility')
     if visibility not in {'private', 'public', 'friends', 'selected'}:
         return JsonResponse({'error': 'سطح اشتراک‌گذاری نامعتبر است'}, status=400)
@@ -473,7 +476,6 @@ def information_share_api(request, info_id):
 
 # Final v2 API overrides. These intentionally appear after legacy definitions.
 @login_required
-@csrf_exempt
 def follow_api(request, user_id):
     """V12: فالو نیازمند تایید طرفه، مگه «تایید خودکار فالو»ش روشن باشه."""
     if request.method != 'POST':
@@ -495,7 +497,6 @@ def follow_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def friend_request_api(request, user_id):
     """V12: کانکشن نیازمند تاییده، مگه «تایید خودکار کانکشن» طرف روشن باشه."""
     if request.method != 'POST':
@@ -521,12 +522,14 @@ def friend_request_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def friend_respond_api(request, request_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     req = get_object_or_404(FriendRequest, pk=request_id, receiver=request.user, status='pending')
-    action = _body(request).get('action')
+    body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    action = body.get('action')
     if action == 'accept':
         if req.request_type == 'follow':
             _accept_follow_request(req)
@@ -541,12 +544,13 @@ def friend_respond_api(request, request_id):
 
 
 @login_required
-@csrf_exempt
 def information_share_api(request, info_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     info = get_object_or_404(Information, pk=info_id, node__owner=request.user)
     body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
     selected = {int(x) for x in body.get('friend_ids') or [] if str(x).isdigit()}
     allowed = _audience_ids(request.user)
     info.visibility = 'selected' if selected else 'private'
@@ -604,7 +608,6 @@ def messages_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def message_send_api(request, user_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -616,6 +619,8 @@ def message_send_api(request, user_id):
         return JsonResponse({'error': 'این کاربر دریافت پیام رو بسته'}, status=403)
 
     body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
     content = (body.get('content') or '').strip()
     if not content:
         return JsonResponse({'error': 'پیام خالی است'}, status=400)
@@ -662,7 +667,6 @@ def message_send_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def typing_api(request, user_id):
     friend = get_object_or_404(User, pk=user_id)
     if not Friendship.objects.filter(user=request.user, friend=friend).exists():
@@ -935,7 +939,6 @@ def _get_or_create_work(kind, title, creator=''):
 
 
 @login_required
-@csrf_exempt
 def work_cover_api(request, work_id):
     """POST → اگه اثر جلد نداره، از اینترنت پیدا کن و ذخیره کن. lazy از UI صدا زده می‌شه.
     اگه پیدا نشد، دلیل هر منبع رو هم برمی‌گردونه که دیگه معما نمونه."""
@@ -1001,6 +1004,10 @@ def public_profile_view(request, username):
     except Exception:
         pass
 
+    visible_media = ProfileMediaItem.objects.filter(user=profile)
+    if profile != request.user:
+        visible_media = visible_media.filter(is_public=True)
+
     return render(request, 'social/profile.html', {
         'profile_user': profile,
         'card': _user_card(profile, request.user),
@@ -1010,9 +1017,9 @@ def public_profile_view(request, username):
         'media_sections': media_sections,
         'persona_node_id': persona_node_id,
         # backward-compat (اگه جایی از تمپلیت قدیمی مونده باشه)
-        'latest_books': ProfileMediaItem.objects.filter(user=profile, kind='book')[:3],
-        'latest_movies': ProfileMediaItem.objects.filter(user=profile, kind='movie')[:3],
-        'latest_series': ProfileMediaItem.objects.filter(user=profile, kind='series')[:3],
+        'latest_books': visible_media.filter(kind='book')[:3],
+        'latest_movies': visible_media.filter(kind='movie')[:3],
+        'latest_series': visible_media.filter(kind='series')[:3],
         'posts': SocialPost.objects.filter(
             author=profile,
             is_public=True,
@@ -1174,7 +1181,10 @@ def post_create_api(request):
         return _spam_error(retry_after)
     if not request.user.is_public:
         return JsonResponse({'error': 'برای انتشار پست، پروفایل باید پابلیک باشد.'}, status=403)
-    body = (_body(request).get('body') or '').strip()[:1200]
+    body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    body = (body.get('body') or '').strip()[:1200]
     if not body:
         return JsonResponse({'error': 'متن پست خالی است.'}, status=400)
     normalized = ' '.join(body.lower().split())
@@ -1228,11 +1238,15 @@ def profile_network_view(request, username, kind):
 
 
 @login_required
-@csrf_exempt
 def profile_cover_api(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    preset = request.POST.get('preset') or _body(request).get('preset')
+    preset = request.POST.get('preset')
+    if not preset:
+        body = _body(request)
+        if body is None:
+            return JsonResponse({'error': 'JSON object required'}, status=400)
+        preset = body.get('preset')
     allowed = {'aurora', 'forest', 'rose', 'graphite', 'sunset'}
     changed = []
     if preset in allowed:
@@ -1248,7 +1262,6 @@ def profile_cover_api(request):
 
 
 @login_required
-@csrf_exempt
 def follow_api(request, user_id):
     """V12: فالو نیازمند تایید طرفه، مگه «تایید خودکار فالو»ش روشن باشه."""
     if request.method != 'POST':
@@ -1270,7 +1283,6 @@ def follow_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def friend_request_api(request, user_id):
     """V12: کانکشن نیازمند تاییده، مگه «تایید خودکار کانکشن» طرف روشن باشه."""
     if request.method != 'POST':
@@ -1296,12 +1308,14 @@ def friend_request_api(request, user_id):
 
 
 @login_required
-@csrf_exempt
 def friend_respond_api(request, request_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     req = get_object_or_404(FriendRequest, pk=request_id, receiver=request.user, status='pending')
-    action = _body(request).get('action')
+    body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    action = body.get('action')
     if action == 'accept':
         if req.request_type == 'follow':
             _accept_follow_request(req)
@@ -1316,12 +1330,13 @@ def friend_respond_api(request, request_id):
 
 
 @login_required
-@csrf_exempt
 def information_share_api(request, info_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     info = get_object_or_404(Information, pk=info_id, node__owner=request.user)
     body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
     selected = {int(x) for x in body.get('friend_ids') or [] if str(x).isdigit()}
     allowed = _audience_ids(request.user)
     info.visibility = 'selected' if selected else 'private'

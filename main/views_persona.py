@@ -16,7 +16,6 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node, Relationship
 
@@ -284,11 +283,20 @@ def gather_person_signals(user, node):
     # ── اگر این نود، یک کاربر واقعی اپه: آثار فرهنگی + تحلیل چت داخلی ──
     def _as_user():
         out = []
-        u = User.objects.filter(username=node.username).first()
+        u = None
+        if node.imported_from_id:
+            imported_user = node.imported_from
+            if imported_user == user or imported_user.is_public:
+                u = imported_user
+        elif node.username == user.username:
+            u = user
         if not u:
             return out
         from .models import ProfileMediaItem, ChatAnalysis, SocialCircleMessage, SocialPost
-        items = list(ProfileMediaItem.objects.filter(user=u)[:40])
+        media_qs = ProfileMediaItem.objects.filter(user=u)
+        if u != user:
+            media_qs = media_qs.filter(is_public=True)
+        items = list(media_qs[:40])
         if items:
             kind_fa = {'book': 'کتاب', 'movie': 'فیلم', 'series': 'سریال', 'music': 'موسیقی'}
             best = sorted([i for i in items if i.rating], key=lambda i: -i.rating)[:6]
@@ -500,7 +508,6 @@ def persona_get_api(request, pk):
 
 
 @login_required
-@csrf_exempt
 def persona_synthesize_api(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -534,7 +541,13 @@ def persona_synthesize_api(request, pk):
 
 @login_required
 def rel_persona_get_api(request, pk):
-    rel = get_object_or_404(Relationship, pk=pk, owner=request.user)
+    rel = get_object_or_404(
+        Relationship,
+        pk=pk,
+        owner=request.user,
+        source__owner=request.user,
+        target__owner=request.user,
+    )
     try:
         from .models import RelationshipProfile
         p = RelationshipProfile.objects.filter(relationship=rel, owner=request.user).first()
@@ -544,11 +557,16 @@ def rel_persona_get_api(request, pk):
 
 
 @login_required
-@csrf_exempt
 def rel_persona_synthesize_api(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-    rel = get_object_or_404(Relationship, pk=pk, owner=request.user)
+    rel = get_object_or_404(
+        Relationship,
+        pk=pk,
+        owner=request.user,
+        source__owner=request.user,
+        target__owner=request.user,
+    )
 
     signals = gather_rel_signals(request.user, rel)
     if len(signals) < 2:

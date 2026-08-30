@@ -77,7 +77,7 @@
 
 {% block extra_js %}
 <script>
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+ function esc(s){ return String(s||'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c])); }
 async function api(url, opts={}){
   opts.headers = Object.assign({'X-CSRFToken': getCookie('csrftoken'), 'Content-Type':'application/json'}, opts.headers||{});
   const r = await fetch(url, opts);
@@ -97,7 +97,7 @@ function userCard(u){
   else connectBtn = `<button class="dv-btn connect" onclick="dvConnect(this, ${u.id})">🔗 کانکشن</button>`;
   return `<div class="dv-card">
     <div class="dv-av">${esc((u.name||'?')[0]).toUpperCase()}</div>
-    <div class="dv-name"><a href="/u/${esc(u.username)}/">${esc(u.name)}</a></div>
+     <div class="dv-name"><a href="/u/${encodeURIComponent(String(u.username||''))}/">${esc(u.name)}</a></div>
     <div class="dv-meta">@${esc(u.username)}${u.career?' · '+esc(u.career):''}${u.city?' · '+esc(u.city):''}</div>
     <div class="dv-reasons">${reasons}</div>
     <div class="dv-stats">${u.followers_count||0} فالوئر · ${u.connections_count||0} کانکشن</div>

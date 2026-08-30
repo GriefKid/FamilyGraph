@@ -8,7 +8,6 @@ from django.contrib.auth.decorators import login_required
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node, CLOSENESS_CHOICES
 from .health import compute_health, health_summary
@@ -63,7 +62,6 @@ def _node_health(user, node_id):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def interaction_log_api(request):
     """POST {node_id, kind, feeling?, note?, date?} → ثبت تعامل + سلامت جدید."""
     if request.method != 'POST':
@@ -128,7 +126,9 @@ def interactions_recent_api(request):
     """۲۰ تعامل آخر یک نود (یا کل شبکه اگه node_id ندی)."""
     try:
         from .models import Interaction
-        qs = Interaction.objects.filter(owner=request.user).select_related('node')
+        qs = Interaction.objects.filter(
+            owner=request.user, node__owner=request.user,
+        ).select_related('node')
         node_id = request.GET.get('node_id')
         if node_id:
             qs = qs.filter(node_id=node_id)
@@ -147,7 +147,6 @@ def interactions_recent_api(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def set_closeness_api(request, pk):
     """POST {closeness} → تعیین دایره نزدیکی نود."""
     if request.method != 'POST':
@@ -192,7 +191,6 @@ def set_closeness_api(request, pk):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def node_relation_analyze_api(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)

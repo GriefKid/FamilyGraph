@@ -18,7 +18,6 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node, Relationship
 
@@ -50,9 +49,10 @@ def _flatten_text(t):
 
 def _body(request):
     try:
-        return json.loads(request.body)
+        body = json.loads(request.body)
     except Exception:
         return None
+    return body if isinstance(body, dict) else None
 
 
 @login_required
@@ -61,7 +61,7 @@ def telegram_import_view(request):
     node_opts = [{'id': n.id, 'label': n.display_name()} for n in nodes]
     root = request.user.root_node
     return render(request, 'import/telegram.html', {
-        'node_opts_json': json.dumps(node_opts, ensure_ascii=False),
+        'node_opts_json': node_opts,
         'root_id': root.id if root else '',
         'root_name': root.display_name() if root else '',
     })
@@ -72,7 +72,6 @@ def telegram_import_view(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def telegram_scan_api(request):
     """پارس فایل بدون نوشتن — لیست مخاطب‌ها + پیشنهاد match."""
     if request.method != 'POST':
@@ -180,7 +179,6 @@ def telegram_scan_api(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def telegram_apply_api(request):
     """{mapping: [{name, action: 'skip'|'new'|'node:ID'}], make_edges} → نوشتن طبق تصمیم کاربر."""
     if request.method != 'POST':
@@ -282,7 +280,6 @@ def telegram_apply_api(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def telegram_undo_api(request):
     """پاک‌سازی همه‌ی چیزهایی که ایمپورت تلگرام ساخته."""
     if request.method != 'POST':
@@ -346,7 +343,6 @@ def telegram_undo_api(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def telegram_analyze_api(request):
     """{name} → AI متن گفتگو رو می‌خونه و آدم‌های ذکرشده رو درمیاره."""
     if request.method != 'POST':
@@ -400,7 +396,6 @@ JSON خالص:
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def telegram_relation_api(request):
     """{name} → AI از روی گفتگو: شخصیت، اخلاقیات، نمره‌ی دوستی، پرچم قرمز و…"""
     if request.method != 'POST':
@@ -461,7 +456,6 @@ JSON خالص:
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def telegram_save_relation_api(request):
     """{node_id, data{...}, set_strength, strength} → merge در Information + قدرت یال."""
     if request.method != 'POST':
@@ -530,7 +524,6 @@ def telegram_save_relation_api(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def telegram_apply_mentions_api(request):
     """{contact_node_id, items: [{name, action, relation}]} → ساخت نود/یال طبق تصمیم کاربر."""
     if request.method != 'POST':

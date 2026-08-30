@@ -6,9 +6,9 @@ import os
 from datetime import date, timedelta
 from django.shortcuts import render
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.db.models import Prefetch
 from django.utils import timezone
 from openai import OpenAI
 
@@ -157,6 +157,7 @@ def _compute_alerts(user=None):
     today = timezone.localdate()
     alerts = []
     user_filter = {'owner': user} if user and user.is_authenticated else {}
+    participant_queryset = Node.objects.filter(owner=user) if user and user.is_authenticated else Node.objects.all()
 
     # ── 1. Birthdays today ──────────────────────────────────────
     for node in Node.objects.filter(birth_day__month=today.month, birth_day__day=today.day, **user_filter):
@@ -200,20 +201,20 @@ def _compute_alerts(user=None):
     try:
         _upcoming_evs = list(Event.objects.filter(
             date__gte=today, date__lte=today + timedelta(days=7), **user_filter
-        ).prefetch_related('participants'))
+        ).prefetch_related(Prefetch('participants', queryset=participant_queryset)))
         _post_evs = list(Event.objects.filter(
             date__gte=today - timedelta(days=3),
             date__lt=today,
             post_event_prompted=False,
             **user_filter
-        ).prefetch_related('participants')[:3])
+        ).prefetch_related(Prefetch('participants', queryset=participant_queryset))[:3])
     except _PErr:
         # migration هنوز نخورده — فقط ستون‌های قدیمی، order_by صریح تا Meta.ordering override بشه
         _upcoming_evs = list(Event.objects.filter(
             date__gte=today, date__lte=today + timedelta(days=7), **user_filter
         ).only('id','title','date','description','owner_id')
          .order_by('date')   # override Meta.ordering که event_time داره
-         .prefetch_related('participants'))
+         .prefetch_related(Prefetch('participants', queryset=participant_queryset)))
         _safe = {'event_time': None, 'reminder_sent_7d': False, 'reminder_sent_1d': False,
                  'reminder_sent_3h': False, 'post_event_prompted': False}
         for _ev in _upcoming_evs:
@@ -275,7 +276,9 @@ def _compute_alerts(user=None):
                       'sad', 'stress', 'anxious', 'worried', 'upset', 'depressed', 'تنها', 'افسرده']
     cutoff7 = today - timedelta(days=7)
     seen_mood_nodes = set()
-    for entry in JournalEntry.objects.filter(created_at__date__gte=cutoff7, ai_analyzed=True, **user_filter).prefetch_related('mentioned_nodes')[:30]:
+    for entry in JournalEntry.objects.filter(
+        created_at__date__gte=cutoff7, ai_analyzed=True, **user_filter
+    ).prefetch_related(Prefetch('mentioned_nodes', queryset=participant_queryset))[:30]:
         if entry.mood and any(neg in entry.mood.lower() for neg in negative_words):
             for node in entry.mentioned_nodes.all()[:3]:
                 if node.id not in seen_mood_nodes:
@@ -350,7 +353,7 @@ def _compute_alerts(user=None):
             if journal_old_enough:
                 seen_decay = set()
                 active_rels = Relationship.objects.filter(
-                    status='active', **user_filter,
+                    status='active', source__owner=user, target__owner=user, **user_filter,
                 ).select_related('source', 'target')
 
                 # پیش‌واکشی یک‌باره نودهایی که در ۹۰ روز اخیر ذکر شدن — جلوگیری از N+1
@@ -528,7 +531,9 @@ def _compute_alerts(user=None):
         if user and user.is_authenticated and user.root_node_id:
             root_id_ = user.root_node_id
             adj_ = {}
-            for r_ in Relationship.objects.filter(owner=user).only('source_id', 'target_id'):
+            for r_ in Relationship.objects.filter(
+                owner=user, source__owner=user, target__owner=user,
+            ).only('source_id', 'target_id'):
                 adj_.setdefault(r_.source_id, set()).add(r_.target_id)
                 adj_.setdefault(r_.target_id, set()).add(r_.source_id)
             my_nbrs_ = adj_.get(root_id_, set())
@@ -675,7 +680,6 @@ def alerts_count_api(request):
 
 
 @login_required
-@csrf_exempt
 def alert_recommendation_api(request):
     """POST {node_id, alert_type, title} → AI gift/action suggestions."""
     if request.method != 'POST':
@@ -684,6 +688,8 @@ def alert_recommendation_api(request):
         body = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     node_id = body.get('node_id')
     alert_type = body.get('alert_type', '')
@@ -801,7 +807,6 @@ def alerts_view(request):
 
 
 @login_required
-@csrf_exempt
 def alert_action_api(request):
     """POST {alert_id, alert_type, node_id, title, action, outcome} → ذخیره اقدام کاربر."""
     if request.method != 'POST':
@@ -810,6 +815,8 @@ def alert_action_api(request):
         body = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     node = None
     node_id = body.get('node_id')
@@ -877,7 +884,6 @@ def alert_action_api(request):
 
 
 @login_required
-@csrf_exempt
 def rename_group_api(request):
     """POST {old_name, new_name} → تغییر نام گروه (Group model)."""
     if request.method != 'POST':
@@ -886,6 +892,8 @@ def rename_group_api(request):
         body = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     from .models import Group as GroupModel
     old_name = (body.get('old_name') or '').strip()
@@ -907,7 +915,6 @@ def rename_group_api(request):
 
 
 @login_required
-@csrf_exempt
 def delete_group_api(request):
     """POST {name} → حذف گروه و خروج نودها از اون گروه."""
     if request.method != 'POST':
@@ -916,6 +923,8 @@ def delete_group_api(request):
         body = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     from .models import Group as GroupModel
     name = (body.get('name') or '').strip()
@@ -935,7 +944,11 @@ def _build_nx(user):
     import networkx as nx
     G = nx.Graph()
     all_nodes = list(Node.objects.filter(owner=user))
-    all_rels  = list(Relationship.objects.filter(owner=user).select_related('source', 'target'))
+    all_rels  = list(Relationship.objects.filter(
+        owner=user,
+        source__owner=user,
+        target__owner=user,
+    ).select_related('source', 'target'))
     for n in all_nodes:
         G.add_node(n.id, label=n.display_name())
     for r in all_rels:
@@ -968,6 +981,7 @@ def psychology_view(request):
 
     user = request.user
     G, all_nodes, all_rels = _build_nx(user)
+    node_by_id = {node.id: node for node in all_nodes}
     n_nodes = G.number_of_nodes()
     n_edges = G.number_of_edges()
 
@@ -1048,7 +1062,9 @@ def psychology_view(request):
     top_connectors = []
     for nid, deg in top_by_deg:
         try:
-            nd = Node.objects.get(pk=nid)
+            nd = node_by_id.get(nid)
+            if nd is None:
+                continue
             top_connectors.append({
                 'name': nd.display_name(),
                 'degree': round(deg * 100),
@@ -1089,7 +1105,9 @@ def psychology_view(request):
             art_point_ids = list(nx.articulation_points(G))
             for nid in art_point_ids[:5]:
                 try:
-                    nd = Node.objects.get(pk=nid)
+                    nd = node_by_id.get(nid)
+                    if nd is None:
+                        continue
                     critical_nodes.append({
                         'name': nd.display_name(),
                         'degree': G.degree(nid),
@@ -1124,7 +1142,9 @@ def psychology_view(request):
                 bridge_ids.add(u); bridge_ids.add(v)
         for nid in list(bridge_ids)[:6]:
             try:
-                bridges.append(Node.objects.get(pk=nid).display_name())
+                nd = node_by_id.get(nid)
+                if nd is not None:
+                    bridges.append(nd.display_name())
             except Exception:
                 pass
     except Exception:
@@ -1136,7 +1156,9 @@ def psychology_view(request):
         sorted_constraint = sorted(constraint_map.items(), key=lambda x: x[1])
         for nid, c in sorted_constraint[:5]:
             try:
-                nd = Node.objects.get(pk=nid)
+                nd = node_by_id.get(nid)
+                if nd is None:
+                    continue
                 # Gould-Fernandez brokerage role classification
                 neighbors = list(G.neighbors(nid))
                 neighbor_comms = [comm_map.get(nb, -1) for nb in neighbors] if comm_map else []
@@ -1176,7 +1198,9 @@ def psychology_view(request):
         sorted_potential = sorted(potential.items(), key=lambda x: x[1], reverse=True)[:5]
         for nid, common_count in sorted_potential:
             try:
-                nd = Node.objects.get(pk=nid)
+                nd = node_by_id.get(nid)
+                if nd is None:
+                    continue
                 friend_suggestions.append({
                     'name': nd.display_name(),
                     'common': common_count,
@@ -1505,15 +1529,14 @@ def psychology_view(request):
         for nb in ego_nbrs:
             nb_nbrs = set(G.neighbors(nb))
             mutual  = len(ego_nbrs & nb_nbrs)
-            try:
-                nd = Node.objects.get(pk=nb)
-                embeddedness_list.append({
-                    'name': nd.display_name(),
-                    'mutual': mutual,
-                    'strength': G.get_edge_data(root.id, nb, {}).get('weight', 3),
-                })
-            except Exception:
-                pass
+            nd = node_by_id.get(nb)
+            if nd is None:
+                continue
+            embeddedness_list.append({
+                'name': nd.display_name(),
+                'mutual': mutual,
+                'strength': G.get_edge_data(root.id, nb, {}).get('weight', 3),
+            })
         embeddedness_list.sort(key=lambda x: (-x['mutual'], -x['strength']))
         avg_embeddedness = round(
             sum(e['mutual'] for e in embeddedness_list) / max(len(embeddedness_list), 1), 1
@@ -1737,7 +1760,7 @@ def psychology_view(request):
         # Journal
         'total_entries': total_entries,
         'analyzed_entries': analyzed_entries,
-        'recent_moods_json': json.dumps(recent_moods, ensure_ascii=False),
+        'recent_moods_json': recent_moods,
 
         # ── NEW: Loneliness Risk (17) ──────────────────────────
         'loneliness_risk': loneliness_risk,
@@ -1806,7 +1829,6 @@ def psychology_view(request):
 
 
 @login_required
-@csrf_exempt
 def psychology_ai_api(request):
     """POST → comprehensive AI psychology+sociology narrative. Cached 6h per user."""
     cache_key = f'psych_ai_{request.user.id}_{date.today().strftime("%Y%m%d")}'
@@ -1815,12 +1837,15 @@ def psychology_ai_api(request):
         body = json.loads(request.body or '{}')
     except Exception:
         pass
+    if not isinstance(body, dict):
+        body = {}
     cached = cache.get(cache_key)
     if cached and not (request.GET.get('refresh') or body.get('refresh')):
         return JsonResponse({'ok': True, 'result': cached, 'from_cache': True})
 
     user = request.user
     G, all_nodes, all_rels = _build_nx(user)
+    node_by_id = {node.id: node for node in all_nodes}
     n_nodes = G.number_of_nodes()
     n_edges = G.number_of_edges()
 
@@ -1882,10 +1907,9 @@ def psychology_ai_api(request):
     # Top betweenness nodes (potential brokers)
     top_brokers = []
     for nid, b in sorted(btw_cent.items(), key=lambda x: x[1], reverse=True)[:3]:
-        try:
-            top_brokers.append(Node.objects.get(pk=nid).display_name())
-        except Exception:
-            pass
+        node = node_by_id.get(nid)
+        if node is not None:
+            top_brokers.append(node.display_name())
 
     # Recent moods
     recent_moods = list(
@@ -2041,7 +2065,10 @@ def daily_tips_view(request):
     try:
         for ev in Event.objects.filter(
                 owner=user, date__month=today.month,
-                date__day=today.day, date__lt=today).order_by('-date')[:2]:
+                date__day=today.day, date__lt=today
+        ).prefetch_related(
+            Prefetch('participants', queryset=Node.objects.filter(owner=user))
+        ).order_by('-date')[:2]:
             yrs = today.year - ev.date.year
             parts = [p.display_name() for p in ev.participants.all()[:3]]
             flashback.append({
@@ -2091,7 +2118,6 @@ def daily_tips_view(request):
 
 
 @login_required
-@csrf_exempt
 def daily_tips_api(request):
     """POST → AI daily network tips — با تقویم شمسی و تعطیلات ایرانی."""
     today       = timezone.localdate()
@@ -2113,7 +2139,9 @@ def daily_tips_api(request):
         JournalEntry.objects.filter(**ufilter).order_by('-created_at').exclude(mood='').values_list('mood', flat=True)[:5]
     )
 
-    weak_rels  = list(Relationship.objects.filter(strength__lte=2, **ufilter).select_related('target')[:5])
+    weak_rels  = list(Relationship.objects.filter(
+        strength__lte=2, target__owner=req_user, **ufilter
+    ).select_related('target')[:5])
     weak_names = [r.target.display_name() for r in weak_rels]
 
     root = req_user.root_node

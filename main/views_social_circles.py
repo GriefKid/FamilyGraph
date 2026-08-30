@@ -9,9 +9,10 @@ from .models import Friendship, SocialCircle, SocialCircleMessage
 
 def _body(request):
     try:
-        return json.loads(request.body or '{}')
+        body = json.loads(request.body or '{}')
     except Exception:
-        return {}
+        return None
+    return body if isinstance(body, dict) else None
 
 
 def _connections(user):
@@ -36,6 +37,8 @@ def circle_create_api(request):
     if not request.user.is_public:
         return JsonResponse({'error': 'بخش اجتماعی فقط برای پروفایل پابلیک است.'}, status=403)
     body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
     name = (body.get('name') or '').strip()[:100]
     description = (body.get('description') or '').strip()[:280]
     if not name:
@@ -89,7 +92,10 @@ def circle_send_api(request, circle_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     circle = _circle_for_member(request, circle_id)
-    body = (_body(request).get('body') or '').strip()[:2000]
+    body = _body(request)
+    if body is None:
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    body = (body.get('body') or '').strip()[:2000]
     if not body:
         return JsonResponse({'error': 'پیام خالی است.'}, status=400)
     message = SocialCircleMessage.objects.create(

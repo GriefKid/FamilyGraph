@@ -12,6 +12,7 @@
 
 {% block content %}
 <main class="recap">
+  {% include "daily/_review_nav.html" %}
   <section class="recap-card recap-hero">
     <div class="recap-meta">از {{ month_start|jalali_date:"long" }} تا {{ today|jalali_date:"long" }}</div>
     <h1 style="font-size:22px;margin:7px 0 8px">ماه روابطت در یک نگاه</h1>
@@ -22,13 +23,16 @@
     <div class="recap-stat"><div class="recap-num">{{ interaction_count }}</div><div class="recap-label">تعامل ثبت‌شده</div></div>
     <div class="recap-stat"><div class="recap-num">{{ people_count }}</div><div class="recap-label">نفر در ارتباط</div></div>
     <div class="recap-stat"><div class="recap-num">{% if interaction_delta > 0 %}+{% endif %}{{ interaction_delta }}</div><div class="recap-label">نسبت به ماه قبل</div></div>
+    <div class="recap-stat"><div class="recap-num">{{ memory_count }}</div><div class="recap-label">حافظهٔ تازه</div></div>
   </section>
 
   <section class="recap-card"><h2 style="font-size:15px;margin-top:0">کارهای کوچکِ انجام‌شده</h2><div class="recap-stats"><div class="recap-stat"><div class="recap-num">{{ completed_commitments }}</div><div class="recap-label">قول انجام‌شده</div></div><div class="recap-stat"><div class="recap-num">{{ completed_followups }}</div><div class="recap-label">پیگیری انجام‌شده</div></div><div class="recap-stat"><div class="recap-num">{{ journal_count }}</div><div class="recap-label">یادداشت و خاطره</div></div></div><div class="recap-meta">{{ event_count }} رویداد نیز در این ماه ثبت شده است.</div></section>
 
   <section class="recap-card"><h2 style="font-size:15px;margin-top:0">بیشترین همراهی این ماه</h2>{% for person in most_present %}<div class="recap-row"><a href="/nodes/{{ person.node_id }}/">{{ person.name }}</a><span class="recap-count">{{ person.total }} تعامل</span></div>{% empty %}<p class="recap-meta">هنوز تعاملی برای این ماه ثبت نشده؛ یک خاطره یا تماس کوتاه کافی است تا گزارش جان بگیرد.</p>{% endfor %}</section>
 
+  {% if memory_highlights %}<section class="recap-card"><h2 style="font-size:15px;margin-top:0">حافظه‌هایی که این ماه شکل گرفتند</h2>{% for fact in memory_highlights %}<div class="recap-row"><a href="/nodes/{{ fact.node_id }}/">{{ fact.node.display_name }}</a><span style="color:var(--text-soft);font-size:12px;">{{ fact.value }}</span><span class="recap-meta">{{ fact.get_category_display }}</span></div>{% endfor %}</section>{% endif %}
+
   <section class="recap-card"><h2 style="font-size:15px;margin-top:0">قدم‌های آرام برای ماه بعد</h2>{% for person in next_steps %}<div class="recap-row"><a href="/nodes/{{ person.node_id }}/">{{ person.name }}</a><span class="recap-meta">{{ person.days_since }} روز از آخرین تعامل</span></div>{% empty %}<p class="recap-meta">رابطه‌ای که نیاز فوری به توجه داشته باشد پیدا نشد.</p>{% endfor %}</section>
-  <a href="/weekly/" class="btn btn-ghost btn-sm">گزارش هفتگی</a>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><a href="/relationship-work/" class="btn btn-primary btn-sm">صف اقدام</a><a href="/weekly/" class="btn btn-ghost btn-sm">گزارش هفتگی</a></div>
 </main>
 {% endblock %}

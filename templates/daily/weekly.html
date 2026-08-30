@@ -37,6 +37,8 @@
 {% block content %}
 <div class="wk-wrap">
 
+  {% include "daily/_review_nav.html" %}
+
   <div class="wk-hero">
     <div>
       <div style="font-size:17px;font-weight:800;">هفته‌ی روابطت در یک نگاه</div>
@@ -54,6 +56,8 @@
     <div class="wk-s"><div class="n">{{ done_actions }}</div><div class="l">✅ ماموریت انجام‌شده</div></div>
     <div class="wk-s"><div class="n">{{ fu_done }}</div><div class="l">📌 قول عمل‌شده</div></div>
     <div class="wk-s"><div class="n">{{ debts_settled }}</div><div class="l">💰 حساب تسویه‌شده</div></div>
+    <div class="wk-s"><div class="n">{{ event_count }}</div><div class="l">🗓 رویداد ثبت‌شده</div></div>
+    <div class="wk-s"><div class="n">{{ memory_count }}</div><div class="l">🧠 حافظهٔ تازه</div></div>
   </div>
 
   <div class="wk-card"><div class="wk-title">📖 داستان این هفته</div>{% for line in narrative %}<p style="font-size:13px;line-height:1.9;margin:5px 0">{{ line }}</p>{% endfor %}{% if next_steps %}<div class="wk-best" style="margin-top:12px"><b>سه قدم کوچک هفتهٔ بعد</b>{% for step in next_steps %}<div style="margin-top:6px">{{ forloop.counter }}. {{ step }}</div>{% endfor %}</div>{% endif %}</div>
@@ -107,6 +111,18 @@
   </div>
   {% endif %}
 
+  {% if event_highlights or memory_highlights %}
+  <div class="wk-card">
+    <div class="wk-title">🧩 چیزهایی که این هفته به شناختت اضافه شد</div>
+    {% for event in event_highlights %}
+    <div class="wk-row"><span>🗓</span><span>{{ event.title }}</span><span style="font-size:11px;color:var(--text-muted);margin-right:auto;">رویداد</span></div>
+    {% endfor %}
+    {% for fact in memory_highlights %}
+    <div class="wk-row"><span>🧠</span><a href="/nodes/{{ fact.node_id }}/">{{ fact.node.display_name }}</a><span style="font-size:12px;color:var(--text-soft);">{{ fact.value }}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <div class="wk-card">
     <div class="wk-title">🗓 برنامه هفته بعد — این ۳ نفر منتظرتن</div>
     {% for p in plan %}
@@ -125,6 +141,7 @@
   </div>
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <a href="/relationship-work/" class="btn btn-ghost btn-sm">🤝 صف اقدام</a>
     <a href="/daily/" class="btn btn-primary btn-sm">✨ بریفینگ امروز</a>
     <a href="/alerts/" class="btn btn-ghost btn-sm">🔔 هشدارها</a>
   </div>

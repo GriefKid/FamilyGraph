@@ -13,7 +13,6 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node, JournalEntry
 from .utils_jalali import jalali_full_str, jalali_day_name
@@ -112,7 +111,7 @@ def checkin_view(request):
     existing = _todays_checkin(user)
 
     return render(request, 'checkin/checkin.html', {
-        'people_json':   json.dumps(people, ensure_ascii=False),
+        'people_json':   people,
         'people_count':  len(people),
         'streak':        journal_streak(user),
         'already':       existing is not None,
@@ -126,7 +125,6 @@ def checkin_view(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def checkin_submit_api(request):
     """POST {contacts:[{node_id,kind}], mood, highlight?, followup?{node_id,text}}"""
     if request.method != 'POST':
@@ -135,13 +133,19 @@ def checkin_submit_api(request):
         body = json.loads(request.body)
     except Exception:
         return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
 
     user = request.user
     today = timezone.localdate()
 
     # ── نودهای معتبر ──
-    contacts = body.get('contacts') or []
-    node_ids = [c.get('node_id') for c in contacts if c.get('node_id')]
+    raw_contacts = body.get('contacts')
+    contacts = [c for c in raw_contacts if isinstance(c, dict)] if isinstance(raw_contacts, list) else []
+    node_ids = [
+        c.get('node_id') for c in contacts
+        if isinstance(c.get('node_id'), int) and not isinstance(c.get('node_id'), bool)
+    ]
     valid_nodes = {n.id: n for n in Node.objects.filter(owner=user, id__in=node_ids)}
 
     # ── تعامل‌ها (dedupe: هر نفر/نوع/روز یه بار) ──
@@ -171,7 +175,8 @@ def checkin_submit_api(request):
         mood_val = None
     mood_label = MOOD_LABELS.get(mood_val, '') if mood_val is not None else ''
 
-    highlight = (body.get('highlight') or '').strip()[:500]
+    highlight = body.get('highlight')
+    highlight = highlight.strip()[:500] if isinstance(highlight, str) else ''
     names = [n.display_name() for n in valid_nodes.values()]
     auto_text = 'چک-این روزانه'
     if names:
@@ -203,12 +208,16 @@ def checkin_submit_api(request):
 
     # ── فالوآپ اختیاری ──
     fu_created = False
-    fu = body.get('followup') or {}
-    fu_text = (fu.get('text') or '').strip()[:300]
-    fu_node = valid_nodes.get(fu.get('node_id')) if fu.get('node_id') else None
-    if not fu_node and fu.get('node_id'):
+    fu = body.get('followup')
+    fu = fu if isinstance(fu, dict) else {}
+    fu_text = fu.get('text')
+    fu_text = fu_text.strip()[:300] if isinstance(fu_text, str) else ''
+    fu_node_id = fu.get('node_id')
+    fu_node_id = fu_node_id if isinstance(fu_node_id, int) and not isinstance(fu_node_id, bool) else None
+    fu_node = valid_nodes.get(fu_node_id) if fu_node_id else None
+    if not fu_node and fu_node_id:
         try:
-            fu_node = Node.objects.get(pk=fu.get('node_id'), owner=user)
+            fu_node = Node.objects.get(pk=fu_node_id, owner=user)
         except Node.DoesNotExist:
             fu_node = None
     if fu_text and fu_node:

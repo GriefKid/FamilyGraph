@@ -9,13 +9,11 @@ import os
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 
 MAX_SIZE = 15 * 1024 * 1024   # 15MB
 
 
 @login_required
-@csrf_exempt
 def stt_api(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)

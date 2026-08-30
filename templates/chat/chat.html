@@ -295,7 +295,7 @@ function sendSuggestion(btn){
   sendMessage()
 }
 
-function appendMsg(role, html){
+function appendMsg(role, text){
   if(welcome && welcome.parentNode) welcome.remove()
 
   let div=document.createElement("div")
@@ -307,7 +307,11 @@ function appendMsg(role, html){
 
   let bubble=document.createElement("div")
   bubble.className="msg-bubble"
-  bubble.innerHTML=html
+  String(text).split(/\n\n+/).forEach(part=>{
+    const paragraph=document.createElement("p")
+    paragraph.textContent=part.trim()
+    bubble.appendChild(paragraph)
+  })
 
   div.appendChild(avatar)
   div.appendChild(bubble)
@@ -327,7 +331,10 @@ function showTyping(){
 
   let bubble=document.createElement("div")
   bubble.className="msg-bubble"
-  bubble.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>'
+  const dots=document.createElement("div")
+  dots.className="typing-dots"
+  for(let i=0;i<3;i++) dots.appendChild(document.createElement("span"))
+  bubble.appendChild(dots)
 
   div.appendChild(avatar)
   div.appendChild(bubble)
@@ -344,11 +351,6 @@ function escHtml(s){
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
 }
 
-function formatReply(text){
-  /* simple newline → paragraph */
-  return text.split(/\n\n+/).map(p=>"<p>"+escHtml(p.trim()).replace(/\n/g,"<br>")+"</p>").join("")
-}
-
 async function sendMessage(){
   let msg=chatInput.value.trim()
   if(!msg) return
@@ -357,7 +359,7 @@ async function sendMessage(){
   chatInput.style.height="auto"
   sendBtn.disabled=true
 
-  appendMsg("user","<p>"+escHtml(msg)+"</p>")
+  appendMsg("user",msg)
   showTyping()
 
   try{
@@ -369,15 +371,15 @@ async function sendMessage(){
     let data=await res.json()
     removeTyping()
     if(data.reply){
-      appendMsg("ai",formatReply(data.reply))
+      appendMsg("ai",data.reply)
       chatHistory.push({role:"user",content:msg})
       chatHistory.push({role:"assistant",content:data.reply})
       if(chatHistory.length>16) chatHistory=chatHistory.slice(-16)
     }
-    else appendMsg("ai","<p style='color:#f43f5e'>خطا: "+(data.error||"نامشخص")+"</p>")
+    else appendMsg("ai","خطا: "+(data.error||"نامشخص"))
   }catch(e){
     removeTyping()
-    appendMsg("ai","<p>خطا در ارتباط با سرور.</p>")
+    appendMsg("ai","خطا در ارتباط با سرور.")
   }finally{
     sendBtn.disabled=false
     chatInput.focus()

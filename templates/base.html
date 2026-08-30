@@ -1242,6 +1242,7 @@ input:focus, textarea:focus, select:focus{
         <a href="/checkin/" class="nav-item {% block nav_checkin %}{% endblock %}"><span class="nav-icon">⚡</span><span>چک‌این سریع</span></a>
         <a href="/nodes/create/" class="nav-item"><span class="nav-icon">＋</span><span>آدم جدید</span></a>
         <a href="/events/create/" class="nav-item"><span class="nav-icon">📅</span><span>رویداد جدید</span></a>
+        <a href="/followups/" class="nav-item"><span class="nav-icon">📌</span><span>موضوعات باز</span></a>
         <a href="/extractions/" class="nav-item {% block nav_extractions %}{% endblock %}"><span class="nav-icon">✓</span><span>موارد منتظر تأیید</span></a>
       </div>
     </div>
@@ -1257,9 +1258,10 @@ input:focus, textarea:focus, select:focus{
       <div class="nav-group-items" id="g3-items">
         <a href="/notifications/" class="nav-item {% block nav_notifs %}{% endblock %}">
           <span class="nav-icon">📬</span><span>اطلاعیه‌ها</span>
-          {% with cnt=request.user.pending_sync_count %}{% if cnt > 0 %}
-          <span class="nav-badge">{{ cnt }}</span>
-          {% endif %}{% endwith %}
+          {% with sync_count=request.user.pending_sync_count unread_count=request.user.unread_notif_count %}
+          {% with total_count=sync_count|add:unread_count %}{% if total_count > 0 %}
+          <span class="nav-badge">{{ total_count }}</span>
+          {% endif %}{% endwith %}{% endwith %}
         </a>
         <a href="/u/{{ request.user.username }}/" class="nav-item {% block nav_settings %}{% endblock %}"><span class="nav-icon">👤</span><span>پروفایل من</span></a>
         <a href="/settings/" class="nav-item"><span class="nav-icon">⚙</span><span>تنظیمات</span></a>
@@ -1511,7 +1513,7 @@ function getCookie(n){
   return v ? v.pop() : '';
 }
 function _esc(s){
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1681,7 +1683,7 @@ function _esc(s){
 const fgToast=(message,error=false)=>{const el=document.getElementById('fgToast');if(!el)return;el.textContent=String(message);el.style.color=error?'#fb7185':'var(--text)';el.style.display='block';clearTimeout(window.__fgToastTimer);window.__fgToastTimer=setTimeout(()=>el.style.display='none',2800)};
 window.alert=message=>fgToast(message,true);
 const palette=document.getElementById('fgPalette'),paletteInput=document.getElementById('fgPaletteInput'),paletteResults=document.getElementById('fgPaletteResults');let paletteTimer;
-async function loadPalette(){const r=await fetch('/api/platform/command-palette/?q='+encodeURIComponent(paletteInput.value)),d=await r.json();paletteResults.innerHTML=(d.results||[]).map((x,i)=>`<a href="${x.url}" style="display:flex;gap:10px;padding:10px;border-radius:10px;color:var(--text);text-decoration:none"><span>${x.icon}</span><span><b>${x.title}</b><small style="display:block;color:var(--text-muted)">${x.subtitle}</small></span></a>`).join('')}
+window.loadOnboarding=async function(){try{const r=await fetch('/api/platform/onboarding/'),d=await r.json();if(d.completed)return;const box=document.getElementById('fgOnboarding'),steps=document.getElementById('fgOnboardingSteps');box.style.display='block';steps.replaceChildren();(d.steps||[]).forEach(s=>{const a=document.createElement('a'),url=String(s.url||'');a.href=url.startsWith('/')&&!url.startsWith('//')?url:'#';a.style.cssText='display:block;padding:7px;text-decoration:none';a.style.color=s.done?'#34d399':'var(--text)';a.textContent=(s.done?'✓ ':'○ ')+String(s.title||'');steps.appendChild(a)})}catch(e){}}
 function openPalette(){palette.style.display='block';paletteInput.value='';loadPalette();setTimeout(()=>paletteInput.focus(),20)}function closePalette(){palette.style.display='none'}paletteInput?.addEventListener('input',()=>{clearTimeout(paletteTimer);paletteTimer=setTimeout(loadPalette,150)});palette?.addEventListener('click',e=>{if(e.target===palette)closePalette()});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette()}if(e.key==='Escape')closePalette()});
 async function loadOnboarding(){try{const r=await fetch('/api/platform/onboarding/'),d=await r.json();if(d.completed)return;const box=document.getElementById('fgOnboarding');box.style.display='block';document.getElementById('fgOnboardingSteps').innerHTML=d.steps.map(s=>`<a href="${s.url}" style="display:block;padding:7px;color:${s.done?'#34d399':'var(--text)'};text-decoration:none">${s.done?'✓':'○'} ${s.title}</a>`).join('')}catch(e){}}async function finishOnboarding(){await fetch('/api/platform/onboarding/complete/',{method:'POST',headers:{'X-CSRFToken':(document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop()||''}});document.getElementById('fgOnboarding').style.display='none'}{% if request.user.is_authenticated and not request.user.onboarding_completed %}loadOnboarding();{% endif %}
 window.addEventListener('error',e=>fetch('/api/platform/frontend-error/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':(document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop()||''},body:JSON.stringify({code:'window_error',message:e.message,path:location.pathname})}).catch(()=>{}));
@@ -1690,5 +1692,6 @@ window.addEventListener('error',e=>fetch('/api/platform/frontend-error/',{method
 <script>async function enableFGNotifications(){if(!('Notification' in window)){alert('مرورگر از اعلان پشتیبانی نمی‌کند.');return}const result=await Notification.requestPermission();if(result==='granted')new Notification('FamilyGraph آماده است',{body:'یادآوری‌های رابطه‌ای فقط با اجازهٔ تو نمایش داده می‌شوند.',icon:'/static/app-icon.svg'});else alert('اجازه اعلان داده نشد.')}</script>
 <script>window.addEventListener('DOMContentLoaded',()=>{if(typeof window.send!=='function')return;const onlineSend=window.send;window.send=async(url,body)=>{if(url!='/api/relationship-life/capture/')return onlineSend(url,body);try{return await onlineSend(url,body)}catch(e){const q=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');q.push({url,body,at:new Date().toISOString()});localStorage.setItem('fg-offline-captures',JSON.stringify(q));alert('این ثبت روی دستگاه نگه داشته شد و بعد از اتصال ارسال می‌شود.')}};window.addEventListener('online',async()=>{const q=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');if(!q.length)return;localStorage.removeItem('fg-offline-captures');for(const item of q){try{await onlineSend(item.url,item.body)}catch(e){const left=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');left.push(item);localStorage.setItem('fg-offline-captures',JSON.stringify(left))}}})})</script>
 <script>async function introBrief(){const a=document.getElementById('introLeft'),b=document.getElementById('introRight'),out=document.getElementById('introResult');if(!a||!b||!out)return;const r=await fetch(`/api/relationship-life/introduction/?left=${a.value}&right=${b.value}`),d=await r.json();if(!r.ok){alert(d.error||'خطا');return}out.textContent=(d.safe_to_suggest?'موضوع مشترک: '+(d.shared_topics.join('، ')||'موضوع روشنی پیدا نشد'):'به‌خاطر حالت حساس، معرفی پیشنهاد نمی‌شود')+' · '+d.note}</script>
+<script src="/static/js/relationship_life.js"></script>
 </body>
 </html>

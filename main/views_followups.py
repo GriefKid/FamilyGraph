@@ -8,8 +8,8 @@ from datetime import datetime
 from django.contrib.auth.decorators import login_required
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Node
 from .utils_jalali import jalali_str
@@ -44,7 +44,9 @@ def open_followups_for(user, node_id, limit=5):
     """موضوعات باز یک نود — برای یادآوری موقع ثبت تعامل. fail-safe."""
     try:
         from .models import FollowUp
-        qs = FollowUp.objects.filter(owner=user, node_id=node_id, done=False)[:limit]
+        qs = FollowUp.objects.filter(
+            owner=user, node_id=node_id, node__owner=user, done=False,
+        )[:limit]
         return [serialize_followup(f) for f in qs]
     except (OperationalError, ProgrammingError):
         return []
@@ -57,7 +59,6 @@ def open_followups_for(user, node_id, limit=5):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def followup_create_api(request):
     """POST {node_id, text, due_date?} → ساخت موضوع باز."""
     if request.method != 'POST':
@@ -97,7 +98,6 @@ def followup_create_api(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def followup_toggle_api(request, pk):
     """POST → تیک زدن / برداشتن تیک."""
     if request.method != 'POST':
@@ -121,7 +121,6 @@ def followup_toggle_api(request, pk):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
-@csrf_exempt
 def followup_delete_api(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
@@ -142,7 +141,9 @@ def followups_list_api(request):
     """لیست موضوعات — باز‌ها + ۱۰ تای آخر انجام‌شده."""
     try:
         from .models import FollowUp
-        qs = FollowUp.objects.filter(owner=request.user).select_related('node')
+        qs = FollowUp.objects.filter(
+            owner=request.user, node__owner=request.user,
+        ).select_related('node')
         node_id = request.GET.get('node_id')
         if node_id:
             qs = qs.filter(node_id=node_id)
@@ -151,3 +152,32 @@ def followups_list_api(request):
         return JsonResponse({'ok': True, 'open': open_items, 'done': done_items})
     except (OperationalError, ProgrammingError):
         return JsonResponse({'ok': True, 'open': [], 'done': [], 'warning': MIGRATION_MSG})
+
+
+@login_required
+def followups_view(request):
+    """A single owner-scoped inbox for open and completed relationship follow-ups."""
+    from .models import FollowUp
+    query = (request.GET.get('q') or '').strip()[:80]
+    show = request.GET.get('show', 'open')
+    if show not in {'open', 'done', 'all', 'overdue'}:
+        show = 'open'
+    qs = FollowUp.objects.filter(owner=request.user).select_related('node')
+    if show == 'open':
+        qs = qs.filter(done=False)
+    elif show == 'done':
+        qs = qs.filter(done=True)
+    elif show == 'overdue':
+        qs = qs.filter(done=False, due_date__lt=timezone.localdate())
+    if query:
+        qs = qs.filter(text__icontains=query)
+    qs = qs.order_by('done', 'due_date', '-created_at')[:100]
+    return render(request, 'followups/followups.html', {
+        'followups': qs,
+        'show': show,
+        'query': query,
+        'open_count': FollowUp.objects.filter(owner=request.user, done=False).count(),
+        'done_count': FollowUp.objects.filter(owner=request.user, done=True).count(),
+        'nodes': Node.objects.filter(owner=request.user, merged_into__isnull=True).order_by('username'),
+        'today': timezone.localdate(),
+    })

@@ -168,6 +168,7 @@ class Command(BaseCommand):
                 fields = row['fields']
                 image = JournalImage.objects.create(
                     pk=row['pk'],
+                    owner=user,
                     entry_id=fields.get('entry'),
                     image=fields['image'],
                 )

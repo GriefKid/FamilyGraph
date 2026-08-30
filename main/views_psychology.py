@@ -26,6 +26,8 @@ def relationship_pulse_create_api(request):
         data = json.loads(request.body or '{}')
     except ValueError:
         return JsonResponse({'error': 'دادهٔ نامعتبر است.'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'آبجکت JSON لازم است.'}, status=400)
 
     try:
         ratings = {name: int(data.get(name)) for name in ('support', 'autonomy', 'belonging', 'trust', 'voice')}
@@ -73,6 +75,8 @@ def extraction_suggestion_decide_api(request, pk):
         data = json.loads(request.body or '{}')
     except ValueError:
         return JsonResponse({'error': 'دادهٔ نامعتبر است.'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'آبجکت JSON لازم است.'}, status=400)
     action = data.get('action')
     if action == 'undo':
         if suggestion.status != 'approved' or not suggestion.applied_model or not suggestion.applied_object_id:
