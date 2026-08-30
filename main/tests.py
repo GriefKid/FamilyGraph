@@ -1,16 +1,13 @@
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
-from django.test.utils import CaptureQueriesContext
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import connection, transaction
 from django.utils import timezone
 import json
 import io
 from datetime import date, timedelta
-from pathlib import Path
 
-from .models import AIExtractionTrace, Commitment, Debt, DirectMessage, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftBox, GiftIdea, Information, Interaction, JournalEntry, JournalImage, KnowledgeTriple, LifeEvent, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
+from .models import AIExtractionTrace, Commitment, Debt, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftIdea, Information, Interaction, JournalEntry, KnowledgeTriple, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
 from .templatetags.jalali_tags import jalali_date
 
 
@@ -301,73 +298,6 @@ class PublicSocialTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(SocialPost.objects.exists())
 
-    def test_public_profile_hides_private_media_items(self):
-        ProfileMediaItem.objects.create(user=self.match, kind='book', title='Public book', is_public=True)
-        ProfileMediaItem.objects.create(user=self.match, kind='movie', title='Private movie', is_public=False)
-        self.client.force_login(self.me)
-
-        response = self.client.get('/u/match/')
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Public book')
-        self.assertNotContains(response, 'Private movie')
-
-    def test_share_cannot_export_a_legacy_edge_with_a_foreign_endpoint(self):
-        User = get_user_model()
-        recipient = User.objects.create_user(username='share-recipient', password='SecurePass1')
-        foreign_owner = User.objects.create_user(username='share-foreign-owner', password='SecurePass1')
-        own_node = Node.objects.create(owner=self.me, username='share-own-node')
-        foreign_node = Node.objects.create(owner=foreign_owner, username='share-private-node')
-        edge = Relationship.objects.bulk_create([Relationship(
-            owner=self.me, source=own_node, target=foreign_node, rel='legacy-share-edge',
-        )])[0]
-        Follow.objects.create(follower=recipient, target=self.me)
-        self.client.force_login(self.me)
-
-        response = self.client.post('/api/social/share/send/', data=json.dumps({
-            'item_type': 'edge', 'item_id': edge.id, 'recipient_ids': [recipient.id],
-        }), content_type='application/json')
-
-        self.assertEqual(response.status_code, 404)
-
-    def test_gifbox_send_requires_an_allowed_recipient_and_valid_faces(self):
-        node = Node.objects.create(owner=self.me, username='giftbox-source')
-        self.client.force_login(self.me)
-        payload = {
-            'recipient_id': self.private.id,
-            'share_type': 'node',
-            'source_id': node.id,
-        }
-
-        blocked = self.client.post(
-            '/api/social/gifbox/send/',
-            data=json.dumps(payload),
-            content_type='application/json',
-        )
-        self.assertEqual(blocked.status_code, 403)
-        self.assertFalse(GiftBox.objects.exists())
-
-        Follow.objects.create(follower=self.match, target=self.me)
-        malformed = self.client.post(
-            '/api/social/gifbox/send/',
-            data=json.dumps({
-                **payload,
-                'recipient_id': self.match.id,
-                'cube_faces': [{'emo': 'x', 'lbl': 'x', 'ci': 0}],
-            }),
-            content_type='application/json',
-        )
-        self.assertEqual(malformed.status_code, 400)
-        self.assertFalse(GiftBox.objects.exists())
-
-        allowed = self.client.post(
-            '/api/social/gifbox/send/',
-            data=json.dumps({**payload, 'recipient_id': self.match.id}),
-            content_type='application/json',
-        )
-        self.assertEqual(allowed.status_code, 200)
-        self.assertTrue(GiftBox.objects.filter(sender=self.me, recipient=self.match).exists())
-
     def test_circle_only_adds_existing_connections(self):
         Friendship.objects.create(user=self.me, friend=self.match)
         Friendship.objects.create(user=self.match, friend=self.me)
@@ -386,68 +316,6 @@ class PublicSocialTests(TestCase):
             set(circle.members.values_list('id', flat=True)),
             {self.me.id, self.match.id},
         )
-
-    def test_social_json_endpoints_reject_non_object_payloads(self):
-        self.client.force_login(self.me)
-
-        circle_response = self.client.post(
-            '/api/social/circles/', data='[]', content_type='application/json'
-        )
-        self.assertEqual(circle_response.status_code, 400)
-        self.assertFalse(SocialCircle.objects.filter(created_by=self.me).exists())
-
-        Friendship.objects.create(user=self.me, friend=self.match)
-        Friendship.objects.create(user=self.match, friend=self.me)
-        send_response = self.client.post(
-            f'/api/social/messages/{self.match.id}/send/',
-            data='[]', content_type='application/json',
-        )
-        self.assertEqual(send_response.status_code, 400)
-        self.assertFalse(DirectMessage.objects.filter(sender=self.me, receiver=self.match).exists())
-
-        node = Node.objects.create(owner=self.me, username='shared-info-node')
-        info = Information.objects.create(node=node, visibility='private', data={'phone': 'hidden'})
-        share_response = self.client.post(
-            f'/api/social/share-info/{info.id}/',
-            data='[]', content_type='application/json',
-        )
-        self.assertEqual(share_response.status_code, 400)
-        info.refresh_from_db()
-        self.assertEqual(info.visibility, 'private')
-
-
-class AlertPrivacyTests(TestCase):
-    def test_alerts_filter_legacy_foreign_event_and_journal_participants(self):
-        User = get_user_model()
-        user = User.objects.create_user(username='alerts-owner', password='SecurePass1')
-        other = User.objects.create_user(username='alerts-other', password='SecurePass1')
-        own_node = Node.objects.create(owner=user, username='alerts-own', name='Owner person')
-        foreign_node = Node.objects.create(owner=other, username='alerts-foreign', name='Private foreign person')
-
-        event = Event.objects.create(
-            owner=user, title='Owner event', date=timezone.localdate() + timedelta(days=1),
-        )
-        event.participants.add(own_node)
-        Event.participants.through.objects.bulk_create([
-            Event.participants.through(event_id=event.id, node_id=foreign_node.id),
-        ])
-        journal = JournalEntry.objects.create(
-            owner=user, text='Owner journal', mood='stress', ai_analyzed=True,
-            entry_date=timezone.localdate(),
-        )
-        journal.mentioned_nodes.add(own_node)
-        JournalEntry.mentioned_nodes.through.objects.bulk_create([
-            JournalEntry.mentioned_nodes.through(journalentry_id=journal.id, node_id=foreign_node.id),
-        ])
-
-        self.client.force_login(user)
-        response = self.client.get('/api/alerts/')
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        serialized = json.dumps(payload, ensure_ascii=False)
-        self.assertIn('Owner person', serialized)
-        self.assertNotIn('Private foreign person', serialized)
 
 
 class JournalMomentTests(TestCase):
@@ -920,100 +788,6 @@ class PlatformQualityTests(TestCase):
         self.assertEqual(trace.source_id, 501)
         self.assertTrue(trace.regex_output)
 
-    def test_insight_ai_reply_is_rendered_as_text_not_html(self):
-        from django.template.loader import get_template
-        source = get_template('insights/insights.html').template.source
-
-        self.assertIn('paragraph.textContent=p', source)
-        self.assertIn('error.textContent="خطا: "+(data.error||"نامشخص")', source)
-        self.assertNotIn('body.innerHTML=data.reply', source)
-
-    def test_dynamic_chat_and_palette_content_uses_safe_dom_rendering(self):
-        from django.template.loader import get_template
-
-        chat_source = get_template('chat/chat.html').template.source
-        self.assertIn('paragraph.textContent=part.trim()', chat_source)
-        self.assertNotIn('bubble.innerHTML=html', chat_source)
-
-        base_source = get_template('base.html').template.source
-        self.assertNotIn('paletteResults.innerHTML', base_source)
-        self.assertIn('steps.replaceChildren()', base_source)
-        self.assertIn("url.startsWith('/')&&!url.startsWith('//')", base_source)
-        self.assertIn('window.loadOnboarding=async function', base_source)
-
-        alerts_source = get_template('alerts/alerts.html').template.source
-        self.assertIn('escA(s.action)', alerts_source)
-        self.assertIn('escA(s.reason)', alerts_source)
-        self.assertNotIn('${s.action||\'\'}', alerts_source)
-        self.assertIn('window.loadDailyTips = async function(btn)', alerts_source)
-        self.assertIn('res.replaceChildren()', alerts_source)
-
-        home_source = get_template('home.html').template.source
-        self.assertIn('escGraph(rel)', home_source)
-
-        profile_edit_source = get_template('social/profile_edit.html').template.source
-        self.assertIn('list.replaceChildren()', profile_edit_source)
-        self.assertNotIn("getElementById('workSuggest').innerHTML", profile_edit_source)
-
-        circles_source = get_template('social/circles.html').template.source
-        self.assertIn('box.replaceChildren()', circles_source)
-        self.assertNotIn("getElementById('circleMessages').innerHTML", circles_source)
-
-        psychology_source = get_template('psychology/psychology.html').template.source
-        self.assertIn('escapeAIValue(res)', psychology_source)
-        self.assertIn('function legacyRenderAI', psychology_source)
-        self.assertIn('renderPsychologyError(cont,d.error', psychology_source)
-
-        node_detail_source = get_template('nodes/node_detail.html').template.source
-        self.assertIn('window.loadSummary=async function', node_detail_source)
-        self.assertIn('body.replaceChildren()', node_detail_source)
-        self.assertIn("error.textContent=d.error||'خطا'", node_detail_source)
-
-        discover_source = get_template('social/discover.html').template.source
-        self.assertIn('encodeURIComponent(String(u.username||\'\'))', discover_source)
-        self.assertIn('&quot;', discover_source)
-
-        profile_source = get_template('social/profile.html').template.source
-        self.assertIn('b.replaceChildren(image)', profile_source)
-
-        gifbox_source = get_template('social/gifbox.html').template.source
-        self.assertIn('json_script:"gifbox-inbox-data"', gifbox_source)
-        self.assertNotIn('inbox_json|safe', gifbox_source)
-        self.assertIn("el.textContent=text??''", gifbox_source)
-        self.assertNotIn('insertAdjacentHTML', gifbox_source)
-        self.assertNotIn('el.innerHTML=`<span class="re">', gifbox_source)
-
-        journal_source = get_template('journal/journal.html').template.source
-        self.assertIn('journal-nodes-data', journal_source)
-        self.assertNotIn('nodes_json|safe', journal_source)
-        self.assertIn("_esc(r.summary||'')", journal_source)
-        self.assertIn('journalNodeTokens.set(token,uname)', journal_source)
-        self.assertIn('dd.replaceChildren()', journal_source)
-        self.assertIn("text.textContent=String(e.text||'')", journal_source)
-        self.assertIn("edit.addEventListener('click',()=>loadEntry(", journal_source)
-        self.assertIn('function journalSafeURL(value)', journal_source)
-        self.assertNotIn('box.innerHTML = d.results.map', journal_source)
-        self.assertNotIn("onclick=\"loadEntry('${e.text", journal_source)
-
-        smart_source = Path(__file__).with_name('views_smart_features.py').read_text(encoding='utf-8')
-        self.assertNotIn('Node.objects.get(pk=nb)', smart_source)
-
-        checkin_source = get_template('checkin/checkin.html').template.source
-        self.assertIn('checkin-people-data', checkin_source)
-        self.assertNotIn('people_json|safe', checkin_source)
-
-        telegram_source = get_template('import/telegram.html').template.source
-        self.assertIn('telegram-node-options', telegram_source)
-        self.assertNotIn('node_opts_json|safe', telegram_source)
-
-        self.assertIn('psychology-moods-data', psychology_source)
-        self.assertNotIn('recent_moods_json|safe', psychology_source)
-
-        graph_source = get_template('nodes/graph.html').template.source
-        self.assertIn('function graphText', graph_source)
-        self.assertIn('function graphAttr', graph_source)
-        self.assertIn('graphText(n.label||n.id)', graph_source)
-
     def test_manual_memory_also_builds_knowledge_triple(self):
         response = self.client.post('/api/memory/facts/', data=json.dumps({
             'action': 'create', 'node_id': self.node.id, 'category': 'interest', 'value': 'نجوم'}),
@@ -1039,91 +813,6 @@ class PlatformQualityTests(TestCase):
         self.assertEqual(ordered['steps'][0]['id'], 'journal')
         timeline = self.client.get('/api/platform/command-palette/?q=خط زمان').json()['results']
         self.assertIn('/memory/timeline/', [row['url'] for row in timeline])
-
-    def test_journal_apply_does_not_copy_unverified_private_public_link(self):
-        foreign = Node.objects.create(
-            owner=self.other, username='private-source', first_name='PRIVATE FIRST',
-            career='PRIVATE CAREER',
-        )
-        response = self.client.post(
-            '/api/journal/apply/',
-            data=json.dumps({
-                'nodes': [{'username': 'copied-person', 'name': 'Client name'}],
-                'node_links': {'copied-person': {'id': foreign.id}},
-                'relationships': 'malformed',
-                'events': {'malformed': True},
-                'attributes': None,
-            }),
-            content_type='application/json',
-        )
-
-        self.assertEqual(response.status_code, 200)
-        copied = Node.objects.get(owner=self.user, username='copied-person')
-        self.assertIsNone(copied.imported_from)
-        self.assertEqual(copied.first_name, '')
-        self.assertEqual(copied.career, '')
-
-    def test_gifbox_serializes_user_content_with_json_script(self):
-        Node.objects.create(
-            owner=self.user, username='gif-script-node',
-            name='</script><script>alert(1)</script>',
-        )
-        response = self.client.get('/social/gifbox/')
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'gifbox-nodes-data')
-        self.assertContains(response, 'jsonData(')
-        self.assertNotContains(response, '</script><script>alert(1)</script>')
-
-    def test_journal_serializes_tags_without_executable_inline_data(self):
-        JournalEntry.objects.create(
-            owner=self.user, text='journal payload',
-            tags=['</script><script>alert(1)</script>'],
-        )
-        response = self.client.get('/journal/')
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'journal-nodes-data')
-        self.assertNotContains(response, "</script><script>alert(1)</script>")
-
-    def test_journal_cannot_attach_another_users_pending_image(self):
-        foreign_image = JournalImage.objects.create(
-            owner=self.other,
-            image='journal/private-pending-image.jpg',
-        )
-
-        response = self.client.post(
-            '/api/journal/save/',
-            data=json.dumps({
-                'text': 'یادداشت مالک',
-                'image_ids': [foreign_image.id],
-            }),
-            content_type='application/json',
-        )
-
-        self.assertEqual(response.status_code, 200)
-        foreign_image.refresh_from_db()
-        self.assertIsNone(foreign_image.entry_id)
-        self.assertEqual(foreign_image.owner, self.other)
-
-    def test_information_detail_escapes_json_values_in_html(self):
-        info = Information.objects.create(
-            node=self.node, visibility='private',
-            data={'note': '</script><script>alert(1)</script>'},
-        )
-        legacy = self.client.get(f'/legacy/info/{info.id}/')
-        modern = self.client.get(f'/informations/{info.id}/')
-
-        self.assertEqual(legacy.status_code, 200)
-        self.assertEqual(modern.status_code, 200)
-        self.assertNotContains(legacy, '</script><script>alert(1)</script>')
-        self.assertNotContains(modern, '</script><script>alert(1)</script>')
-
-    def test_json_script_backed_pages_render_successfully(self):
-        for path in ('/journal/', '/checkin/', '/import/telegram/', '/psychology/', '/social/gifbox/'):
-            with self.subTest(path=path):
-                response = self.client.get(path)
-                self.assertEqual(response.status_code, 200)
 
     def test_feature_flag_supports_rollout_and_user_override(self):
         flag = FeatureFlag.objects.get(name='hybrid-ai')

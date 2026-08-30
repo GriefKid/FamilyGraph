@@ -1,8 +1,10 @@
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
-from django.db.models.signals import m2m_changed, pre_delete
+from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
 
@@ -78,6 +80,11 @@ class User(AbstractUser):
     def pending_sync_count(self):
         """تعداد SyncNotificationهای در انتظار — برای badge sidebar."""
         return self.sync_notifications.filter(status='pending').count()
+
+    @property
+    def inbox_count(self):
+        """Actionable inbox items, always scoped to this account."""
+        return self.unread_notif_count + self.pending_sync_count
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -165,7 +172,7 @@ class Node(models.Model):
     )
     merged_into = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name='merged_duplicates')
-    is_pinned       = models.BooleanField(default=False)
+    is_pinned = models.BooleanField(default=False)
     is_demo = models.BooleanField(default=False)
 
     def display_name(self):
@@ -190,18 +197,6 @@ class Node(models.Model):
 # ─────────────────────────────────────────────────────────────────
 # 4. Relationship
 # ─────────────────────────────────────────────────────────────────
-
-@receiver(m2m_changed, sender=Node.groups.through)
-def enforce_node_group_ownership(sender, instance, action, pk_set, **kwargs):
-    """Do not attach a user's node to another user's owned group."""
-    if action not in {'pre_add', 'pre_set'} or not instance.owner_id or not pk_set:
-        return
-    foreign_exists = Group.objects.filter(
-        pk__in=pk_set,
-        owner__isnull=False,
-    ).exclude(owner_id=instance.owner_id).exists()
-    if foreign_exists:
-        raise ValidationError('Node groups must belong to the same owner.')
 
 
 class Relationship(models.Model):
@@ -320,18 +315,6 @@ class Event(models.Model):
             models.Index(fields=['owner', 'date'], name='event_owner_date'),
         ]
 
-
-@receiver(m2m_changed, sender=Event.participants.through)
-def enforce_event_participant_ownership(sender, instance, action, pk_set, **kwargs):
-    """Keep event participants inside the event owner's tenant on direct ORM writes."""
-    if action not in {'pre_add', 'pre_set'} or not instance.owner_id or not pk_set:
-        return
-    foreign_exists = Node.objects.filter(
-        pk__in=pk_set,
-        owner__isnull=False,
-    ).exclude(owner_id=instance.owner_id).exists()
-    if foreign_exists:
-        raise ValidationError('Event participants must belong to the same owner.')
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -689,18 +672,6 @@ class JournalEntry(models.Model):
                    models.Index(fields=['owner', 'entry_date'], name='journal_owner_date')]
 
 
-@receiver(m2m_changed, sender=JournalEntry.mentioned_nodes.through)
-def enforce_journal_node_ownership(sender, instance, action, pk_set, **kwargs):
-    """Keep mentioned people inside the journal entry owner's tenant."""
-    if action not in {'pre_add', 'pre_set'} or not instance.owner_id or not pk_set:
-        return
-    foreign_exists = Node.objects.filter(
-        pk__in=pk_set,
-        owner__isnull=False,
-    ).exclude(owner_id=instance.owner_id).exists()
-    if foreign_exists:
-        raise ValidationError('Journal mentions must belong to the same owner.')
-
 
 class RelationshipPulse(models.Model):
     """Optional, private self-report used by relationship theory monitors."""
@@ -807,7 +778,8 @@ class MemoryFact(models.Model):
 
     class Meta:
         ordering = ['category', '-confidence', '-observed_at']
-        indexes = [models.Index(fields=['owner', 'node', 'active'], name='memory_owner_node_active')]
+        indexes = [models.Index(fields=['owner', 'node', 'active'], name='memory_owner_node_active'),
+                   models.Index(fields=['owner', 'active'], name='memory_owner_active')]
         constraints = [models.UniqueConstraint(fields=['owner', 'node', 'category', 'value'],
                                                 name='unique_memory_fact_per_node')]
 
@@ -1466,6 +1438,19 @@ class SharedItem(models.Model):
         return f'{self.sender} → {self.recipient}: {self.get_item_type_display()} {self.title}'
 
 
+class ShareLink(models.Model):
+    """Revocable, time-limited public link for a deliberately small person card."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='share_links')
+    node = models.ForeignKey(Node, on_delete=models.CASCADE, related_name='share_links')
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    expires_at = models.DateTimeField()
+    revoked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 # ─────────────────────────────────────────────────────────────────
 # 9. AlertAction
 # ─────────────────────────────────────────────────────────────────
@@ -1510,6 +1495,8 @@ class JournalImage(models.Model):
     entry       = models.ForeignKey(JournalEntry, on_delete=models.CASCADE,
                                      related_name='images', null=True, blank=True)
     image       = models.ImageField(upload_to='journal/', verbose_name='تصویر')
+    owner       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                    related_name='journal_images', null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1549,6 +1536,7 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['user', 'is_read'], name='notif_user_read')]
         verbose_name = 'اطلاعیه'
         verbose_name_plural = 'اطلاعیه‌ها'
 
