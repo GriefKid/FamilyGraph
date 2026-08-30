@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load people_tags %}
 {% block title %}{{ node.display_name }} — FamilyGraph{% endblock %}
 {% block page_title %}◉ افراد <span class="page-title-sep">›</span> {{ node.display_name }}{% endblock %}
 {% block nav_nodes %}active{% endblock %}
@@ -463,7 +464,7 @@
         {% if node.picture %}
           <div class="av-inner"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
         {% else %}
-          <div class="av-ph">{{ node.display_name|first|upper }}</div>
+          <div class="av-ph" style="{{ node.username|avatar_style }}">{{ node|person_initials }}</div>
         {% endif %}
       </div>
     </div>

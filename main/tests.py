@@ -401,6 +401,32 @@ class GraphHealthRingTests(TestCase):
         self.assertContains(response, 'حلقه = سلامت رابطه')
 
 
+class AvatarPresentationTests(TestCase):
+    def test_initials_take_first_and_last_word(self):
+        from main.templatetags.people_tags import person_initials, avatar_style
+
+        class _N:
+            def __init__(self, n): self._n = n
+            def display_name(self): return self._n
+
+        self.assertEqual(person_initials(_N('سارا احمدی')), 'سا')
+        self.assertEqual(person_initials(_N('Jane Doe')), 'JD')
+        self.assertEqual(person_initials(_N('کیان')), 'کی')
+        self.assertEqual(person_initials(_N('')), '؟')
+        # Same key always yields the same colour; different keys usually differ.
+        self.assertEqual(avatar_style('sara'), avatar_style('sara'))
+        self.assertIn('hsl(', avatar_style('sara'))
+
+    def test_directory_uses_coloured_initials_for_people_without_a_photo(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='avatar-owner', password='SecurePass1')
+        Node.objects.create(owner=user, username='no-photo', name='بدون عکس')
+        self.client.force_login(user)
+        response = self.client.get('/nodes/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'nc-avatar-ph" style="background:hsl(')
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load people_tags %}
 {% block title %}افراد — FamilyGraph{% endblock %}
 {% block page_title %}👥 افراد{% endblock %}
 {% block nav_nodes %}active{% endblock %}
@@ -364,7 +365,7 @@
         {% if node.picture %}
           <div class="nc-avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
         {% else %}
-          <div class="nc-avatar-ph">{{ node.display_name|first|upper }}</div>
+          <div class="nc-avatar-ph" style="{{ node.username|avatar_style }}">{{ node|person_initials }}</div>
         {% endif %}
       </div>
       {% if request.user.root_node and node.id == request.user.root_node.id %}
@@ -412,7 +413,7 @@
       {% if node.picture %}
         <div class="nli-avatar"><img src="{{ node.picture.url }}" alt="{{ node.username }}"></div>
       {% else %}
-        <div class="nli-avatar-ph">{{ node.display_name|first|upper }}</div>
+        <div class="nli-avatar-ph" style="{{ node.username|avatar_style }}">{{ node|person_initials }}</div>
       {% endif %}
     </div>
 
