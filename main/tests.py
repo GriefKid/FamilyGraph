@@ -3,6 +3,7 @@ from django.test import Client, TestCase, override_settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from unittest import mock
 import json
 import io
 from datetime import date, timedelta
@@ -316,6 +317,57 @@ class PublicSocialTests(TestCase):
             set(circle.members.values_list('id', flat=True)),
             {self.me.id, self.match.id},
         )
+
+
+class ChatAnalysisAsyncTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.me = User.objects.create_user(username='dm-me', password='SecurePass1')
+        self.friend = User.objects.create_user(username='dm-friend', password='SecurePass1')
+        Friendship.objects.create(user=self.me, friend=self.friend)
+        Friendship.objects.create(user=self.friend, friend=self.me)
+        self.client.force_login(self.me)
+        cache.clear()
+
+    def _send(self, text='سلام رفیق'):
+        return self.client.post(
+            f'/api/social/messages/{self.friend.id}/send/',
+            data=json.dumps({'content': text}),
+            content_type='application/json',
+        )
+
+    def test_send_does_not_run_analysis_on_the_request_path(self):
+        from .models import DirectMessage
+        with mock.patch(
+            'main.views_social._chat_analysis_for',
+            side_effect=AssertionError('AI analysis must not run synchronously during send'),
+        ):
+            response = self._send()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(DirectMessage.objects.filter(sender=self.me, receiver=self.friend).exists())
+
+    def test_send_schedules_background_analysis_for_both_directions(self):
+        with mock.patch('main.views_social._schedule_chat_analysis') as scheduled:
+            self._send()
+        pairs = {(args[0].id, args[1].id) for args, _ in scheduled.call_args_list}
+        self.assertIn((self.me.id, self.friend.id), pairs)
+        self.assertIn((self.friend.id, self.me.id), pairs)
+
+    def test_background_scheduler_debounces_repeat_sends(self):
+        started = []
+        real_thread = __import__('threading').Thread
+
+        def fake_thread(*a, **kw):
+            started.append(kw.get('name'))
+            t = real_thread(target=lambda: None)
+            return t
+
+        with mock.patch('main.views_social._chat_analysis_for'), \
+             mock.patch('main.views_social.threading.Thread', side_effect=fake_thread):
+            for _ in range(6):
+                self._send('پیام تکراری برای تست')
+        # The cache lock keeps concurrent sends from each spawning a worker.
+        self.assertLessEqual(len(started), 4)
 
 
 class JournalMomentTests(TestCase):

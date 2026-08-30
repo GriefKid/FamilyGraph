@@ -1,11 +1,12 @@
 import json
+import threading
 
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.db import transaction
+from django.db import close_old_connections, transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -416,6 +417,55 @@ def _chat_analysis_for(user, friend):
     return analysis
 
 
+def _schedule_chat_analysis(user, friend):
+    """Run chat analysis off the request path.
+
+    The analysis makes an AI round-trip that must never block message
+    delivery. Debounce it: skip when a recent analysis already covers the
+    unread messages, and hold a short cache lock so only one worker runs
+    per conversation at a time.
+    """
+    unanalyzed = DirectMessage.objects.filter(
+        sender=user, receiver=friend, analyzed=False,
+    ).count()
+    existing = (
+        ChatAnalysis.objects
+        .filter(user=user, friend=friend)
+        .only('updated_at')
+        .first()
+    )
+    if existing and unanalyzed < 3:
+        return
+    fresh = bool(
+        existing and existing.updated_at
+        and timezone.now() - existing.updated_at < timedelta(minutes=10)
+    )
+    if fresh and unanalyzed < 6:
+        return
+
+    lock_key = f'chat-analysis-lock:{user.id}:{friend.id}'
+    if not cache.add(lock_key, '1', 180):
+        return  # a worker is already in flight
+
+    user_id, friend_id = user.id, friend.id
+
+    def _worker():
+        try:
+            _chat_analysis_for(User.objects.get(pk=user_id), User.objects.get(pk=friend_id))
+        except Exception:
+            pass
+        finally:
+            cache.delete(lock_key)
+            close_old_connections()
+
+    try:
+        threading.Thread(
+            target=_worker, name=f'chat-analysis-{user_id}-{friend_id}', daemon=True,
+        ).start()
+    except Exception:
+        cache.delete(lock_key)
+
+
 @login_required
 def message_send_api(request, user_id):
     if request.method != 'POST':
@@ -430,14 +480,17 @@ def message_send_api(request, user_id):
     if not content:
         return JsonResponse({'error': 'پیام خالی است'}, status=400)
     msg = DirectMessage.objects.create(sender=request.user, receiver=friend, content=content[:3000])
-    analysis = _chat_analysis_for(request.user, friend)
+    # Analysis runs in the background; return the message (and any prior
+    # analysis) immediately so sending stays instant.
+    _schedule_chat_analysis(request.user, friend)
+    existing = ChatAnalysis.objects.filter(user=request.user, friend=friend).first()
     return JsonResponse({'ok': True, 'message': {
         'id': msg.id,
         'mine': True,
         'sender': request.user.username,
         'content': msg.content,
         'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M'),
-    }, 'analysis': _analysis_payload(analysis)})
+    }, 'analysis': _analysis_payload(existing)})
 
 
 @login_required
@@ -446,10 +499,10 @@ def chat_analyze_api(request, user_id):
         return JsonResponse({'error': 'POST required'}, status=405)
     friend = get_object_or_404(User, pk=user_id)
     if not Friendship.objects.filter(user=request.user, friend=friend).exists():
-        return JsonResponse({'error': '??? ?? ??????? ???? ????? ???'}, status=403)
+        return JsonResponse({'error': 'فقط با دوست‌هایت می‌توانی چت کنی'}, status=403)
     analysis = _chat_analysis_for(request.user, friend)
     if not analysis:
-        return JsonResponse({'error': '???? ?????? ????? ??? ???? ???? ???'}, status=400)
+        return JsonResponse({'error': 'هنوز پیام کافی برای تحلیل نیست'}, status=400)
     return JsonResponse({'ok': True, 'analysis': _analysis_payload(analysis)})
 
 
@@ -642,11 +695,10 @@ def message_send_api(request, user_id):
         reply_to=reply_to,
     )
 
-    try:
-        _chat_analysis_for(request.user, friend)
-        _chat_analysis_for(friend, request.user)
-    except Exception:
-        pass
+    # Both-direction chat analysis makes AI round-trips; run it off the
+    # request path so sending a message stays instant.
+    _schedule_chat_analysis(request.user, friend)
+    _schedule_chat_analysis(friend, request.user)
 
     _notify_social(friend, f'{request.user.username} پیام جدید فرستاد.', '/social/chat/')
     return JsonResponse({'ok': True, 'message': {
