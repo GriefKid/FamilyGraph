@@ -2022,6 +2022,68 @@ def journal_image_upload_api(request):
 
 @login_required
 @require_POST
+def journal_image_ocr_api(request):
+    """POST {image_id} → recognised Persian/English text from a journal image.
+
+    Uses the project's OpenAI-compatible vision model (works with the free
+    OpenRouter / Gemini / Groq vision models and local Ollama llava).
+    """
+    import base64
+
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    image_id = body.get('image_id')
+    if not isinstance(image_id, int) or isinstance(image_id, bool):
+        return JsonResponse({'error': 'image_id لازم است'}, status=400)
+
+    img = get_object_or_404(JournalImage, pk=image_id, owner=request.user)
+    try:
+        with img.image.open('rb') as fh:
+            raw = fh.read(6 * 1024 * 1024)
+    except Exception:
+        return JsonResponse({'error': 'تصویر قابل خواندن نبود'}, status=400)
+
+    name = (img.image.name or '').lower()
+    mime = 'image/png' if name.endswith('.png') else (
+        'image/webp' if name.endswith('.webp') else 'image/jpeg')
+    data_uri = f'data:{mime};base64,' + base64.b64encode(raw).decode('ascii')
+
+    try:
+        client, model = _get_ai_client_and_model()
+    except RuntimeError as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{
+                'role': 'user',
+                'content': [
+                    {'type': 'text', 'text': (
+                        'متنِ داخل این تصویر را دقیقاً و کامل بنویس (فارسی یا انگلیسی). '
+                        'ترتیب و خط‌شکنی‌ها را تا حد ممکن حفظ کن. اگر متنی وجود ندارد، '
+                        'فقط بنویس: (متنی یافت نشد). هیچ توضیح اضافه‌ای نده.'
+                    )},
+                    {'type': 'image_url', 'image_url': {'url': data_uri}},
+                ],
+            }],
+            max_tokens=1200,
+        )
+        text = (resp.choices[0].message.content or '').strip()
+    except Exception as e:
+        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
+
+    if not text or text.startswith('(متنی'):
+        return JsonResponse({'ok': True, 'text': '', 'empty': True})
+    return JsonResponse({'ok': True, 'text': text[:4000]})
+
+
+@login_required
+@require_POST
 def journal_analyze_api(request):
     """Diary text → rich structured extraction with root-node awareness."""
     if request.method != 'POST':

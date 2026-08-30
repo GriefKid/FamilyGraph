@@ -256,6 +256,7 @@ urlpatterns = [
     path('api/journal/analyze/',      views.journal_analyze_api,      name='journal_analyze'),
     path('api/journal/apply/',        views.journal_apply_api,        name='journal_apply'),
     path('api/journal/upload-image/', views.journal_image_upload_api, name='journal_image_upload'),
+    path('api/journal/image-ocr/',    views.journal_image_ocr_api,    name='journal_image_ocr'),
     path('api/journal/save/',         journal_save_api,               name='journal_save'),
     path('api/journal/calendar/',     journal_calendar_api,           name='journal_calendar'),
     path('api/journal/entries/',      journal_entries_api,            name='journal_entries'),

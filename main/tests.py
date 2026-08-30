@@ -794,6 +794,63 @@ class WebPushPulseTests(TestCase):
         self.assertEqual(PushSubscription.objects.count(), 0)
 
 
+class JournalImageOCRTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='ocr', password='SecurePass1')
+        self.client.force_login(self.user)
+        try:
+            from PIL import Image
+            buf = io.BytesIO()
+            Image.new('RGB', (16, 16), 'white').save(buf, 'PNG')
+            data = buf.getvalue()
+        except Exception:
+            data = b'\x89PNG\r\n\x1a\n' + b'0' * 64
+        from main.models import JournalImage
+        self.img = JournalImage.objects.create(
+            owner=self.user,
+            image=SimpleUploadedFile('note.png', data, content_type='image/png'),
+        )
+
+    def _fake_ai(self, text='خرید: نان، شیر، تخم‌مرغ'):
+        client = mock.MagicMock()
+        client.chat.completions.create.return_value.choices = [
+            mock.MagicMock(message=mock.MagicMock(content=text))
+        ]
+        return (client, 'vision-model')
+
+    def test_ocr_returns_recognised_text_for_the_owner(self):
+        with mock.patch('main.views._get_ai_client_and_model', return_value=self._fake_ai()):
+            r = self.client.post('/api/journal/image-ocr/',
+                                 data=json.dumps({'image_id': self.img.id}),
+                                 content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('تخم‌مرغ', json.loads(r.content)['text'])
+
+    def test_ocr_is_owner_scoped(self):
+        other = get_user_model().objects.create_user(username='ocr-other', password='SecurePass1')
+        self.client.force_login(other)
+        with mock.patch('main.views._get_ai_client_and_model', return_value=self._fake_ai()):
+            r = self.client.post('/api/journal/image-ocr/',
+                                 data=json.dumps({'image_id': self.img.id}),
+                                 content_type='application/json')
+        self.assertEqual(r.status_code, 404)
+
+    def test_ocr_requires_an_image_id_and_post(self):
+        self.assertEqual(self.client.get('/api/journal/image-ocr/').status_code, 405)
+        r = self.client.post('/api/journal/image-ocr/', data='{}', content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_empty_recognition_is_reported_cleanly(self):
+        with mock.patch('main.views._get_ai_client_and_model',
+                        return_value=self._fake_ai('(متنی یافت نشد)')):
+            r = self.client.post('/api/journal/image-ocr/',
+                                 data=json.dumps({'image_id': self.img.id}),
+                                 content_type='application/json')
+        body = json.loads(r.content)
+        self.assertTrue(body['ok'])
+        self.assertTrue(body['empty'])
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

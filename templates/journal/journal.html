@@ -720,10 +720,36 @@ async function uploadImages(files){
 }
 function renderPreviews(){
   document.getElementById('imgPreviews').innerHTML=uploadedImages.map((img,i)=>
-    `<div class="img-thumb"><img src="${img.url}"><button class="rm-img" onclick="removeImg(${i})">✕</button></div>`
+    `<div class="img-thumb"><img src="${img.url}">`
+    + `<button class="rm-img" onclick="removeImg(${i})">✕</button>`
+    + `<button class="rm-img ocr-img" title="استخراج متن از عکس" style="left:4px;right:auto" onclick="ocrImage(${img.id},this)">📝</button>`
+    + `</div>`
   ).join('');
 }
 function removeImg(i){uploadedImages.splice(i,1);renderPreviews();}
+async function ocrImage(imageId,btn){
+  if(!imageId) return;
+  const old=btn.textContent; btn.textContent='…'; btn.disabled=true;
+  try{
+    const r=await fetch('/api/journal/image-ocr/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:JSON.stringify({image_id:imageId})
+    });
+    const d=await r.json();
+    if(d.ok && d.text){
+      const ta=document.getElementById('journalText');
+      ta.value=(ta.value.trim()?ta.value.trim()+'\n\n':'')+d.text.trim();
+      ta.dispatchEvent(new Event('input',{bubbles:true}));
+      updateCount();
+    } else if(d.ok){
+      alert('متنی در تصویر پیدا نشد.');
+    } else {
+      alert(d.error||'استخراج متن ناموفق بود');
+    }
+  }catch(e){ alert('خطا در ارتباط با سرور'); }
+  btn.textContent=old; btn.disabled=false;
+}
 
 // ── Helpers ────────────────────────────────────────────
 function updateCount(){document.getElementById('charCount').textContent=document.getElementById('journalText').value.length+' کاراکتر';}
