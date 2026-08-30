@@ -851,6 +851,57 @@ class JournalImageOCRTests(TestCase):
         self.assertTrue(body['empty'])
 
 
+class DirectoryAppUserTests(TestCase):
+    def setUp(self):
+        U = get_user_model()
+        self.me = U.objects.create_user(username='dir-me', password='SecurePass1', is_public=True)
+        self.app_friend = U.objects.create_user(username='dir-appfriend', password='SecurePass1')
+        self.app_stranger = U.objects.create_user(username='dir-appstranger', password='SecurePass1')
+        Node.objects.create(owner=self.me, username='dir-appfriend', name='رفیق اپی')
+        Node.objects.create(owner=self.me, username='dir-appstranger', name='غریبهٔ اپی')
+        Node.objects.create(owner=self.me, username='dir-plainguy', name='مخاطب ساده')
+        from main.models import Friendship
+        Friendship.objects.create(user=self.me, friend=self.app_friend)
+        self.client.force_login(self.me)
+
+    def test_directory_marks_app_users_and_offers_chat_only_for_connections(self):
+        r = self.client.get('/nodes/')
+        self.assertEqual(r.status_code, 200)
+        by_name = {n.username: n for n in r.context['nodes']}
+        self.assertTrue(by_name['dir-appfriend'].is_app_user)
+        self.assertTrue(by_name['dir-appstranger'].is_app_user)
+        self.assertFalse(by_name['dir-plainguy'].is_app_user)
+        # Chat only where there is a connection and I can use chat.
+        self.assertTrue(by_name['dir-appfriend'].can_chat)
+        self.assertEqual(by_name['dir-appfriend'].chat_user_id, self.app_friend.id)
+        self.assertFalse(by_name['dir-appstranger'].can_chat)
+        self.assertFalse(by_name['dir-plainguy'].can_chat)
+        self.assertContains(r, 'در اپ')
+        self.assertContains(r, 'فقط مخاطب')
+        self.assertContains(r, 'chatWith(event,%d)' % self.app_friend.id)
+
+    def test_focus_filter_splits_app_users_from_contacts(self):
+        app_only = self.client.get('/nodes/?focus=app')
+        self.assertEqual(
+            {n.username for n in app_only.context['nodes']},
+            {'dir-appfriend', 'dir-appstranger'},
+        )
+        contacts_only = self.client.get('/nodes/?focus=offline')
+        self.assertEqual(
+            {n.username for n in contacts_only.context['nodes']},
+            {'dir-plainguy'},
+        )
+
+    def test_non_public_account_gets_the_badges_but_no_chat_button(self):
+        self.me.is_public = False
+        self.me.save(update_fields=['is_public'])
+        r = self.client.get('/nodes/')
+        by_name = {n.username: n for n in r.context['nodes']}
+        self.assertTrue(by_name['dir-appfriend'].is_app_user)
+        self.assertFalse(by_name['dir-appfriend'].can_chat)
+        self.assertNotContains(r, 'chatWith(event')
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

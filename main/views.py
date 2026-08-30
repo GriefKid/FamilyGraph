@@ -306,6 +306,12 @@ class NodeListView(LoginRequiredMixin, ListView):
                 queryset = queryset.filter(pk__in=attention_ids)
             except Exception:
                 queryset = queryset.none()
+        elif focus in ('app', 'offline'):
+            User = get_user_model()
+            app_q = Q(imported_from__isnull=False) | Q(
+                username__in=User.objects.values_list('username', flat=True)
+            )
+            queryset = queryset.filter(app_q) if focus == 'app' else queryset.exclude(app_q)
         return queryset.order_by('-is_pinned', 'username')
 
     def get_context_data(self, **kwargs):
@@ -314,6 +320,31 @@ class NodeListView(LoginRequiredMixin, ListView):
         context['groups'] = Group.objects.filter(owner=self.request.user)
         context['selected_group'] = self.request.GET.get('group', '').strip()
         context['selected_focus'] = self.request.GET.get('focus', '').strip()
+
+        # Mark which people in the directory actually use the app, and which of
+        # those I'm connected to (so I can chat with them).
+        page_nodes = list(context.get('nodes') or [])
+        usernames = {n.username for n in page_nodes if n.username}
+        User = get_user_model()
+        accounts = {u.username: u for u in User.objects.filter(username__in=usernames)}
+        from .models import Friendship
+        friend_ids = set(
+            Friendship.objects.filter(user=self.request.user).values_list('friend_id', flat=True)
+        )
+        can_use_chat = bool(getattr(self.request.user, 'is_public', False))
+        app_user_count = 0
+        for n in page_nodes:
+            acc = accounts.get(n.username)
+            n.is_app_user = bool(acc) or n.imported_from_id is not None
+            n.app_account = acc
+            n.chat_user_id = acc.id if acc else None
+            n.is_connected = bool(acc and acc.id in friend_ids)
+            n.can_chat = bool(n.is_connected and can_use_chat and n.chat_user_id != self.request.user.id)
+            n.account_last_login = acc.last_login if acc else None
+            if n.is_app_user:
+                app_user_count += 1
+        context['app_user_count'] = app_user_count
+        context['directory_can_chat'] = can_use_chat
         return context
 
 
