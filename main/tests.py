@@ -370,6 +370,37 @@ class ChatAnalysisAsyncTests(TestCase):
         self.assertLessEqual(len(started), 4)
 
 
+class GraphHealthRingTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='graph-health', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='root-me')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.friend = Node.objects.create(owner=self.user, username='old-friend')
+        Relationship.objects.create(owner=self.user, source=self.root, target=self.friend, strength=3)
+        self.client.force_login(self.user)
+
+    def test_graph_nodes_carry_relationship_health_for_the_ring(self):
+        response = self.client.get('/api/graph/all/')
+        self.assertEqual(response.status_code, 200)
+        nodes = {n['username']: n for n in json.loads(response.content)['nodes']}
+        self.assertIn('health_status', nodes['old-friend'])
+        # A long-dormant connection should not read as green.
+        Interaction.objects.create(
+            owner=self.user, node=self.friend, kind='call',
+            date=timezone.localdate() - timedelta(days=120),
+        )
+        payload = json.loads(self.client.get('/api/graph/all/').content)
+        friend = next(n for n in payload['nodes'] if n['username'] == 'old-friend')
+        self.assertIn(friend['health_status'], {'red', 'yellow', 'green', 'unknown', None})
+        self.assertIn('health_counts', payload)
+
+    def test_graph_page_documents_the_health_ring(self):
+        response = self.client.get('/graph/')
+        self.assertContains(response, 'حلقه = سلامت رابطه')
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

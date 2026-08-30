@@ -381,7 +381,19 @@
       <div style="width:20px;height:2px;background:rgba(165,180,252,.5);border-radius:2px;"></div>
       <span>رابطه</span>
     </div>
-    <div style="font-size:10px;color:#4b5563;margin-top:4px;">اندازه = degree centrality</div>
+    <div class="leg-row" style="margin-top:8px;border-top:1px solid rgba(255,255,255,.07);padding-top:8px;">
+      <div class="leg-dot" style="background:transparent;border:3px solid #ef4444;"></div>
+      <span>حلقهٔ قرمز — از رابطه غافل شده‌ای</span>
+    </div>
+    <div class="leg-row">
+      <div class="leg-dot" style="background:transparent;border:3px solid #f59e0b;"></div>
+      <span>حلقهٔ نارنجی — دارد سرد می‌شود</span>
+    </div>
+    <div class="leg-row">
+      <div class="leg-dot" style="background:transparent;border:3px solid #22c55e;"></div>
+      <span>حلقهٔ سبز — رابطه سالم</span>
+    </div>
+    <div style="font-size:10px;color:#4b5563;margin-top:4px;">اندازه = میزان مرکزیت · حلقه = سلامت رابطه با تو</div>
   </div>
 
   <!-- Node info panel -->
@@ -815,13 +827,14 @@ function paint(nodes, edges, rootId, nMap){
     .attr("stroke-width", 2)
     .attr("filter", "url(#glow-strong)");
 
-  // Community colour ring
+  // Colour ring: relationship-health when known, otherwise the community/group colour
   ng.append("circle")
+    .attr("class", "health-ring")
     .attr("r", d => nr(d) + 3.5)
     .attr("fill", "none")
-    .attr("stroke", d => d.id === rootId ? "#ffffff" : d.color)
-    .attr("stroke-width", d => d.id === rootId ? 2.5 : 1.8)
-    .attr("opacity", .8);
+    .attr("stroke", d => d.id === rootId ? "#ffffff" : healthRingColor(d))
+    .attr("stroke-width", d => d.id === rootId ? 2.5 : healthRingWidth(d))
+    .attr("opacity", d => healthRingAttention(d) ? 1 : .8);
 
   // Main fill circle
   ng.append("circle")
@@ -876,6 +889,14 @@ function paint(nodes, edges, rootId, nMap){
 // Helpers
 // ═══════════════════════════════════════════════════════════
 function nr(n){ return Math.max(MIN_R, Math.min(MAX_R, MIN_R + (n.centrality || 0) * (MAX_R - MIN_R) * 5)); }
+
+// Relationship-health ring around each person: red = overdue, amber = slipping,
+// green = healthy. Falls back to the node's group/community colour when there is
+// no health signal (no root set, or an unconnected person).
+const HEALTH_RING = { red: "#ef4444", yellow: "#f59e0b", green: "#22c55e" };
+function healthRingColor(d){ return HEALTH_RING[d && d.health_status] || (d ? d.color : "#818cf8"); }
+function healthRingAttention(d){ return !!(d && (d.health_status === "red" || d.health_status === "yellow")); }
+function healthRingWidth(d){ return healthRingAttention(d) ? 3.2 : 1.8; }
 
 function buildLegend(commSet, nodes){
   const c = document.getElementById("legend-items");

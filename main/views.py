@@ -1719,12 +1719,23 @@ def graph_all_api(request):
     except Exception:
         pass
 
+    # ── V4: سلامت رابطه — برای رنگ حلقهٔ نودها و یال‌های متصل به root ──
+    health_map = {}
+    health_counts = {}
+    try:
+        from .health import compute_health, health_summary
+        health_map = compute_health(request.user)
+        health_counts = health_summary(health_map)
+    except Exception:
+        pass
+
     node_data = []
     for n in all_nodes:
         c_idx   = com_map.get(n.id, 0)
         gnames  = node_groups_map.get(n.id, [])
         # رنگ: اول گروه اول، وگرنه رنگ community
         color   = group_color_map.get(gnames[0], COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)]) if gnames else COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)]
+        h = health_map.get(n.id) or {}
         node_data.append({
             "id":         str(n.id),
             "username":   n.username,
@@ -1736,17 +1747,10 @@ def graph_all_api(request):
             "group":      gnames[0] if gnames else '',   # backward compat
             "color":      color,
             "fscore":     fscore_map.get(n.id),
+            "health_status": h.get("status"),           # green|yellow|red|unknown|None
+            "health_score":  h.get("score"),
+            "days_since":     h.get("days_since"),
         })
-
-    # ── V4: سلامت رابطه — رنگ یال‌های متصل به root ──
-    health_map = {}
-    health_counts = {}
-    try:
-        from .health import compute_health, health_summary
-        health_map = compute_health(request.user)
-        health_counts = health_summary(health_map)
-    except Exception:
-        pass
 
     root_id_int = request.user.root_node_id if request.user.is_authenticated else None
 
