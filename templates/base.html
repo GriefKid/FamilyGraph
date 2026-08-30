@@ -1694,7 +1694,43 @@ async function loadOnboarding(){try{const r=await fetch('/api/platform/onboardin
 window.addEventListener('error',e=>fetch('/api/platform/frontend-error/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':(document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop()||''},body:JSON.stringify({code:'window_error',message:e.message,path:location.pathname})}).catch(()=>{}));
 </script>
 <script>let fgWaitingWorker;function showFGUpdate(worker){fgWaitingWorker=worker;document.getElementById('fgUpdate').style.display='block'}function applyFGUpdate(){if(fgWaitingWorker)fgWaitingWorker.postMessage({type:'SKIP_WAITING'})}if('serviceWorker' in navigator){let refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!refreshing){refreshing=true;location.reload()}});window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').then(reg=>{if(reg.waiting&&navigator.serviceWorker.controller)showFGUpdate(reg.waiting);reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)showFGUpdate(worker)})})}).catch(()=>{}))}</script>
-<script>async function enableFGNotifications(){if(!('Notification' in window)){alert('مرورگر از اعلان پشتیبانی نمی‌کند.');return}const result=await Notification.requestPermission();if(result==='granted')new Notification('FamilyGraph آماده است',{body:'یادآوری‌های رابطه‌ای فقط با اجازهٔ تو نمایش داده می‌شوند.',icon:'/static/app-icon.svg'});else alert('اجازه اعلان داده نشد.')}</script>
+<script>
+function _urlB64ToUint8(base64){
+  const pad='='.repeat((4-base64.length%4)%4);
+  const b64=(base64+pad).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(b64);const out=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+  return out;
+}
+async function enableFGNotifications(){
+  if(!('Notification' in window)){alert('مرورگر از اعلان پشتیبانی نمی‌کند.');return}
+  const result=await Notification.requestPermission();
+  if(result!=='granted'){alert('اجازه اعلان داده نشد.');return}
+  // اعلان محلی تأیید
+  try{new Notification('FamilyGraph آماده است',{body:'یادآوری‌های رابطه‌ای فقط با اجازهٔ تو نمایش داده می‌شوند.',icon:'/static/app-icon.svg'});}catch(e){}
+  // ثبت‌نام Web Push برای نبض هفتگی (اگر روی سرور فعال باشد)
+  try{
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)) return;
+    const keyResp=await fetch('/api/push/public-key/');
+    const keyData=await keyResp.json();
+    if(!keyData.configured||!keyData.publicKey){return;}
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      sub=await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey:_urlB64ToUint8(keyData.publicKey)
+      });
+    }
+    const j=sub.toJSON();
+    await fetch('/api/push/subscribe/',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+      body:JSON.stringify({endpoint:j.endpoint,keys:j.keys})
+    });
+  }catch(e){ console.warn('push subscribe failed', e); }
+}
+</script>
 <script>window.addEventListener('DOMContentLoaded',()=>{if(typeof window.send!=='function')return;const onlineSend=window.send;window.send=async(url,body)=>{if(url!='/api/relationship-life/capture/')return onlineSend(url,body);try{return await onlineSend(url,body)}catch(e){const q=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');q.push({url,body,at:new Date().toISOString()});localStorage.setItem('fg-offline-captures',JSON.stringify(q));alert('این ثبت روی دستگاه نگه داشته شد و بعد از اتصال ارسال می‌شود.')}};window.addEventListener('online',async()=>{const q=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');if(!q.length)return;localStorage.removeItem('fg-offline-captures');for(const item of q){try{await onlineSend(item.url,item.body)}catch(e){const left=JSON.parse(localStorage.getItem('fg-offline-captures')||'[]');left.push(item);localStorage.setItem('fg-offline-captures',JSON.stringify(left))}}})})</script>
 <script>async function introBrief(){const a=document.getElementById('introLeft'),b=document.getElementById('introRight'),out=document.getElementById('introResult');if(!a||!b||!out)return;const r=await fetch(`/api/relationship-life/introduction/?left=${a.value}&right=${b.value}`),d=await r.json();if(!r.ok){alert(d.error||'خطا');return}out.textContent=(d.safe_to_suggest?'موضوع مشترک: '+(d.shared_topics.join('، ')||'موضوع روشنی پیدا نشد'):'به‌خاطر حالت حساس، معرفی پیشنهاد نمی‌شود')+' · '+d.note}</script>
 <script>

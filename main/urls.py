@@ -6,6 +6,7 @@ from .views_auth import (
 from .views_notifications import (
     notifications_view, notification_read_api, notifications_read_all_api,
     sync_respond_api, notification_preferences_api, mark_notifications_read_api,
+    push_public_key_api, push_subscribe_api, push_unsubscribe_api,
 )
 from .views import (
     groups_view,
@@ -179,6 +180,9 @@ urlpatterns = [
     path('notifications/',           notifications_view,       name='notifications'),
     path('api/notifications/<int:pk>/read/', notification_read_api, name='notification_read'),
     path('api/notifications/read-all/', notifications_read_all_api, name='notifications_read_all'),
+    path('api/push/public-key/', push_public_key_api, name='push_public_key'),
+    path('api/push/subscribe/', push_subscribe_api, name='push_subscribe'),
+    path('api/push/unsubscribe/', push_unsubscribe_api, name='push_unsubscribe'),
     path('api/sync/<int:notif_id>/respond/', sync_respond_api, name='sync_respond'),
     path('api/notifications/preferences/', notification_preferences_api, name='notification_preferences'),
     path('api/notifications/mark-read/', mark_notifications_read_api, name='mark_notifications_read'),

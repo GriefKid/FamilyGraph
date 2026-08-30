@@ -10,3 +10,4 @@ cryptography>=43,<46
 gunicorn>=23,<24
 whitenoise>=6.8,<7
 redis>=5,<7
+pywebpush>=1.14,<3   # optional: Web Push for the weekly pulse (see: python manage.py generate_vapid_keys)

@@ -217,3 +217,9 @@ LOGGING = {
     'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'verbose', 'filters': ['request_id']}},
     'root': {'handlers': ['console'], 'level': os.environ.get('LOG_LEVEL', 'INFO')},
 }
+
+# ── Web Push (اعلان نبض هفتگی) ──
+# کلیدها را با «python manage.py generate_vapid_keys» بساز و در .env بگذار.
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_ADMIN_EMAIL = os.environ.get('VAPID_ADMIN_EMAIL', 'admin@example.com')

@@ -141,3 +141,58 @@ def _apply_sync(notif: SyncNotification, recipient):
         node.career = payload['career']
     # username رو تغییر نده — فقط قفل کن
     node.save()
+
+
+# ── Web Push subscriptions (نبض هفتگی) ──
+
+@login_required
+def push_public_key_api(request):
+    from .push import vapid_public_key, push_configured
+    return JsonResponse({'ok': True, 'publicKey': vapid_public_key(),
+                         'configured': push_configured()})
+
+
+@login_required
+@require_POST
+def push_subscribe_api(request):
+    from .models import PushSubscription
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+    endpoint = (body.get('endpoint') or '').strip()
+    keys = body.get('keys') or {}
+    p256dh = (keys.get('p256dh') or '').strip()
+    auth = (keys.get('auth') or '').strip()
+    if not (endpoint.startswith('https://') and p256dh and auth):
+        return JsonResponse({'error': 'اطلاعات اشتراک ناقص است'}, status=400)
+
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint[:500],
+        defaults={
+            'owner': request.user,
+            'p256dh': p256dh[:200],
+            'auth': auth[:100],
+            'user_agent': request.META.get('HTTP_USER_AGENT', '')[:200],
+            'failure_count': 0,
+        },
+    )
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_POST
+def push_unsubscribe_api(request):
+    from .models import PushSubscription
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        body = {}
+    endpoint = (body.get('endpoint') or '').strip() if isinstance(body, dict) else ''
+    qs = PushSubscription.objects.filter(owner=request.user)
+    if endpoint:
+        qs = qs.filter(endpoint=endpoint)
+    deleted, _ = qs.delete()
+    return JsonResponse({'ok': True, 'deleted': deleted})

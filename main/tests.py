@@ -731,6 +731,69 @@ class GraphTimelapseTests(TestCase):
         return self.client
 
 
+class WebPushPulseTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='push-user', password='SecurePass1')
+        self.client.force_login(self.user)
+
+    def _sub_body(self, endpoint='https://push.example/abc'):
+        return {'endpoint': endpoint, 'keys': {'p256dh': 'x' * 20, 'auth': 'y' * 16}}
+
+    def test_subscribe_then_unsubscribe_is_owner_scoped(self):
+        from main.models import PushSubscription
+        r = self.client.post('/api/push/subscribe/', data=json.dumps(self._sub_body()),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(PushSubscription.objects.filter(owner=self.user).count(), 1)
+
+        other = get_user_model().objects.create_user(username='push-other', password='SecurePass1')
+        self.client.force_login(other)
+        self.client.post('/api/push/unsubscribe/', data=json.dumps({'endpoint': 'https://push.example/abc'}),
+                         content_type='application/json')
+        self.assertEqual(PushSubscription.objects.filter(owner=self.user).count(), 1)
+
+        self.client.force_login(self.user)
+        self.client.post('/api/push/unsubscribe/', data='{}', content_type='application/json')
+        self.assertEqual(PushSubscription.objects.filter(owner=self.user).count(), 0)
+
+    def test_subscribe_rejects_incomplete_payloads(self):
+        r = self.client.post('/api/push/subscribe/', data=json.dumps({'endpoint': 'https://push.example/x'}),
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_pulse_digest_summarises_what_is_due(self):
+        from main.push import build_pulse
+        root = Node.objects.create(owner=self.user, username='pp-root')
+        self.user.root_node = root
+        self.user.save(update_fields=['root_node'])
+        friend = Node.objects.create(owner=self.user, username='pp-friend')
+        Relationship.objects.create(owner=self.user, source=root, target=friend, strength=4)
+        FollowUp.objects.create(owner=self.user, node=friend, text='زنگ بزن',
+                                due_date=timezone.localdate() - timedelta(days=4))
+        payload = build_pulse(self.user)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload['url'], '/weekly/')
+        self.assertIn('پیگیری عقب‌افتاده', payload['body'])
+
+    def test_send_command_prunes_dead_subscriptions(self):
+        from main.models import PushSubscription
+        from django.core.management import call_command
+        root = Node.objects.create(owner=self.user, username='pc-root')
+        self.user.root_node = root
+        self.user.save(update_fields=['root_node'])
+        friend = Node.objects.create(owner=self.user, username='pc-friend')
+        Relationship.objects.create(owner=self.user, source=root, target=friend, strength=4)
+        FollowUp.objects.create(owner=self.user, node=friend, text='x',
+                                due_date=timezone.localdate() - timedelta(days=2))
+        PushSubscription.objects.create(owner=self.user, endpoint='https://push.example/dead',
+                                        p256dh='p' * 20, auth='a' * 16)
+        cmd = 'main.management.commands.send_relationship_pulse'
+        with mock.patch(f'{cmd}.push_available', return_value=True), \
+             mock.patch(f'{cmd}.send_web_push', return_value=(False, True)):
+            call_command('send_relationship_pulse')
+        self.assertEqual(PushSubscription.objects.count(), 0)
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')
