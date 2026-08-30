@@ -1914,6 +1914,13 @@ class DirectoryAppUserTests(TestCase):
 
 
 class AIProviderConfigTests(TestCase):
+    CLOUD_ENV = {
+        'OPENROUTER_API_KEY': '',
+        'GEMINI_API_KEY': '',
+        'MISTRAL_API_KEY': '',
+        'GROQ_API_KEY': '',
+    }
+
     def test_ai_provider_env_pins_the_backend(self):
         from main.views_smart_features import _ai_client, _model
         with mock.patch.dict('os.environ', {
@@ -1924,19 +1931,85 @@ class AIProviderConfigTests(TestCase):
             self.assertEqual(_model(), 'llama-3.3-70b-versatile')
 
     def test_forced_provider_without_its_key_falls_back_to_auto(self):
-        from main.views_smart_features import _ai_client
+        from main.views_smart_features import _ai_client, _model
         with mock.patch.dict('os.environ', {
             'AI_PROVIDER': 'mistral', 'MISTRAL_API_KEY': '', 'GROQ_API_KEY': 'g',
             'OPENROUTER_API_KEY': '', 'GEMINI_API_KEY': '',
         }, clear=False):
             _client, _key, provider = _ai_client()
             self.assertEqual(provider, 'groq')
+            self.assertEqual(_model(), 'llama-3.3-70b-versatile')
 
     def test_reasoning_blocks_are_stripped_before_parsing(self):
         from main.views_smart_features import _strip_reasoning, _extract_json
         self.assertEqual(_strip_reasoning('<think>ummm</think>\n{"ok": 1}'), '{"ok": 1}')
         self.assertEqual(_extract_json('<think>x</think> noise {"v": 3} tail'), {'v': 3})
         self.assertEqual(_extract_json('```json\n{"z": 9}\n```'), {'z': 9})
+
+    def test_stale_ollama_model_falls_back_to_an_installed_preferred_model(self):
+        from main.views_smart_features import _ollama_model
+
+        selected = _ollama_model(
+            models=('deepseek-r1:14b', 'qwen3:8b'),
+            configured_model='qwen2.5:3b',
+        )
+
+        self.assertEqual(selected, 'qwen3:8b')
+
+    def test_local_provider_uses_an_installed_model_instead_of_stale_env(self):
+        from main.views_smart_features import _ai_client, _model
+
+        env = {
+            **self.CLOUD_ENV,
+            'AI_PROVIDER': '',
+            'AI_MODEL': '',
+            'OLLAMA_ENABLED': '1',
+            'OLLAMA_MODEL': 'qwen2.5:3b',
+        }
+        with mock.patch.dict('os.environ', env, clear=False), mock.patch(
+            'main.views_smart_features._ollama_model_names',
+            return_value=('deepseek-r1:14b',),
+        ):
+            _client, configured, provider = _ai_client()
+            self.assertEqual(configured, 'ollama')
+            self.assertEqual(provider, 'ollama')
+            self.assertEqual(_model(), 'deepseek-r1:14b')
+
+    def test_ollama_without_installed_models_is_not_treated_as_configured(self):
+        from main.views_smart_features import _ai_client
+
+        env = {
+            **self.CLOUD_ENV,
+            'AI_PROVIDER': '',
+            'AI_MODEL': '',
+            'OLLAMA_ENABLED': '1',
+        }
+        with mock.patch.dict('os.environ', env, clear=False), mock.patch(
+            'main.views_smart_features._ollama_model_names', return_value=(),
+        ):
+            client, configured, provider = _ai_client()
+
+        self.assertIsNone(client)
+        self.assertEqual(configured, '')
+        self.assertEqual(provider, '')
+
+    def test_openrouter_does_not_attach_an_unavailable_local_fallback(self):
+        from main.views_smart_features import _AIClientFailover, _ai_client
+
+        env = {
+            **self.CLOUD_ENV,
+            'AI_PROVIDER': 'openrouter',
+            'OPENROUTER_API_KEY': 'key',
+            'OLLAMA_ENABLED': '1',
+        }
+        with mock.patch.dict('os.environ', env, clear=False), mock.patch(
+            'main.views_smart_features._ollama_model_names', return_value=(),
+        ):
+            client, configured, provider = _ai_client()
+
+        self.assertNotIsInstance(client, _AIClientFailover)
+        self.assertEqual(configured, 'key')
+        self.assertEqual(provider, 'openrouter')
 
 
 class JournalMomentTests(TestCase):

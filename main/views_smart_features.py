@@ -3,6 +3,9 @@ Smart Features: Alerts, Psychology Analysis, Daily Tips
 """
 import json
 import os
+import time
+from urllib.error import URLError
+from urllib.request import urlopen
 from datetime import date, timedelta
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -44,7 +47,10 @@ class _ChatCompletionFailover:
             try:
                 return self.fallback.chat.completions.create(*args, **fallback_kwargs)
             except Exception as fallback_error:
-                raise fallback_error from primary_error
+                raise RuntimeError(
+                    f'Cloud AI failed ({primary_error}); local Ollama fallback '
+                    f'with model {self.fallback_model!r} also failed ({fallback_error})'
+                ) from fallback_error
 
 
 class _AIClientFailover:
@@ -57,11 +63,103 @@ class _AIClientFailover:
         )
 
 
-def _ollama_client():
-    """Return the configured local Ollama client and its model name."""
-    base_url = os.environ.get('OLLAMA_BASE_URL', 'http://127.0.0.1:11434').rstrip('/')
-    model = os.environ.get('OLLAMA_MODEL', 'qwen2.5:3b')
-    return OpenAI(base_url=f'{base_url}/v1', api_key='ollama'), model
+_OLLAMA_DEFAULT_MODEL = 'qwen3:8b'
+_OLLAMA_MODEL_PREFERENCES = (
+    'qwen3:8b',
+    'qwen3:14b',
+    'gemma3:12b',
+    'deepseek-r1:14b',
+)
+_OLLAMA_DISCOVERY_CACHE = {'base_url': '', 'expires_at': 0.0, 'models': ()}
+
+
+def _ollama_enabled():
+    return os.environ.get('OLLAMA_ENABLED', '1').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }
+
+
+def _ollama_base_url():
+    return os.environ.get(
+        'OLLAMA_BASE_URL', 'http://127.0.0.1:11434'
+    ).rstrip('/')
+
+
+def _ollama_model_names():
+    """Return models that the local Ollama server can actually run.
+
+    Discovery is intentionally short-lived: it avoids probing Ollama twice in a
+    single request while still noticing a model installed after Django started.
+    """
+    base_url = _ollama_base_url()
+    now = time.monotonic()
+    cached = _OLLAMA_DISCOVERY_CACHE
+    if cached['base_url'] == base_url and cached['expires_at'] > now:
+        return cached['models']
+
+    models = ()
+    try:
+        timeout = max(0.1, float(os.environ.get('OLLAMA_DISCOVERY_TIMEOUT', '0.8')))
+        with urlopen(f'{base_url}/api/tags', timeout=timeout) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+        models = tuple(
+            item.get('name') or item.get('model')
+            for item in payload.get('models', [])
+            if isinstance(item, dict) and (item.get('name') or item.get('model'))
+        )
+    except (OSError, ValueError, TypeError, URLError):
+        models = ()
+
+    cached.update({
+        'base_url': base_url,
+        'expires_at': now + 10,
+        'models': models,
+    })
+    return models
+
+
+def _ollama_model(models=None, configured_model=None):
+    """Resolve a configured model to an installed model, with safe fallback."""
+    models = tuple(_ollama_model_names() if models is None else models)
+    configured = (
+        configured_model
+        if configured_model is not None
+        else os.environ.get('OLLAMA_MODEL', _OLLAMA_DEFAULT_MODEL)
+    ).strip() or _OLLAMA_DEFAULT_MODEL
+    if not models or configured in models:
+        return configured
+
+    # Ollama commonly reports an explicit ``:latest`` tag for a bare model.
+    aliases = {name.removesuffix(':latest'): name for name in models}
+    if configured in aliases:
+        return aliases[configured]
+    if configured.removesuffix(':latest') in aliases:
+        return aliases[configured.removesuffix(':latest')]
+
+    for preferred in _OLLAMA_MODEL_PREFERENCES:
+        if preferred in models:
+            return preferred
+        if preferred in aliases:
+            return aliases[preferred]
+    for family in ('qwen3.8', 'qwen3', 'gemma3', 'deepseek-r1', 'llama'):
+        match = next((name for name in models if name.startswith(family)), None)
+        if match:
+            return match
+    return models[0]
+
+
+def _ollama_client(models=None):
+    """Return the local Ollama client and a model that is actually installed."""
+    models = _ollama_model_names() if models is None else tuple(models)
+    model = _ollama_model(models=models)
+    return OpenAI(base_url=f'{_ollama_base_url()}/v1', api_key='ollama'), model
+
+
+def _available_ollama_client():
+    if not _ollama_enabled():
+        return None
+    models = _ollama_model_names()
+    return _ollama_client(models=models) if models else None
 
 
 # ── AI Provider Config ────────────────────────────────────────────────────
@@ -94,15 +192,19 @@ def _forced_provider():
     if not name:
         return None
     if name == 'ollama':
-        client, _m = _ollama_client()
+        available = _available_ollama_client()
+        if not available:
+            return None
+        client, _m = available
         return client, 'ollama', 'ollama'
     if name in _PROVIDER_BASE_URLS:
         key = os.environ.get(_PROVIDER_KEY_ENV[name], '')
         if not key:
             return None  # fall through to auto so the app still works
         primary = OpenAI(base_url=_PROVIDER_BASE_URLS[name], api_key=key)
-        if name == 'openrouter' and os.environ.get('OLLAMA_ENABLED', '1') == '1':
-            fb, fbm = _ollama_client()
+        fallback = _available_ollama_client() if name == 'openrouter' else None
+        if fallback:
+            fb, fbm = fallback
             primary = _AIClientFailover(primary, fb, fbm)
         return primary, key, name
     return None
@@ -126,14 +228,12 @@ def _ai_client():
             base_url='https://openrouter.ai/api/v1',
             api_key=openrouter_key,
         )
-        if os.environ.get('OLLAMA_ENABLED', '1') == '1':
-            fallback, fallback_model = _ollama_client()
+        fallback_config = _available_ollama_client()
+        if fallback_config:
+            fallback, fallback_model = fallback_config
             primary = _AIClientFailover(primary, fallback, fallback_model)
-        return (
-            primary,
-            openrouter_key,
-            'openrouter+ollama',
-        )
+        provider = 'openrouter+ollama' if fallback_config else 'openrouter'
+        return primary, openrouter_key, provider
 
     gemini_key = os.environ.get('GEMINI_API_KEY', '')
     if gemini_key:
@@ -148,8 +248,9 @@ def _ai_client():
     if groq_key:
         return OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_key), groq_key, 'groq'
     # Ollama exposes an OpenAI-compatible local API and needs no cloud key.
-    if os.environ.get('OLLAMA_ENABLED', '1') == '1':
-        client, _model_name = _ollama_client()
+    available = _available_ollama_client()
+    if available:
+        client, _model_name = available
         return client, 'ollama', 'ollama'
 
     return None, '', ''
@@ -166,12 +267,21 @@ _PROVIDER_DEFAULT_MODEL = {
 def _model():
     """Pick the model name for the active provider."""
     configured_model = os.environ.get('AI_MODEL', '').strip()
-    if configured_model:
-        return configured_model
     forced = os.environ.get('AI_PROVIDER', '').strip().lower()
+    cloud_configured = any(
+        os.environ.get(key_env) for key_env in _PROVIDER_KEY_ENV.values()
+    )
+    ollama_active = forced == 'ollama' or (not forced and not cloud_configured)
+    if configured_model:
+        if ollama_active:
+            return _ollama_model(configured_model=configured_model)
+        return configured_model
     if forced == 'ollama':
-        return os.environ.get('OLLAMA_MODEL', 'qwen2.5:3b')
-    if forced in _PROVIDER_DEFAULT_MODEL:
+        return _ollama_model()
+    if (
+        forced in _PROVIDER_DEFAULT_MODEL
+        and os.environ.get(_PROVIDER_KEY_ENV[forced])
+    ):
         return _PROVIDER_DEFAULT_MODEL[forced]
     if os.environ.get('OPENROUTER_API_KEY'):
         return 'openrouter/free'
@@ -181,7 +291,7 @@ def _model():
         return "mistral-small-latest"
     if os.environ.get('GROQ_API_KEY'):
         return "llama-3.3-70b-versatile"
-    return os.environ.get('OLLAMA_MODEL', 'qwen2.5:3b')
+    return _ollama_model()
 
 
 def _rate_limit_msg(e: Exception) -> str:
