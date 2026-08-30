@@ -427,6 +427,49 @@ class AvatarPresentationTests(TestCase):
         self.assertContains(response, 'nc-avatar-ph" style="background:hsl(')
 
 
+class WarmestIntroPathTests(TestCase):
+    def _adj(self, edges):
+        adj = {}
+        for a, b, s in edges:
+            adj.setdefault(a, {})[b] = ('', s)
+            adj.setdefault(b, {})[a] = ('', s)
+        return adj
+
+    def test_prefers_a_chain_of_strong_ties_over_one_weak_hop(self):
+        from main.views_connect import _warmest_path, _shortest_path
+        # 1->4 direct but weak (1); 1-2-3-4 all strong (5).
+        adj = self._adj([(1, 4, 1), (1, 2, 5), (2, 3, 5), (3, 4, 5)])
+        self.assertEqual(_shortest_path(adj, 1, 4), [1, 4])
+        self.assertEqual(_warmest_path(adj, 1, 4), [1, 2, 3, 4])
+
+    def test_falls_back_to_fewest_hops_when_warm_path_detours_too_far(self):
+        from main.views_connect import _warmest_path
+        # Short weak path (2 hops) vs very long strong path (6 hops).
+        edges = [(1, 9, 2), (9, 4, 2)]
+        chain = [1, 2, 3, 5, 6, 7, 4]
+        for a, b in zip(chain, chain[1:]):
+            edges.append((a, b, 5))
+        adj = self._adj(edges)
+        self.assertEqual(_warmest_path(adj, 1, 4), [1, 9, 4])
+
+    def test_connect_api_returns_a_path_through_the_graph(self):
+        User = get_user_model()
+        user = User.objects.create_user(username='intro-owner', password='SecurePass1')
+        me = Node.objects.create(owner=user, username='intro-me')
+        bridge = Node.objects.create(owner=user, username='bridge')
+        target = Node.objects.create(owner=user, username='target')
+        user.root_node = me
+        user.save(update_fields=['root_node'])
+        Relationship.objects.create(owner=user, source=me, target=bridge, strength=5)
+        Relationship.objects.create(owner=user, source=bridge, target=target, strength=4)
+        self.client.force_login(user)
+        response = self.client.get(f'/api/connect/{target.id}/')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)
+        self.assertEqual([step['id'] for step in data['path']], [me.id, bridge.id, target.id])
+        self.assertEqual(data['hops'], 2)
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

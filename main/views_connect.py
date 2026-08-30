@@ -6,6 +6,7 @@ views_connect.py — مسیر آشنایی (V5)
   2. آشناهای مشترک + گروه‌ها و رویدادهای مشترک
   3. پلن AI: قدم‌به‌قدم، بر اساس شناختی که از آدم‌های وسط راه داریم
 """
+import heapq
 import json
 from collections import deque
 from datetime import date
@@ -30,7 +31,7 @@ def _adjacency(user):
 
 
 def _shortest_path(adj, src, dst):
-    """BFS — لیست node_id از src تا dst یا None."""
+    """BFS — لیست node_id از src تا dst یا None (کمترین تعداد واسطه)."""
     if src == dst or src not in adj:
         return None
     q, seen, parent = deque([src]), {src}, {}
@@ -50,6 +51,43 @@ def _shortest_path(adj, src, dst):
     return None
 
 
+def _warmest_path(adj, src, dst):
+    """Dijkstra با هزینهٔ یال = ۶ − قدرت رابطه.
+
+    یعنی مسیر معرفی از دلِ نزدیک‌ترین آدم‌ها می‌گذرد، نه صرفاً کوتاه‌ترین
+    زنجیره. اگر این مسیر بیش از دو واسطه از کوتاه‌ترین مسیر بلندتر شود،
+    به همان BFS برمی‌گردیم تا پیشنهاد غیرعملی نشود.
+    """
+    if src == dst or src not in adj:
+        return None
+    dist = {src: 0.0}
+    parent = {}
+    pq = [(0.0, src)]
+    while pq:
+        d, cur = heapq.heappop(pq)
+        if cur == dst:
+            break
+        if d > dist.get(cur, float('inf')):
+            continue
+        for nb, (_rel, strength) in adj.get(cur, {}).items():
+            cost = d + (6 - min(5, max(1, strength or 3)))
+            if cost < dist.get(nb, float('inf')):
+                dist[nb] = cost
+                parent[nb] = cur
+                heapq.heappush(pq, (cost, nb))
+    if dst not in dist:
+        return None
+    path = [dst]
+    while path[-1] != src:
+        path.append(parent[path[-1]])
+    path.reverse()
+
+    bfs = _shortest_path(adj, src, dst)
+    if bfs and (len(path) - len(bfs)) > 2:
+        return bfs
+    return path
+
+
 def _connect_data(user, target):
     """داده‌های خام مسیر آشنایی — dict یا error."""
     root = user.root_node
@@ -63,8 +101,8 @@ def _connect_data(user, target):
 
     is_direct = target.id in adj.get(root.id, {})
 
-    # مسیر
-    path_ids = _shortest_path(adj, root.id, target.id)
+    # مسیر: از دلِ گرم‌ترین روابط (نه صرفاً کوتاه‌ترین)
+    path_ids = _warmest_path(adj, root.id, target.id)
     path = []
     if path_ids:
         for i, nid in enumerate(path_ids):
