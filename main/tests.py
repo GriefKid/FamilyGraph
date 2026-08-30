@@ -580,6 +580,41 @@ class AttentionPriorityTests(TestCase):
         self.assertIn(self.a.id, names)
 
 
+class SuggestedCirclesTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='circles', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='circ-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.people = [Node.objects.create(owner=self.user, username=f'c{i}') for i in range(6)]
+        for a, b in [(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5)]:
+            Relationship.objects.create(
+                owner=self.user, source=self.people[a], target=self.people[b], strength=4,
+            )
+        self.client.force_login(self.user)
+
+    def test_detects_ungrouped_clusters_of_three_or_more(self):
+        data = json.loads(self.client.get('/api/groups/suggested-circles/').content)
+        self.assertTrue(data['ok'])
+        self.assertTrue(all(c['size'] >= 3 for c in data['circles']))
+        self.assertGreaterEqual(len(data['circles']), 1)
+
+    def test_already_grouped_people_drop_out_of_the_suggestions(self):
+        from main.models import Group
+        g = Group.objects.create(owner=self.user, name='خانواده')
+        for p in self.people[:3]:
+            p.groups.add(g)
+        circles = json.loads(self.client.get('/api/groups/suggested-circles/').content)['circles']
+        flat = {nid for c in circles for nid in c['node_ids']}
+        self.assertTrue(flat.isdisjoint({p.id for p in self.people[:3]}))
+
+    def test_suggestions_are_owner_scoped(self):
+        other = get_user_model().objects.create_user(username='circ-other', password='SecurePass1')
+        self.client.force_login(other)
+        data = json.loads(self.client.get('/api/groups/suggested-circles/').content)
+        self.assertEqual(data['circles'], [])
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

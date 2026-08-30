@@ -161,6 +161,12 @@
       <span style="font-size:20px;">＋</span> گروه جدید
     </div>
 
+    <!-- خوشه‌های پیشنهادی از تحلیل گراف (Louvain) -->
+    <div id="suggestedCircles" style="display:none;margin-bottom:14px;">
+      <div style="font-size:12px;color:var(--text-muted);margin:4px 2px 8px;">✦ خوشه‌های کشف‌شده از شکلِ شبکه — با یک کلیک گروه بساز</div>
+      <div id="suggestedCirclesList"></div>
+    </div>
+
     {% if not groups %}
     <div class="empty-state-groups">
       <div style="font-size:48px;margin-bottom:10px">🗂</div>
@@ -409,5 +415,39 @@ function promptNewGroup(){
   document.getElementById('newGroupNameInput').value = name.trim();
   toast(`گروه «${name.trim()}» — نودها رو انتخاب کن و اعمال بزن`);
 }
+
+// ── خوشه‌های پیشنهادی (Louvain) ──────────────
+const _escC = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+async function loadSuggestedCircles(){
+  try{
+    const r = await fetch('/api/groups/suggested-circles/');
+    const d = await r.json();
+    const circles = (d && d.circles) || [];
+    if(!circles.length) return;
+    const wrap = document.getElementById('suggestedCircles');
+    const list = document.getElementById('suggestedCirclesList');
+    list.innerHTML = circles.map((c, i) => `
+      <div class="group-card" style="border-style:dashed;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">خوشهٔ ${i+1} · ${c.size} نفر</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.9;margin-bottom:10px;">${c.members.map(_escC).join('، ')}</div>
+        <button class="btn btn-sm btn-primary" data-ids="${c.node_ids.join(',')}" onclick="makeGroupFromCircle(this)">بساز گروه از این خوشه</button>
+      </div>`).join('');
+    wrap.style.display = 'block';
+  }catch(e){}
+}
+async function makeGroupFromCircle(btn){
+  const name = prompt('اسم گروه برای این خوشه:');
+  if(!name || !name.trim()) return;
+  const ids = btn.dataset.ids.split(',').map(Number).filter(Boolean);
+  btn.disabled = true;
+  const r = await fetch('/api/groups/assign/', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ node_ids: ids, group_name: name.trim(), action: 'add' })
+  });
+  const d = await r.json();
+  if(d.ok){ toast(`${d.count} نفر به «${name.trim()}» اضافه شد`); setTimeout(()=>location.reload(), 900); }
+  else { btn.disabled = false; toast(d.error || 'خطا', true); }
+}
+loadSuggestedCircles();
 </script>
 {% endblock %}

@@ -1226,6 +1226,47 @@ def groups_view(request):
 
 
 @login_required
+def suggested_circles_api(request):
+    """Detected communities (Louvain) among not-yet-grouped people.
+
+    Combines the graph clustering already used for colouring with the Group
+    model: each cluster of >=3 ungrouped people becomes a one-click 'make a
+    group' suggestion posted back to assign_group_api.
+    """
+    root_id = request.user.root_node_id
+    grouped_ids = set(
+        Node.objects.filter(owner=request.user, groups__isnull=False)
+        .values_list('id', flat=True)
+    )
+    try:
+        G, all_nodes, _ = _build_graph(request.user)
+        com_map = _community_map(G)
+    except Exception:
+        return JsonResponse({'ok': True, 'circles': []})
+
+    names = {n.id: n.display_name() for n in all_nodes}
+    buckets = {}
+    for nid, cidx in com_map.items():
+        if nid == root_id or nid in grouped_ids or nid not in names:
+            continue
+        buckets.setdefault(cidx, []).append(nid)
+
+    circles = []
+    for cidx, ids in buckets.items():
+        if len(ids) < 3:
+            continue
+        ids.sort(key=lambda i: names.get(i, ''))
+        circles.append({
+            'key': f'circle-{cidx}',
+            'size': len(ids),
+            'node_ids': ids,
+            'members': [names[i] for i in ids],
+        })
+    circles.sort(key=lambda c: -c['size'])
+    return JsonResponse({'ok': True, 'circles': circles[:6]})
+
+
+@login_required
 @require_POST
 def assign_group_api(request):
     """

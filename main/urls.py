@@ -10,6 +10,7 @@ from .views_notifications import (
 from .views import (
     groups_view,
     assign_group_api,
+    suggested_circles_api,
     InformationListView,
     InformationDetailView,
     InformationCreateView,
@@ -312,6 +313,7 @@ urlpatterns = [
     path('api/alerts/action/',           alert_action_api,           name='alert_action_api'),
     path('api/groups/rename/',           rename_group_api,           name='rename_group_api'),
     path('api/groups/assign/',           assign_group_api,           name='assign_group_api'),
+    path('api/groups/suggested-circles/', suggested_circles_api,     name='suggested_circles'),
     path('api/groups/delete/',           delete_group_api,           name='delete_group_api'),
     path('groups/',                      groups_view,                name='groups'),
     path('api/psychology/analyze/',      psychology_ai_api,          name='psychology_ai_api'),
