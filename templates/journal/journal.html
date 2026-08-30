@@ -478,9 +478,10 @@ animation:spin .7s linear infinite;vertical-align:middle;}
   <!-- ══ TAB: List ═════════════════════════════════ -->
   <div id="tab-list" class="tab-pane">
     <div class="filter-bar">
-      <input type="text" id="fq" placeholder="🔍 جستجو در متن..." oninput="scheduleLoadEntries()">
+      <input type="text" id="fq" placeholder="🔍 جستجو در متن..." oninput="loadEntries()">
       <select id="fTag" onchange="loadEntries()">
         <option value="">همه تگ‌ها</option>
+        {% for tag in all_tags_json|default:"[]"|safe %}{% endfor %}
       </select>
       <select id="fPerson" onchange="loadEntries()">
         <option value="">همه افراد</option>
@@ -509,7 +510,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
     {% if entries %}
     <div class="history-list">
       {% for entry in entries %}
-      <div class="history-item" onclick="loadEntry('{{ entry.text|escapejs }}','{{ entry.entry_date|default:'' }}',JSON.parse('{{ entry.tags_json|escapejs }}'))">
+      <div class="history-item" onclick="loadEntry('{{ entry.text|escapejs }}','{{ entry.entry_date|default:'' }}',{{ entry.tags|default:'[]'|safe }})">
         {% with fi=entry.images.first %}
         {% if fi %}<img class="history-thumb" src="{{ fi.image.url }}" alt="">
         {% else %}<div class="history-ph"></div>{% endif %}
@@ -536,23 +537,17 @@ animation:spin .7s linear infinite;vertical-align:middle;}
 
 <div class="extract-modal" id="extractModal" role="dialog" aria-modal="true"><div class="extract-dialog"><div class="extract-head"><div><b>پیشنهادهای استخراج‌شده</b><div style="font-size:11px;color:var(--text-muted);margin-top:4px">فقط مواردی که تأیید کنی وارد داده‌های اصلی می‌شوند.</div></div><button class="btn" onclick="closeExtractions()">بستن</button></div><div id="extractList" style="margin-top:12px"></div></div></div>
 
-{{ nodes_json|json_script:"journal-nodes-data" }}
-{{ all_tags_json|json_script:"journal-tags-data" }}
-{{ all_nodes_json|json_script:"journal-usernames-data" }}
-{{ all_moods_json|json_script:"journal-moods-data" }}
 <script>
 // ── Data from Django ─────────────────────────────────────
-const jsonData=id=>JSON.parse(document.getElementById(id).textContent||'[]');
-const ALL_NODES  = jsonData('journal-nodes-data');
-const ALL_TAGS   = jsonData('journal-tags-data');
-const ALL_NODES_U = jsonData('journal-usernames-data');
-const ALL_MOODS  = jsonData('journal-moods-data');
+const ALL_NODES  = {{ nodes_json|safe }};
+const ALL_TAGS   = {{ all_tags_json|safe }};
+const ALL_NODES_U = {{ all_nodes_json|safe }};
+const ALL_MOODS  = {{ all_moods_json|safe }};
 
 // ── State ─────────────────────────────────────────────────
 let lastResult = null, uploadedImages = [], currentTags = [], entryKind = 'moment';
 let mentionState = null, activeMentionIdx = 0;
 let calYear, calMonth;
-let entryLoadTimer = null, entryLoadRequestId = 0;
 
 function nodeDisplay(n){
   if(n.nickname) return n.nickname;
@@ -654,31 +649,13 @@ function showMention(ta, atIdx, query){
   mentionState = {start:atIdx, query};
   activeMentionIdx = 0;
   const dd = document.getElementById('mentionDropdown');
-  dd.replaceChildren();
-  matches.forEach((n,i)=>{
-    const username=String(n.username||'');
-    const item=document.createElement('div');
-    item.className='mention-item';
-    item.dataset.idx=String(i);
-    item.dataset.u=username;
-    item.addEventListener('mousedown',()=>pickMention(username));
-    if(n._new){
-      item.textContent='+ جدید: '+username;
-    }else{
-      item.append(document.createTextNode(nodeDisplay(n)+' '));
-      const handle=document.createElement('span');
-      handle.style.cssText='color:var(--text-muted);font-size:11px';
-      handle.textContent='@'+username;
-      item.appendChild(handle);
-      if(nodeSet.has(username)){
-        const badge=document.createElement('span');
-        badge.className='mention-badge ex';
-        badge.textContent='موجود';
-        item.appendChild(badge);
-      }
-    }
-    dd.appendChild(item);
-  });
+  dd.innerHTML = matches.map((n,i) => {
+    if(n._new) return `<div class="mention-item" data-idx="${i}" data-u="${n.username}" onmousedown="pickMention('${n.username}')">+ جدید: ${n.username}</div>`;
+    return `<div class="mention-item" data-idx="${i}" data-u="${n.username}" onmousedown="pickMention('${n.username}')">
+      ${nodeDisplay(n)} <span style="color:var(--text-muted);font-size:11px">@${n.username}</span>
+      ${nodeSet.has(n.username)?'<span class="mention-badge ex">موجود</span>':''}
+    </div>`;
+  }).join('');
   dd.style.cssText=`display:block;top:${ta.scrollHeight}px;right:0;left:0;`;
   updateMentionActive();
 }
@@ -721,19 +698,9 @@ function addTag(t){
 }
 function removeTag(i){ currentTags.splice(i,1); renderTags(); }
 function renderTags(){
-  const container=document.getElementById('tagChips');
-  container.replaceChildren();
-  currentTags.forEach((tag,index)=>{
-    const chip=document.createElement('span');
-    chip.className='tag-chip';
-    chip.appendChild(document.createTextNode('#'+String(tag)));
-    const remove=document.createElement('button');
-    remove.type='button';
-    remove.textContent='×';
-    remove.addEventListener('click',()=>removeTag(index));
-    chip.appendChild(remove);
-    container.appendChild(chip);
-  });
+  document.getElementById('tagChips').innerHTML = currentTags.map((t,i)=>
+    `<span class="tag-chip">#${t}<button type="button" onclick="removeTag(${i})">×</button></span>`
+  ).join('');
 }
 
 // ── Image upload ───────────────────────────────────────
@@ -752,31 +719,11 @@ async function uploadImages(files){
   }
 }
 function renderPreviews(){
-  const container=document.getElementById('imgPreviews');
-  container.replaceChildren();
-  uploadedImages.forEach((item,index)=>{
-    const url=journalSafeURL(item?.url);
-    if(!url) return;
-    const thumb=document.createElement('div');
-    thumb.className='img-thumb';
-    const image=document.createElement('img');
-    image.src=url;
-    image.alt='';
-    const remove=document.createElement('button');
-    remove.type='button';
-    remove.className='rm-img';
-    remove.textContent='✕';
-    remove.addEventListener('click',()=>removeImg(index));
-    thumb.append(image,remove);
-    container.appendChild(thumb);
-  });
+  document.getElementById('imgPreviews').innerHTML=uploadedImages.map((img,i)=>
+    `<div class="img-thumb"><img src="${img.url}"><button class="rm-img" onclick="removeImg(${i})">✕</button></div>`
+  ).join('');
 }
 function removeImg(i){uploadedImages.splice(i,1);renderPreviews();}
-
-function journalSafeURL(value){
-  const url=String(value||'');
-  return url.startsWith('/')&&!url.startsWith('//') ? url : '';
-}
 
 // ── Helpers ────────────────────────────────────────────
 function updateCount(){document.getElementById('charCount').textContent=document.getElementById('journalText').value.length+' کاراکتر';}
@@ -850,13 +797,7 @@ async function analyzeJournal(){
     });
     window._analyzeEntryId = null;  // reset after use
     const data=await r.json();
-    if(data.error){
-      const error=document.createElement('div');
-      error.style.cssText='padding:16px;color:#f43f5e;';
-      error.textContent=`خطا: ${data.error}`;
-      document.getElementById('resultBody').replaceChildren(error);
-      return;
-    }
+    if(data.error){document.getElementById('resultBody').innerHTML=`<div style="padding:16px;color:#f43f5e;">خطا: ${data.error}</div>`;return;}
     lastResult=data.result;
     renderResult(data.result);
   }catch(e){document.getElementById('resultBody').innerHTML='<div style="padding:16px;color:#f43f5e;">خطا در ارتباط با سرور</div>';}
@@ -867,11 +808,6 @@ async function analyzeJournal(){
 const nodePrivacy = {};
 const relPrivacy  = {};
 const nodeLinks   = {};   // {username: {id, display_name, owner_username, ...}}
-const journalNodeTokens = new Map();
-
-function journalNodeName(token){
-  return journalNodeTokens.get(token);
-}
 
 function togglePrivacy(btn){
   const key  = btn.dataset.key;
@@ -883,15 +819,13 @@ function togglePrivacy(btn){
   btn.title       = map[key] ? 'عمومی — کلیک برای خصوصی کردن' : 'خصوصی — کلیک برای عمومی کردن';
 }
 
-function togglePublicSearch(token){
-  const uname = journalNodeName(token);
-  if(uname === undefined) return;
-  const wrap = document.getElementById(`psw-${token}`);
-  const btn  = document.getElementById(`plb-${token}`);
+function togglePublicSearch(uname){
+  const wrap = document.getElementById(`psw-${uname}`);
+  const btn  = document.getElementById(`plb-${uname}`);
   if(nodeLinks[uname]){
     // unlink
     delete nodeLinks[uname];
-    document.getElementById(`pli-${token}`).replaceChildren();
+    document.getElementById(`pli-${uname}`).innerHTML = '';
     btn.textContent = '🔍';
     btn.classList.remove('linked');
     btn.title = 'وصل به شبکه عمومی';
@@ -904,11 +838,9 @@ function togglePublicSearch(token){
 }
 
 let _searchTimers = {};
-async function searchPublicNode(evt, token){
-  const uname = journalNodeName(token);
-  if(uname === undefined) return;
+async function searchPublicNode(evt, uname){
   const q = evt.target.value.trim();
-  const box = document.getElementById(`psr-${token}`);
+  const box = document.getElementById(`psr-${uname}`);
   clearTimeout(_searchTimers[uname]);
   if(q.length < 2){ box.style.display='none'; return; }
   _searchTimers[uname] = setTimeout(async () => {
@@ -916,101 +848,73 @@ async function searchPublicNode(evt, token){
       const r = await fetch(`/api/nodes/public-search/?q=${encodeURIComponent(q)}`);
       const d = await r.json();
       if(!d.results?.length){
-        const empty=document.createElement('div');
-        empty.className='pi-result-item';
-        empty.style.color='var(--text-muted)';
-        empty.textContent='نتیجه‌ای نبود';
-        box.replaceChildren(empty);
+        box.innerHTML='<div class="pi-result-item" style="color:var(--text-muted);">نتیجه‌ای نبود</div>';
         box.style.display='block';
         return;
       }
-      box.replaceChildren();
-      d.results.forEach(n=>{
-        const row=document.createElement('div');
-        row.className='pi-result-item';
-        row.addEventListener('click',()=>linkPublicNode(token,n));
-        const details=document.createElement('div');
-        details.style.flex='1';
-        const name=document.createElement('div');
-        name.style.fontWeight='600';
-        name.textContent=n.display_name||'';
-        const owner=document.createElement('div');
-        owner.className='pi-result-owner';
-        owner.textContent=`از شبکه @${n.owner_username||''} · @${n.username||''}`;
-        details.append(name,owner);
-        const badge=document.createElement('span');
-        badge.style.cssText='font-size:10px;color:#6ee7b7;';
-        badge.textContent='🌐 عمومی';
-        row.append(details,badge);
-        box.appendChild(row);
-      });
+      box.innerHTML = d.results.map(n => `
+        <div class="pi-result-item" onclick="linkPublicNode('${uname}', ${JSON.stringify(n).replace(/"/g,'&quot;')})">
+          <div style="flex:1">
+            <div style="font-weight:600">${n.display_name}</div>
+            <div class="pi-result-owner">از شبکه @${n.owner_username} · @${n.username}</div>
+          </div>
+          <span style="font-size:10px;color:#6ee7b7;">🌐 عمومی</span>
+        </div>
+      `).join('');
       box.style.display = 'block';
     }catch(e){ box.style.display='none'; }
   }, 300);
 }
 
-function linkPublicNode(token, nodeData){
-  const uname = journalNodeName(token);
-  if(uname === undefined) return;
+function linkPublicNode(uname, nodeData){
   nodeLinks[uname] = nodeData;
   // نمایش badge لینک شده
-  const badge=document.createElement('span');
-  badge.className='pi-linked-badge';
-  badge.textContent=`🔗 لینک شده به @${nodeData.owner_username||''} (${nodeData.display_name||''})`;
-  document.getElementById(`pli-${token}`).replaceChildren(badge);
+  document.getElementById(`pli-${uname}`).innerHTML =
+    `<span class="pi-linked-badge">🔗 لینک شده به @${nodeData.owner_username} (${nodeData.display_name})</span>`;
   // بستن dropdown
-  document.getElementById(`psr-${token}`).style.display = 'none';
-  document.getElementById(`psw-${token}`).style.display = 'none';
+  document.getElementById(`psr-${uname}`).style.display = 'none';
+  document.getElementById(`psw-${uname}`).style.display = 'none';
   // آپدیت دکمه
-  const btn = document.getElementById(`plb-${token}`);
+  const btn = document.getElementById(`plb-${uname}`);
   btn.textContent = '🔗';
   btn.classList.add('linked');
   btn.title = 'لینک شده — کلیک برای لغو';
 }
 
 function renderResult(r){
-  r = r && typeof r === 'object' ? r : {};
-  for(const key of ['nodes','relationships','events','attributes','my_insights']){
-    if(!Array.isArray(r[key])) r[key]=[];
-  }
-  journalNodeTokens.clear();
   const exSet=new Set(ALL_NODES.map(n=>n.username));
   let html='';
 
   if(r.summary||r.my_mood){
-    html+=`<div class="r-section"><div class="r-section-title">خلاصه</div><div class="summary-box">${_esc(r.summary||'')}`;
-    if(r.my_mood) html+=`<div class="mood-row"><span class="mood-badge">خلق‌وخوی من: ${_esc(r.my_mood)}</span></div>`;
-    if(r.my_insights?.length) html+=`<div class="mood-row">${r.my_insights.map(i=>`<span class="mood-badge" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#a5b4fc;">💡 ${_esc(i)}</span>`).join('')}</div>`;
+    html+=`<div class="r-section"><div class="r-section-title">خلاصه</div><div class="summary-box">${r.summary||''}`;
+    if(r.my_mood) html+=`<div class="mood-row"><span class="mood-badge">خلق‌وخوی من: ${r.my_mood}</span></div>`;
+    if(r.my_insights?.length) html+=`<div class="mood-row">${r.my_insights.map(i=>`<span class="mood-badge" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.2);color:#a5b4fc;">💡 ${i}</span>`).join('')}</div>`;
     html+='</div></div>';
   }
 
   // ── Nodes با privacy toggle + public link search ────
   if(r.nodes?.length){
     html+=`<div class="r-section"><div class="r-section-title">افراد (${r.nodes.length}) <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— 🔒 پرایوت &nbsp;|&nbsp; 🌐 پابلیک</span></div><div class="privacy-list">`;
-    for(const [nodeIndex,n] of r.nodes.entries()){
-      if(!n || typeof n !== 'object') continue;
-      const uname = String(n.username||'');
-      if(!uname) continue;
+    for(const n of r.nodes){
+      const uname = n.username;
       const label = n.name||uname;
-      const token = `jn-${nodeIndex}`;
-      journalNodeTokens.set(token,uname);
       const exists = exSet.has(uname);
       nodePrivacy[uname] = nodePrivacy[uname] || false;
-      html+=`<div class="privacy-item" id="ni-${token}">
+      html+=`<div class="privacy-item" id="ni-${uname}">
         <span class="pi-icon">◉</span>
         <div style="flex:1;min-width:0;">
-          <div><span class="pi-label">${_esc(label)}</span> <span class="pi-sub">@${_esc(uname)}</span></div>
-          <div id="pli-${token}"></div>
-          <div class="pi-search-wrap" id="psw-${token}" style="display:none;">
+          <div><span class="pi-label">${label}</span> <span class="pi-sub">@${uname}</span></div>
+          <div id="pli-${uname}"></div>
+          <div class="pi-search-wrap" id="psw-${uname}" style="display:none;">
             <input class="pi-search-input" placeholder="🔍 نام یا فامیلی طرف رو بنویس..."
-              oninput="searchPublicNode(event,'${token}')" autocomplete="off">
-            <div class="pi-search-results" id="psr-${token}"></div>
+              oninput="searchPublicNode(event,'${uname}')" autocomplete="off">
+            <div class="pi-search-results" id="psr-${uname}"></div>
           </div>
         </div>
         ${exists?'<span class="pi-exists">موجود</span>':''}
-        <button class="pi-link-btn" id="plb-${token}"
-          title="وصل به شبکه عمومی" onclick="togglePublicSearch('${token}')">🔍</button>
-        <button class="pi-toggle" data-key="${_esc(uname)}" data-type="node" data-pub="0"
+        <button class="pi-link-btn" id="plb-${uname}"
+          title="وصل به شبکه عمومی" onclick="togglePublicSearch('${uname}')">🔍</button>
+        <button class="pi-toggle" data-key="${uname}" data-type="node" data-pub="0"
           title="خصوصی — کلیک برای عمومی کردن" onclick="togglePrivacy(this)">🔒</button>
       </div>`;
     }
@@ -1021,13 +925,12 @@ function renderResult(r){
   if(r.relationships?.length){
     html+=`<div class="r-section"><div class="r-section-title">روابط (${r.relationships.length}) <span style="font-size:10px;color:var(--text-muted);font-weight:400;">— 🔒 پرایوت &nbsp;|&nbsp; 🌐 پابلیک</span></div><div class="privacy-list">`;
     for(const rel of r.relationships){
-      if(!rel || typeof rel !== 'object') continue;
-      const key = `${String(rel.from||'')}||${String(rel.to||'')}||${String(rel.type||'')}`;
+      const key = `${rel.from}||${rel.to}||${rel.type||''}`;
       relPrivacy[key] = relPrivacy[key] || false;
       html+=`<div class="privacy-item">
         <span class="pi-icon">⟶</span>
-        <span class="pi-label">${_esc(rel.from||'')} → ${_esc(rel.to||'')} <span class="pi-sub">${_esc(rel.type||'')}${rel.strength?' · '+_esc(rel.strength)+'/5':''}</span></span>
-        <button class="pi-toggle" data-key="${_esc(key)}" data-type="rel" data-pub="0"
+        <span class="pi-label">${rel.from} → ${rel.to} <span class="pi-sub">${rel.type||''}${rel.strength?' · '+rel.strength+'/5':''}</span></span>
+        <button class="pi-toggle" data-key="${key}" data-type="rel" data-pub="0"
           title="خصوصی — کلیک برای عمومی کردن" onclick="togglePrivacy(this)">🔒</button>
       </div>`;
     }
@@ -1037,7 +940,7 @@ function renderResult(r){
   // ── Events (بدون toggle — همیشه پرایوت) ────────────
   if(r.events?.length){
     html+=`<div class="r-section"><div class="r-section-title">رویدادها (${r.events.length})</div><div class="chip-group">`;
-    html+=r.events.filter(ev=>ev&&typeof ev==='object').map(ev=>`<span class="ec ec-event">◷ ${_esc(ev.title||'')}${ev.date?' ('+_esc(ev.date)+')':''}</span>`).join('');
+    html+=r.events.map(ev=>`<span class="ec ec-event">◷ ${ev.title}${ev.date?' ('+ev.date+')':''}</span>`).join('');
     html+='</div></div>';
   }
 
@@ -1045,15 +948,14 @@ function renderResult(r){
   if(r.attributes?.length){
     html+='<div class="r-section"><div class="r-section-title">اطلاعات عمیق افراد</div>';
     for(const attr of r.attributes){
-      if(!attr || typeof attr !== 'object') continue;
       let rows='';
       for(const[key,label]of Object.entries(LABELS)){
         const val=attr[key];
         if(!val||(Array.isArray(val)&&!val.length)) continue;
-        if(Array.isArray(val)) rows+=`<div class="attr-row"><div class="attr-key">${label}</div><div class="attr-vals">${val.map(v=>`<span class="attr-val">${_esc(v)}</span>`).join('')}</div></div>`;
-        else rows+=`<div class="attr-row"><div class="attr-key">${label}</div><span class="attr-val-str">${_esc(val)}</span></div>`;
+        if(Array.isArray(val)) rows+=`<div class="attr-row"><div class="attr-key">${label}</div><div class="attr-vals">${val.map(v=>`<span class="attr-val">${v}</span>`).join('')}</div></div>`;
+        else rows+=`<div class="attr-row"><div class="attr-key">${label}</div><span class="attr-val-str">${val}</span></div>`;
       }
-      if(rows) html+=`<div class="attr-person"><div class="attr-person-head">🧑 ${_esc(attr.username||'')}</div><div class="attr-person-body">${rows}</div></div>`;
+      if(rows) html+=`<div class="attr-person"><div class="attr-person-head">🧑 ${attr.username}</div><div class="attr-person-body">${rows}</div></div>`;
     }
     html+='</div>';
   }
@@ -1268,7 +1170,6 @@ function changeMonth(delta){
 // LIST TAB
 // ════════════════════════════════════════════════════════
 async function loadEntries(){
-  const requestId = ++entryLoadRequestId;
   const q      = document.getElementById('fq').value.trim();
   const tag    = document.getElementById('fTag').value;
   const person = document.getElementById('fPerson').value;
@@ -1329,11 +1230,6 @@ async function loadEntries(){
     status.textContent = '';
     list.innerHTML = '<div class="empty-state">خطا در بارگذاری</div>';
   }
-}
-
-function scheduleLoadEntries(){
-  clearTimeout(entryLoadTimer);
-  entryLoadTimer = setTimeout(loadEntries, 180);
 }
 
 function toggleText(id){

@@ -189,12 +189,7 @@ async function personaLoad(fresh){
       ? await api(`/api/persona/node/${PERSONA_NODE}/synthesize/`, {method:'POST', body:'{}'})
       : await api(`/api/persona/node/${PERSONA_NODE}/`);
     personaRender(d.persona);
-    if(d.warning){
-      const warning=document.createElement('div');
-      warning.style.cssText='color:#fbbf24;font-size:11px;margin-top:6px;';
-      warning.textContent=d.warning;
-      box.appendChild(warning);
-    }
+    if(d.warning) box.insertAdjacentHTML('beforeend', `<div style="color:#fbbf24;font-size:11px;margin-top:6px;">${d.warning}</div>`);
   }catch(e){ box.textContent = e.message || 'خطا'; }
 }
 if(PERSONA_NODE) personaLoad(false);
@@ -210,11 +205,7 @@ async function fetchCovers(showReport){
     try{
       const d = await api(`/api/social/works/${b.dataset.work}/cover/`, {method:'POST', body:'{}'});
       if(d.cover_url){
-        const image=document.createElement('img');
-        image.src=String(d.cover_url);
-        image.alt='';
-        image.loading='lazy';
-        b.replaceChildren(image);
+        b.innerHTML = `<img src="${d.cover_url}" alt="" loading="lazy">`;
         found++;
       } else if(d.tried && d.tried.length){
         lastTried = d.tried;

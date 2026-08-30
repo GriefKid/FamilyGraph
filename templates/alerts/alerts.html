@@ -267,7 +267,6 @@
 // ── helper: پیدا کردن card والد ───────────────────────────────────────────
 function _card(el){ return el.closest('.alert-card'); }
 function _alertId(card){ return card.dataset.alertId; }
-function escA(value){ return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ── پیشنهاد AI ───────────────────────────────────────────────────────────
 async function toggleSuggestions(btn){
@@ -304,19 +303,19 @@ async function toggleSuggestions(btn){
     if(d.ok && d.result){
       let html = (d.result.suggestions||[]).map(s=>`
         <div class="sugg-item">
-          <div class="sugg-rank">${escA(s.rank)}</div>
+          <div class="sugg-rank">${s.rank}</div>
           <div>
-            <div class="sugg-action">${escA(s.action)}</div>
-            <div class="sugg-reason">${escA(s.reason)}</div>
-            <span class="sugg-diff">${escA(s.difficulty)}</span>
+            <div class="sugg-action">${s.action||''}</div>
+            <div class="sugg-reason">${s.reason||''}</div>
+            <span class="sugg-diff">${s.difficulty||''}</span>
           </div>
         </div>`).join('');
       if(d.result.personal_note)
-        html += `<div class="personal-note">💬 ${escA(d.result.personal_note)}</div>`;
+        html += `<div class="personal-note">💬 ${d.result.personal_note}</div>`;
       panel.innerHTML = html;
       panel.dataset.loaded = '1';
     } else {
-      panel.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px">${escA(d.error||'خطا')}</div>`;
+      panel.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px">${d.error||'خطا'}</div>`;
     }
   } catch(e){
     panel.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px">خطا در ارتباط با سرور</div>`;
@@ -371,7 +370,7 @@ function _removeCard(card){
 
 // ── Daily Tips ───────────────────────────────────────────────────────────
 let _dailyLoaded = false;
-async function legacyLoadDailyTips(btn){
+async function loadDailyTips(btn){
   const res = document.getElementById('daily-tips-result');
   if(_dailyLoaded){ res.style.display = res.style.display==='none'?'block':'none'; return; }
   btn.textContent = '⏳ در حال بارگذاری...';
@@ -387,8 +386,8 @@ async function legacyLoadDailyTips(btn){
         <div class="tip-item">
           <span style="font-size:18px;line-height:1">${tip.emoji||'✦'}</span>
           <div class="tip-body">
-            <div class="tip-title">${escA(tip.tip)}</div>
-            <div class="tip-why">${escA(tip.why)}</div>
+            <div class="tip-title">${tip.tip||''}</div>
+            <div class="tip-why">${tip.why||''}</div>
           </div>
         </div>`).join('');
       res.innerHTML = html;
@@ -402,29 +401,5 @@ async function legacyLoadDailyTips(btn){
   btn.textContent = '✦ نکات روزانه AI';
   btn.style.opacity = '1';
 }
-window.loadDailyTips = async function(btn){
-  const res=document.getElementById('daily-tips-result');
-  if(_dailyLoaded){res.style.display=res.style.display==='none'?'block':'none';return;}
-  btn.textContent='Loading...'; btn.disabled=true;
-  try{
-    const response=await fetch('/api/daily/tips/',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    const data=await response.json();
-    res.replaceChildren();
-    if(!data.ok){res.textContent=data.error||'خطا';return;}
-    const result=data.result||{};
-    if(result.day_message){const message=document.createElement('div');message.className='day-msg';message.textContent=result.day_message;res.appendChild(message)}
-    (result.tips||[]).forEach(tip=>{
-      const item=document.createElement('div');item.className='tip-item';
-      const emoji=document.createElement('span');emoji.textContent=tip.emoji||'✦';item.appendChild(emoji);
-      const content=document.createElement('div');content.className='tip-body';
-      const title=document.createElement('div');title.className='tip-title';title.textContent=tip.tip||'';content.appendChild(title);
-      const why=document.createElement('div');why.className='tip-why';why.textContent=tip.why||'';content.appendChild(why);
-      item.appendChild(content);res.appendChild(item);
-    });
-    if(result.focus_person&&result.focus_person.name){const focus=document.createElement('div');focus.className='focus-box';focus.textContent='🎯 آدمِ امروز: '+result.focus_person.name+' — '+(result.focus_person.suggestion||'');res.appendChild(focus)}
-    if(!res.childNodes.length)res.textContent='چیزی برنگشت';
-    _dailyLoaded=true;
-  }catch(_){res.textContent='خطا در ارتباط با سرور'}finally{btn.disabled=false;btn.textContent='✦ نکات روزانه AI'}
-};
 </script>
 {% endblock %}

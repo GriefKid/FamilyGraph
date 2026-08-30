@@ -527,19 +527,12 @@ async function generateInsight(){
     })
     let data=await res.json()
     if(data.reply){
-      body.replaceChildren()
-      data.reply.split(/\n\n+/).forEach(p=>{const paragraph=document.createElement("p");paragraph.textContent=p;body.appendChild(paragraph)})
+      body.innerHTML=data.reply.split(/\n\n+/).map(p=>"<p>"+p.replace(/\n/g,"<br>")+"</p>").join("")
     }else{
-      const error=document.createElement("span")
-      error.style.color="#f43f5e"
-      error.textContent="خطا: "+(data.error||"نامشخص")
-      body.replaceChildren(error)
+      body.innerHTML='<span style="color:#f43f5e">خطا: '+(data.error||"نامشخص")+'</span>'
     }
   }catch(e){
-    const error=document.createElement("span")
-    error.style.color="#f43f5e"
-    error.textContent="خطا در ارتباط با سرور"
-    body.replaceChildren(error)
+    body.innerHTML='<span style="color:#f43f5e">خطا در ارتباط با سرور</span>'
   }finally{
     btn.disabled=false
     btn.textContent="تولید دوباره"

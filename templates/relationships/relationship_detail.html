@@ -138,7 +138,7 @@ async function rpersonaLoad(fresh){
     const r = await fetch(fresh ? '/api/persona/rel/{{ relationship.id }}/synthesize/' : '/api/persona/rel/{{ relationship.id }}/',
       fresh ? {method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}} : {});
     const d = await r.json();
-    if(!d.ok){ box.textContent = d.error || 'خطا'; return; }
+    if(!d.ok){ box.innerHTML = `<span style="color:#f87171">${d.error||'خطا'}</span>`; return; }
     rpersonaRender(d.persona);
   }catch(e){ box.textContent = 'خطا در ارتباط با سرور'; }
 }

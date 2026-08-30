@@ -208,13 +208,6 @@
   color:#fff;
   font-weight:800;
 }
-.nc-pin-badge{
-  position:absolute;
-  top:10px; right:10px; z-index:1;
-  color:#fbbf24;
-  font-size:15px;
-  filter:drop-shadow(0 1px 4px rgba(0,0,0,.4));
-}
 
 .nc-name{
   font-size:13px;
@@ -355,12 +348,7 @@
     <button class="vt-btn active" id="vt-grid" onclick="setView('grid')" title="نمایش کارتی">⊞</button>
     <button class="vt-btn" id="vt-list" onclick="setView('list')" title="نمایش لیستی">☰</button>
   </div>
-  <div class="view-toggle" aria-label="فیلتر افراد">
-    <a class="vt-btn {% if request.GET.pinned != '1' %}active{% endif %}" href="{% url 'node_list' %}" title="همه افراد">همه</a>
-    <a class="vt-btn {% if request.GET.pinned == '1' %}active{% endif %}" href="{% url 'node_list' %}?pinned=1" title="فقط افراد پین‌شده">★</a>
-  </div>
 </div>
-</form>
 
 <!-- GRID VIEW -->
 <div class="node-grid" id="nodeGrid">
@@ -383,7 +371,6 @@
       <div class="nc-root-badge" title="نود اصلی (من)">★</div>
       {% endif %}
     </div>
-    {% if node.is_pinned %}<span class="nc-pin-badge" title="فرد پین‌شده" aria-label="فرد پین‌شده">★</span>{% endif %}
 
     <div class="nc-name">{{ node.display_name }}</div>
     {% if node.username != node.display_name %}
@@ -403,7 +390,6 @@
   </div>
   {% else %}
   <div class="empty-state">
-    {% if has_directory_filters %}<a href="{% url 'node_list' %}" class="btn btn-primary">Clear filters</a>{% endif %}
     <div class="empty-icon">◎</div>
     <div class="empty-text">
       هنوز هیچ شخصی اضافه نشده<br>
@@ -452,9 +438,9 @@
 
 {% if is_paginated %}
 <div class="pagination">
-  {% if page_obj.has_previous %}<a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}{% if request.GET.pinned == '1' %}&pinned=1{% endif %}">قبلی</a>{% endif %}
+  {% if page_obj.has_previous %}<a class="btn btn-sm" href="?page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
   <span class="page-info">صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
-  {% if page_obj.has_next %}<a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}{% if request.GET.pinned == '1' %}&pinned=1{% endif %}">بعدی</a>{% endif %}
+  {% if page_obj.has_next %}<a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
 </div>
 {% endif %}
 
@@ -473,19 +459,12 @@ function setView(v){
 // restore saved view
 setView(_currentView);
 
-// Keep non-submit view controls from submitting the directory filter form.
-document.querySelectorAll('#vt-grid, #vt-list').forEach(button => {
-  button.addEventListener('click', event => event.preventDefault());
-});
-
-// Preserve active filters when moving between directory pages.
-const directoryParams = new URLSearchParams(window.location.search);
-document.querySelectorAll('.pagination a').forEach(link => {
-  const page = new URL(link.href, window.location.href).searchParams.get('page');
-  if (!page) return;
-  const next = new URL(link.href, window.location.href);
-  ['q', 'group', 'pinned'].forEach(key => {
-    if (directoryParams.has(key)) next.searchParams.set(key, directoryParams.get(key));
+function filterNodes(q){
+  q = q.toLowerCase().trim();
+  const sel = '#nodeGrid .node-card, #nodeList .node-list-item';
+  document.querySelectorAll(sel).forEach(c=>{
+    const match = !q || (c.dataset.search||'').includes(q);
+    c.style.display = match ? '' : 'none';
   });
 }
 // Keep all server-side directory filters active while moving through pages.

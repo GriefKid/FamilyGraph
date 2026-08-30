@@ -64,7 +64,6 @@
 .notif-dot.read{background:var(--border);}
 .notif-msg{flex:1;font-size:13px;line-height:1.6;}
 .notif-ts{font-size:11px;color:var(--text-muted);flex-shrink:0;}
-.notif-read-btn{flex-shrink:0;min-width:28px;padding:3px 7px;color:var(--primary-light);}
 .empty-state{text-align:center;padding:40px;color:var(--text-muted);font-size:13px;}
 .notification-preferences{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin:4px 0 18px}.notification-preferences strong{font-size:12px}.notification-preferences p{width:100%;margin:0;color:var(--text-muted);font-size:11px;line-height:1.7}.notification-mode{border:1px solid var(--border);border-radius:9px;padding:6px 9px;background:var(--surface);color:var(--text-muted);font:11px 'Vazirmatn',sans-serif;cursor:pointer}.notification-mode.active{border-color:rgba(99,102,241,.65);background:rgba(99,102,241,.14);color:#c7d2fe;font-weight:700}
 </style>
@@ -143,10 +142,6 @@
 
 <!-- ── General Notifications ── -->
 <div class="notif-section-title">📢 اطلاعیه‌های سیستم</div>
-<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-  <span style="font-size:12px;color:var(--text-muted);">اعلان‌های خوانده‌نشده: <b id="unreadCount">{{ unread_count }}</b></span>
-  {% if unread_count %}<button class="btn btn-sm" type="button" onclick="markAllNotificationsRead()">خواندن همه</button>{% endif %}
-</div>
 {% if general_notifs %}
 <button type="button" class="btn btn-sm" style="margin:-3px 0 10px" onclick="markAllNotificationsRead(this)">خوانده‌شدن همه</button>
 {% for n in general_notifs %}
@@ -207,34 +202,6 @@ async function syncRespond(id, action){
 function getCookie(name){
   const v = document.cookie.match('(^|;) ?'+name+'=([^;]*)(;|$)');
   return v ? v[2] : null;
-}
-
-async function markNotificationRead(id, button){
-  button.disabled = true;
-  const response = await fetch(`/api/notifications/${id}/read/`, {
-    method:'POST',
-    headers:{'X-CSRFToken': getCookie('csrftoken')}
-  });
-  if(!response.ok){ button.disabled = false; return; }
-  const card = document.getElementById(`notification-${id}`);
-  card?.classList.remove('unread');
-  button.remove();
-  const count = document.getElementById('unreadCount');
-  if(count) count.textContent = Math.max(0, Number(count.textContent || 0) - 1);
-}
-
-async function markAllNotificationsRead(){
-  const response = await fetch('/api/notifications/read-all/', {
-    method:'POST',
-    headers:{'X-CSRFToken': getCookie('csrftoken')}
-  });
-  if(!response.ok) return;
-  document.querySelectorAll('.notif-item.unread').forEach(card => {
-    card.classList.remove('unread');
-    card.querySelector('.notif-read-btn')?.remove();
-  });
-  const count = document.getElementById('unreadCount');
-  if(count) count.textContent = '0';
 }
 </script>
 {% endblock %}

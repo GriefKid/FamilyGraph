@@ -185,9 +185,8 @@
 {% endblock %}
 
 {% block extra_js %}
-{{ people_json|json_script:"checkin-people-data" }}
 <script>
-const CK_PEOPLE = JSON.parse(document.getElementById('checkin-people-data').textContent||'[]');
+const CK_PEOPLE = {{ people_json|safe }};
 const CK_KINDS  = ['message','call','meet','online'];
 const CK_ICONS  = {message:'💬', call:'📞', meet:'🤝', online:'🌐'};
 const CK_DOTS   = {green:'#34d399', yellow:'#fbbf24', red:'#f87171', unknown:'#64748b'};

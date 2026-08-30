@@ -396,20 +396,13 @@
 
 <!-- Three.js + all scripts go HERE (after DOM, not inside <style>) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-{{ inbox_json|json_script:"gifbox-inbox-data" }}
-{{ sent_json|json_script:"gifbox-sent-data" }}
-{{ recipients_json|json_script:"gifbox-recipients-data" }}
-{{ nodes_json|json_script:"gifbox-nodes-data" }}
-{{ edges_json|json_script:"gifbox-edges-data" }}
-{{ infos_json|json_script:"gifbox-infos-data" }}
 <script>
-const jsonData=id=>JSON.parse(document.getElementById(id).textContent||'[]');
-const INBOX_DATA = jsonData('gifbox-inbox-data');
-const SENT_DATA  = jsonData('gifbox-sent-data');
-const RECIPIENTS = jsonData('gifbox-recipients-data');
-const MY_NODES   = jsonData('gifbox-nodes-data');
-const MY_EDGES   = jsonData('gifbox-edges-data');
-const MY_INFOS   = jsonData('gifbox-infos-data');
+const INBOX_DATA = {{ inbox_json|safe }};
+const SENT_DATA  = {{ sent_json|safe }};
+const RECIPIENTS = {{ recipients_json|safe }};
+const MY_NODES   = {{ nodes_json|safe }};
+const MY_EDGES   = {{ edges_json|safe }};
+const MY_INFOS   = {{ infos_json|safe }};
 const ME_ID      = {{ me.id }};
 const CSRF       = '{{ csrf_token }}';
 const REACTION_DELTA_JS = {true:2.5, accept:0.63, reject:-0.63, false:-2.5};
@@ -467,13 +460,6 @@ function miniCubeEl(faces,sz){
 }
 
 /* ── render inbox/sent ── */
-function gbTextEl(tag,className,text){
-  const el=document.createElement(tag);
-  if(className) el.className=className;
-  el.textContent=text??'';
-  return el;
-}
-
 function renderCards(){
   const rMap={'true':'✅','false':'❌','accept':'🤐','reject':'🚫'};
   const ic=document.getElementById('inbox-cards');
@@ -487,20 +473,14 @@ function renderCards(){
       card.onclick=()=>openBox(box.id);
       card.appendChild(miniCubeEl(box.cube_faces,58));
       const tc=tColor(box.sender_trust);
-      card.appendChild(gbTextEl('div','cc-name',box.sender_name));
-      const type=gbTextEl('div','cc-time',box.type_label||'');
-      type.style.color='var(--text-muted)';
-      card.appendChild(type);
-      const trust=gbTextEl('div','cc-trust',box.sender_trust);
-      trust.style.color=tc; trust.style.background=tc+'22';
-      card.appendChild(trust);
-      card.appendChild(gbTextEl('div','cc-time',box.time_ago));
-      if(box.my_reaction) card.appendChild(gbTextEl('div','cc-react',rMap[box.my_reaction]||''));
-      if(box.content_added){
-        const added=gbTextEl('div','', '✅ اضافه شده');
-        added.style.cssText='font-size:9px;color:#43e97b';
-        card.appendChild(added);
-      }
+      card.insertAdjacentHTML('beforeend',`
+        <div class="cc-name">${box.sender_name}</div>
+        <div class="cc-time" style="color:var(--text-muted)">${box.type_label||''}</div>
+        <div class="cc-trust" style="color:${tc};background:${tc}22">${box.sender_trust}</div>
+        <div class="cc-time">${box.time_ago}</div>
+        ${box.my_reaction?`<div class="cc-react">${rMap[box.my_reaction]||''}</div>`:''}
+        ${box.content_added?'<div style="font-size:9px;color:#43e97b">✅ اضافه شده</div>':''}
+      `);
       ic.appendChild(card);
     });
   }
@@ -514,11 +494,11 @@ function renderCards(){
       card.className='cube-card';
       card.onclick=()=>openSentBox(box.id);
       card.appendChild(miniCubeEl(box.cube_faces,58));
-      card.appendChild(gbTextEl('div','cc-name',`به: ${box.recipient_name||''}`));
-      const type=gbTextEl('div','cc-time',box.type_label||'');
-      type.style.color='var(--text-muted)';
-      card.appendChild(type);
-      card.appendChild(gbTextEl('div','cc-time',box.time_ago));
+      card.insertAdjacentHTML('beforeend',`
+        <div class="cc-name">به: ${box.recipient_name}</div>
+        <div class="cc-time" style="color:var(--text-muted)">${box.type_label||''}</div>
+        <div class="cc-time">${box.time_ago}</div>
+      `);
       sc.appendChild(card);
     });
   }
@@ -627,11 +607,7 @@ function initCompose(){
         RECIPIENTS.forEach(u=>{
           const el=document.createElement('div');el.className='rb';
           el.onclick=function(){cmpSetRecip(u.id,this);};
-          const avatar=gbTextEl('span','re',u.avatar||'👤');
-          const name=gbTextEl('span','rn',u.name);
-          const trust=gbTextEl('span','rt',u.trust);
-          trust.style.color=tColor(u.trust);
-          el.append(avatar,name,trust);
+          el.innerHTML=`<span class="re">${u.avatar||'👤'}</span><span class="rn">${u.name}</span><span class="rt" style="color:${tColor(u.trust)}">${u.trust}</span>`;
           rg.appendChild(el);
         });
       }
@@ -673,11 +649,7 @@ function renderItemList(items){
     const row=document.createElement('div');
     row.className='item-row'+(cmp.source_id===item.id?' sel':'');
     row.onclick=()=>selectItem(item.id,row);
-    const info=document.createElement('div');
-    info.className='item-row-info';
-    info.appendChild(gbTextEl('div','item-row-title',item.title));
-    if(item.sub) info.appendChild(gbTextEl('div','item-row-sub',item.sub));
-    row.append(gbTextEl('span','item-row-ico',item.ico),info);
+    row.innerHTML=`<span class="item-row-ico">${item.ico}</span><div class="item-row-info"><div class="item-row-title">${item.title}</div>${item.sub?`<div class="item-row-sub">${item.sub}</div>`:''}</div>`;
     el.appendChild(row);
   });
 }

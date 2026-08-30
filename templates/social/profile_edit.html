@@ -127,6 +127,6 @@ async function uploadCover(){const f=document.getElementById('coverFile').files[
 let workTimer=null;
 document.getElementById('workTitle')?.addEventListener('input',()=>{clearTimeout(workTimer);workTimer=setTimeout(loadWorkSuggest,180)});
 document.getElementById('workKind')?.addEventListener('change',loadWorkSuggest);
-async function loadWorkSuggest(){const q=document.getElementById('workTitle').value.trim();const kind=document.getElementById('workKind').value;if(!q)return;const r=await fetch(`/api/social/works/suggest/?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(q)}`);const d=await r.json();const list=document.getElementById('workSuggest');list.replaceChildren();(d.works||[]).forEach(w=>{const option=document.createElement('option');option.value=String(w.title||'');option.textContent=[w.creator,w.year].filter(v=>v!==null&&v!==undefined&&String(v)!=='').join(' - ');list.appendChild(option)})}
+async function loadWorkSuggest(){const q=document.getElementById('workTitle').value.trim();const kind=document.getElementById('workKind').value;if(!q)return;const r=await fetch(`/api/social/works/suggest/?kind=${encodeURIComponent(kind)}&q=${encodeURIComponent(q)}`);const d=await r.json();document.getElementById('workSuggest').innerHTML=(d.works||[]).map(w=>`<option value="${w.title}">${w.creator||''}${w.year?' - '+w.year:''}</option>`).join('')}
 </script>
 {% endblock %}

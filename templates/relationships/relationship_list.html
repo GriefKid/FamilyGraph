@@ -144,13 +144,6 @@
   document.getElementById('rlAvg').textContent = avg.toFixed(1) + '/5';
 })();
 
-let rlFilterTimer;
-const rlParams = new URLSearchParams(window.location.search);
-const rlSearch = document.getElementById('rlSearch');
-if (rlSearch) rlSearch.value = rlParams.get('q') || '';
-
-// The relationship directory is filtered by the server so results are not
-// limited to the cards currently rendered in the browser.
 function rlFilter(q){
   const normalize = value => String(value||'').trim().toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک');
   q = normalize(q);
@@ -161,27 +154,5 @@ function rlFilter(q){
   });
   document.getElementById('rlSearchStatus').textContent = q ? `${visible.length} نتیجه` : '';
 }
-
-const rlStatus = document.createElement('select');
-rlStatus.className = 'rl-search';
-rlStatus.style.maxWidth = '150px';
-rlStatus.setAttribute('aria-label', 'فیلتر وضعیت رابطه');
-rlStatus.innerHTML = '<option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="distant">دور</option><option value="inactive">غیرفعال</option>';
-rlStatus.value = rlParams.get('status') || '';
-rlStatus.addEventListener('change', () => {
-  const next = new URLSearchParams();
-  if (rlSearch && rlSearch.value.trim()) next.set('q', rlSearch.value.trim());
-  if (rlStatus.value) next.set('status', rlStatus.value);
-  window.location.href = '/relationships/' + (next.toString() ? '?' + next : '');
-});
-if (rlSearch && rlSearch.parentNode) rlSearch.parentNode.appendChild(rlStatus);
-
-document.querySelectorAll('.pagination a').forEach(link => {
-  const next = new URL(link.href, window.location.href);
-  ['q', 'status'].forEach(key => {
-    if (rlParams.has(key)) next.searchParams.set(key, rlParams.get(key));
-  });
-  link.href = next.pathname + '?' + next.searchParams.toString();
-});
 </script>
 {% endblock %}

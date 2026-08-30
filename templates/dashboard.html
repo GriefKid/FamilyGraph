@@ -101,7 +101,7 @@
       <div class="briefing-card">
         <h2>⭐ افراد مهم</h2>
         <div class="briefing-card-sub">دسترسی سریع به آدم‌هایی که خودت پین کرده‌ای</div>
-        {% if pinned_people %}<div class="stack">{% for person in pinned_people %}<a class="stack-item" href="/nodes/{{ person.id }}/"><div class="stack-title">⭐ {{ person.display_name }}</div>{% if person.career %}<div class="stack-meta">{{ person.career }}</div>{% endif %}</a>{% endfor %}</div><a href="/nodes/?pinned=1" style="display:block;margin-top:10px;color:var(--primary-light);font-size:11px;text-decoration:none">دیدن همهٔ افراد مهم ←</a>{% else %}<div class="empty-briefing">برای دسترسی سریع، افراد مهمت را از صفحهٔ هر فرد پین کن.</div>{% endif %}
+        {% if pinned_people %}<div class="stack">{% for person in pinned_people %}<a class="stack-item" href="/nodes/{{ person.id }}/"><div class="stack-title">⭐ {{ person.display_name }}</div>{% if person.career %}<div class="stack-meta">{{ person.career }}</div>{% endif %}</a>{% endfor %}</div><a href="/nodes/?focus=pinned" style="display:block;margin-top:10px;color:var(--primary-light);font-size:11px;text-decoration:none">دیدن همهٔ افراد مهم ←</a>{% else %}<div class="empty-briefing">برای دسترسی سریع، افراد مهمت را از صفحهٔ هر فرد پین کن.</div>{% endif %}
       </div>
 
       <div class="briefing-card">
