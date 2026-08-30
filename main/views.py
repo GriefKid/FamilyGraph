@@ -1863,6 +1863,32 @@ def graph_all_api(request):
     except Exception:
         pass
 
+    # ── «از کِی در شبکه‌ای؟» — قدیمی‌ترین نشانه برای هر نفر (time-lapse) ──
+    since_map = {}
+
+    def _mark(nid, d):
+        if nid is None or d is None:
+            return
+        cur = since_map.get(nid)
+        if cur is None or d < cur:
+            since_map[nid] = d
+
+    try:
+        from .models import Interaction, Debt
+        for nid, d in Interaction.objects.filter(owner=request.user).values_list('node_id', 'date'):
+            _mark(nid, d)
+        for nid, d in Event.objects.filter(owner=request.user).values_list('participants__id', 'date'):
+            _mark(nid, d)
+        for nid, d in JournalEntry.objects.filter(owner=request.user).values_list('mentioned_nodes__id', 'entry_date'):
+            _mark(nid, d)
+        for nid, d in Debt.objects.filter(owner=request.user).values_list('node_id', 'date'):
+            _mark(nid, d)
+    except Exception:
+        pass
+    for n in all_nodes:
+        if getattr(n, 'created_at', None):
+            _mark(n.id, n.created_at.date())
+
     node_data = []
     for n in all_nodes:
         c_idx   = com_map.get(n.id, 0)
@@ -1870,6 +1896,7 @@ def graph_all_api(request):
         # رنگ: اول گروه اول، وگرنه رنگ community
         color   = group_color_map.get(gnames[0], COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)]) if gnames else COMMUNITY_PALETTE[c_idx % len(COMMUNITY_PALETTE)]
         h = health_map.get(n.id) or {}
+        since = since_map.get(n.id)
         node_data.append({
             "id":         str(n.id),
             "username":   n.username,
@@ -1884,17 +1911,26 @@ def graph_all_api(request):
             "health_status": h.get("status"),           # green|yellow|red|unknown|None
             "health_score":  h.get("score"),
             "days_since":     h.get("days_since"),
+            "since":         since.isoformat() if since else None,
         })
 
     root_id_int = request.user.root_node_id if request.user.is_authenticated else None
 
     edge_data = []
     for r in all_rels:
+        edge_since = r.met_at
+        if not edge_since and getattr(r, 'created_at', None):
+            edge_since = r.created_at.date()
+        if not edge_since:
+            # fall back to when both people entered the network
+            a, b = since_map.get(r.source_id), since_map.get(r.target_id)
+            edge_since = max(a, b) if a and b else (a or b)
         e = {
             "source":   str(r.source_id),
             "target":   str(r.target_id),
             "label":    r.rel or "",
             "strength": r.strength,
+            "since":    edge_since.isoformat() if edge_since else None,
         }
         # فقط یال‌هایی که یه سرشون root است رنگ سلامت می‌گیرن
         if root_id_int and root_id_int in (r.source_id, r.target_id):

@@ -695,6 +695,42 @@ class ChatRetrievalTests(TestCase):
         self.assertEqual(_retrieve_context(other, 'سارا کافه شمال'), '')
 
 
+class GraphTimelapseTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='tl', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='tl-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.old_friend = Node.objects.create(owner=self.user, username='tl-old')
+        self.new_friend = Node.objects.create(owner=self.user, username='tl-new')
+        Relationship.objects.create(
+            owner=self.user, source=self.root, target=self.old_friend,
+            strength=3, met_at=date(2019, 1, 1),
+        )
+        Relationship.objects.create(
+            owner=self.user, source=self.root, target=self.new_friend, strength=3,
+        )
+        Interaction.objects.create(
+            owner=self.user, node=self.old_friend, kind='call', date=date(2018, 6, 1),
+        )
+
+    def test_each_node_and_edge_carries_a_since_date(self):
+        data = json.loads(self.client_login().get('/api/graph/all/').content)
+        by_name = {n['username']: n for n in data['nodes']}
+        self.assertEqual(by_name['tl-old']['since'], '2018-06-01')
+        self.assertIsNotNone(by_name['tl-new']['since'])
+        self.assertTrue(all('since' in e for e in data['edges']))
+
+    def test_graph_page_exposes_the_timelapse_control(self):
+        response = self.client_login().get('/graph/')
+        self.assertContains(response, 'id="timelapse-wrap"')
+        self.assertContains(response, 'toggleTimelapse()')
+
+    def client_login(self):
+        self.client.force_login(self.user)
+        return self.client
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

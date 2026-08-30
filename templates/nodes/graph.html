@@ -300,6 +300,13 @@
       <button class="tb-btn" onclick="toggleLayout()">تغییر layout</button>
       <button class="tb-btn" onclick="fitAll()">Fit</button>
     </div>
+    <!-- Time-lapse: رشد شبکه در طول زمان -->
+    <div class="tb-glass" id="timelapse-wrap" style="display:none;">
+      <button class="tb-btn" id="tlPlay" onclick="toggleTimelapse()" title="پخش رشد شبکه">▶</button>
+      <input type="range" class="deg-slider" id="tlSlider" min="0" max="100" value="100"
+             oninput="setTimelapse(+this.value)" aria-label="زمان">
+      <span id="tlLabel" style="font-size:11px;color:#a5b4fc;white-space:nowrap;min-width:64px;">اکنون</span>
+    </div>
     <!-- Groups manager button -->
     <div class="tb-glass" style="cursor:pointer;" onclick="openGroupsMgr()">
       <span style="font-size:13px;">🗂</span>
@@ -566,6 +573,8 @@ const MIN_R = 10, MAX_R = 26;
 let gData = null, sim = null, useEgo = true, panelId = null;
 let hopFilter = 0, hiddenComs = new Set(), minDegFilter = 0;
 let activeGroups = new Set();   // گروه‌های انتخاب‌شده (خالی = همه)
+let tlCutoff = null;            // ISO date string — null = نمایش کامل
+let tlMinDate = null, tlMaxDate = null, tlTimer = null;
 
 const svgEl  = d3.select("#graph-svg");
 const gRoot  = svgEl.select("#graph-root");
@@ -587,6 +596,7 @@ async function loadGraph(){
     const r = await fetch("/api/graph/all/");
     gData = await r.json();
     draw();
+    try { initTimelapse(); } catch(e) {}
     // Auto-fit after layout settles
     setTimeout(fitAll, 80);
   } catch(e) {
@@ -638,6 +648,7 @@ function getFilteredData(){
       const lv = levels[n.id];
       if(lv === undefined || lv > hopFilter) return false;
     }
+    if(tlCutoff && n.id !== root_id && n.since && n.since > tlCutoff) return false;
     return true;
   });
 
@@ -648,7 +659,8 @@ function getFilteredData(){
   }
 
   const vis = new Set(fn.map(n => n.id));
-  const fe = edges.filter(e => vis.has(e.source) && vis.has(e.target));
+  const fe = edges.filter(e => vis.has(e.source) && vis.has(e.target)
+    && !(tlCutoff && e.since && e.since > tlCutoff));
   return { nodes: fn, edges: fe, root_id };
 }
 
@@ -1076,6 +1088,51 @@ function setMinDegree(v){
   minDegFilter = v;
   document.getElementById("degLabel").textContent = v;
   draw(); fitAll();
+}
+
+// ── Time-lapse: رشد شبکه در طول زمان ──
+function initTimelapse(){
+  const dates = [];
+  (gData.nodes || []).forEach(n => { if(n.since) dates.push(n.since); });
+  (gData.edges || []).forEach(e => { if(e.since) dates.push(e.since); });
+  const wrap = document.getElementById("timelapse-wrap");
+  if(dates.length < 4){ if(wrap) wrap.style.display = "none"; return; }
+  dates.sort();
+  tlMinDate = dates[0];
+  tlMaxDate = dates[dates.length - 1];
+  if(tlMinDate === tlMaxDate){ if(wrap) wrap.style.display = "none"; return; }
+  if(wrap) wrap.style.display = "flex";
+  const s = document.getElementById("tlSlider");
+  s.value = 100;
+  tlCutoff = null;
+  document.getElementById("tlLabel").textContent = "اکنون";
+}
+function _tlDateForPct(pct){
+  const a = Date.parse(tlMinDate), b = Date.parse(tlMaxDate);
+  return new Date(a + (b - a) * pct / 100).toISOString().slice(0, 10);
+}
+function setTimelapse(pct){
+  if(!tlMinDate) return;
+  if(pct >= 100){ tlCutoff = null; document.getElementById("tlLabel").textContent = "اکنون"; }
+  else {
+    tlCutoff = _tlDateForPct(pct);
+    document.getElementById("tlLabel").textContent = tlCutoff;
+  }
+  draw();
+}
+function toggleTimelapse(){
+  const btn = document.getElementById("tlPlay");
+  const slider = document.getElementById("tlSlider");
+  if(tlTimer){ clearInterval(tlTimer); tlTimer = null; btn.textContent = "▶"; return; }
+  btn.textContent = "⏸";
+  let pct = 0;
+  slider.value = 0; setTimelapse(0);
+  tlTimer = setInterval(() => {
+    pct += 4;
+    if(pct >= 100){ pct = 100; clearInterval(tlTimer); tlTimer = null; btn.textContent = "▶"; }
+    slider.value = pct; setTimelapse(pct);
+    if(pct === 100) fitAll();
+  }, 320);
 }
 function toggleCommunity(ci){
   if(hiddenComs.has(ci)) hiddenComs.delete(ci);

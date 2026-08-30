@@ -173,6 +173,7 @@ class Node(models.Model):
     merged_into = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name='merged_duplicates')
     is_pinned = models.BooleanField(default=False)
+    created_at      = models.DateTimeField(auto_now_add=True, null=True)
     is_demo = models.BooleanField(default=False)
 
     def display_name(self):
@@ -212,6 +213,7 @@ class Relationship(models.Model):
     strength = models.IntegerField(default=3, choices=[(i, i) for i in range(1, 6)])
     status   = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
     met_at    = models.DateField(blank=True, null=True, verbose_name='تاریخ آشنایی')
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
     is_public = models.BooleanField(
         default=False, verbose_name='عمومی',
         help_text='اگه حساب عمومی باشه، این رابطه برای دیگران قابل مشاهده‌ست'
