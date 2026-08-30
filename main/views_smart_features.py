@@ -10,6 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db.models import Prefetch
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from openai import OpenAI
 
 from .models import Node, Relationship, Event, Information, JournalEntry, AppSettings, AlertAction
@@ -754,6 +755,82 @@ JSON:
         result = _extract_json(resp.choices[0].message.content)
         cache.set(cache_key, result, timeout=24 * 3600)  # کش ۲۴ ساعته
         return JsonResponse({'ok': True, 'result': result})
+    except Exception as e:
+        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+
+
+@login_required
+@require_POST
+def alert_greeting_api(request):
+    """POST {node_id, alert_type, title} → a short, ready-to-send Persian greeting.
+
+    For birthdays / anniversaries / Iranian occasions. Personalised from the
+    owner-scoped person data, cached per user+node+type per day.
+    """
+    try:
+        body = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'invalid JSON'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'error': 'JSON object required'}, status=400)
+
+    node_id = body.get('node_id')
+    alert_type = str(body.get('alert_type', ''))[:40]
+    alert_title = str(body.get('title', ''))[:160]
+
+    name = 'دوستم'
+    person_bits = []
+    if node_id:
+        try:
+            node = Node.objects.get(pk=node_id, owner=request.user)
+        except (Node.DoesNotExist, ValueError, TypeError):
+            return JsonResponse({'error': 'شخص پیدا نشد'}, status=404)
+        name = node.display_name()
+        if node.career:
+            person_bits.append(f'شغل: {node.career}')
+        info_obj = node.informations.first()
+        if info_obj and isinstance(info_obj.data, dict):
+            d = info_obj.data
+            if d.get('interests'):
+                person_bits.append('علایق: ' + '، '.join(map(str, d['interests'][:4])))
+            if d.get('relationship_quality'):
+                person_bits.append(f"کیفیت رابطه: {d['relationship_quality']}")
+
+    cache_key = f'alert_greet_{request.user.id}_{node_id}_{alert_type}_{date.today():%Y%m%d}'
+    cached = cache.get(cache_key)
+    if cached:
+        return JsonResponse({'ok': True, 'greeting': cached, 'from_cache': True})
+
+    client, api_key, _provider = _ai_client()
+    if not api_key:
+        return JsonResponse({'error': 'API key نیست'}, status=500)
+
+    prompt = f"""یک پیام تبریک کوتاه فارسی برای «{name}» بنویس.
+مناسبت: {alert_title} (نوع: {alert_type})
+{chr(10).join(person_bits) if person_bits else ''}
+
+قواعد:
+- گرم و صمیمی، نه رسمی و کلیشه‌ای
+- ۱ تا ۳ جمله، آمادهٔ ارسال
+- اگر مناسبت ایرانی است (نوروز، یلدا، عید و…) فضای همان مناسبت را داشته باشد
+- بدون هشتگ و بدون ایموجی زیاد (حداکثر یکی)
+فقط خودِ پیام را بده، بدون توضیح."""
+
+    try:
+        resp = client.chat.completions.create(
+            model=_model(),
+            messages=[
+                {'role': 'system', 'content': 'نویسندهٔ پیام‌های تبریک فارسیِ گرم و کوتاه.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            max_tokens=220,
+        )
+        greeting = (resp.choices[0].message.content or '').strip().strip('"').strip()
+        greeting = greeting[:600]
+        if not greeting:
+            return JsonResponse({'error': 'پیام خالی برگشت'}, status=502)
+        cache.set(cache_key, greeting, timeout=12 * 3600)
+        return JsonResponse({'ok': True, 'greeting': greeting})
     except Exception as e:
         return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
 

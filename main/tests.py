@@ -615,6 +615,55 @@ class SuggestedCirclesTests(TestCase):
         self.assertEqual(data['circles'], [])
 
 
+class OccasionGreetingTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='greet', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='greet-friend', name='مینا')
+        self.client.force_login(self.user)
+
+    def _fake_ai(self, text='تولدت مبارک مینا جان! امیدوارم سالِ خوبی پیش رو داشته باشی.'):
+        client = mock.MagicMock()
+        client.chat.completions.create.return_value.choices = [
+            mock.MagicMock(message=mock.MagicMock(content=text))
+        ]
+        return (client, 'key', 'groq')
+
+    def test_greeting_is_personalised_and_owner_scoped(self):
+        with mock.patch('main.views_smart_features._ai_client', return_value=self._fake_ai()):
+            response = self.client.post(
+                '/api/alerts/greeting/',
+                data=json.dumps({'node_id': self.node.id, 'alert_type': 'birthday', 'title': 'تولد مینا'}),
+                content_type='application/json',
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('مینا', json.loads(response.content)['greeting'])
+
+        other = get_user_model().objects.create_user(username='greet-other', password='SecurePass1')
+        self.client.force_login(other)
+        with mock.patch('main.views_smart_features._ai_client', return_value=self._fake_ai()):
+            denied = self.client.post(
+                '/api/alerts/greeting/',
+                data=json.dumps({'node_id': self.node.id, 'alert_type': 'birthday', 'title': 'x'}),
+                content_type='application/json',
+            )
+        self.assertEqual(denied.status_code, 404)
+
+    def test_greeting_requires_post(self):
+        self.assertEqual(self.client.get('/api/alerts/greeting/').status_code, 405)
+
+    def test_second_call_is_served_from_cache_without_a_new_ai_call(self):
+        cache.clear()
+        fake = self._fake_ai()
+        with mock.patch('main.views_smart_features._ai_client', return_value=fake):
+            self.client.post('/api/alerts/greeting/', data=json.dumps(
+                {'node_id': self.node.id, 'alert_type': 'birthday', 'title': 't'}),
+                content_type='application/json')
+            self.client.post('/api/alerts/greeting/', data=json.dumps(
+                {'node_id': self.node.id, 'alert_type': 'birthday', 'title': 't'}),
+                content_type='application/json')
+        self.assertEqual(fake[0].chat.completions.create.call_count, 1)
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

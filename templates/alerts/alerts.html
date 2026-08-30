@@ -238,6 +238,15 @@
         onclick="toggleSuggestions(this)">
         ✦ دریافت پیشنهاد AI
       </button>
+      {% if alert.type == 'birthday' or alert.type == 'birthday_upcoming' or alert.type == 'anniversary' %}
+      <button class="suggest-btn"
+        data-node="{{ alert.node_id }}"
+        data-type="{{ alert.type }}"
+        data-title="{{ alert.title }}"
+        onclick="writeGreeting(this)">
+        ✍️ پیام تبریک بنویس
+      </button>
+      {% endif %}
       <div class="suggestions-panel"></div>
       {% endif %}
 
@@ -323,6 +332,47 @@ async function toggleSuggestions(btn){
   }
   btn.textContent = '✕ بستن پیشنهادها';
   btn.style.opacity = '1';
+}
+
+async function writeGreeting(btn){
+  const card  = _card(btn);
+  const panel = card.querySelector('.suggestions-panel');
+  if(!panel) return;
+  const escG = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = '⏳ می‌نویسم...';
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted)">✍️ در حال نوشتن پیام…</div>';
+  try{
+    const r = await fetch('/api/alerts/greeting/', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        node_id: parseInt(btn.dataset.node) || null,
+        alert_type: btn.dataset.type,
+        title: btn.dataset.title
+      })
+    });
+    const d = await r.json();
+    if(d.ok && d.greeting){
+      panel.innerHTML =
+        `<div class="sugg-action" style="line-height:1.9;white-space:pre-wrap">${escG(d.greeting)}</div>`
+        + `<button class="suggest-btn" style="margin-top:8px" onclick="copyGreeting(this)" data-text="${escG(d.greeting)}">📋 کپی</button>`;
+    } else {
+      panel.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px">${escG(d.error)||'خطا'}</div>`;
+    }
+  } catch(e){
+    panel.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px">خطا در ارتباط با سرور</div>`;
+  }
+  btn.disabled = false;
+  btn.textContent = label;
+}
+function copyGreeting(btn){
+  const t = btn.dataset.text || '';
+  navigator.clipboard?.writeText(t).then(
+    () => { btn.textContent = '✓ کپی شد'; setTimeout(()=>btn.textContent='📋 کپی', 1500); },
+    () => { btn.textContent = 'کپی نشد'; }
+  );
 }
 
 // ── دکمه‌های انجام دادم / رد کردن ────────────────────────────────────────
