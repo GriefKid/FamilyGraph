@@ -120,12 +120,17 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
 
         attention = []
         try:
-            from .health import compute_health
+            from .health import compute_health, attention_priority
             health = compute_health(user)
-            rank = {'red': 0, 'yellow': 1, 'unknown': 2, 'green': 3}
+            priority = attention_priority(user, health)
             for node_id, item in health.items():
                 node = node_map.get(node_id)
-                if not node or item.get('status') not in ('red', 'yellow'):
+                if not node:
+                    continue
+                prio = priority.get(node_id, {'score': 0.0, 'factors': []})
+                # Surface anyone the ranking flags, not only red/yellow health —
+                # an overdue follow-up or a bad mood can matter on its own.
+                if item.get('status') not in ('red', 'yellow') and prio['score'] < 25:
                     continue
                 attention.append({
                     'node': node,
@@ -133,13 +138,10 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
                     'score': item.get('score'),
                     'days_since': item.get('days_since'),
                     'expected': item.get('expected'),
+                    'priority': round(prio['score']),
+                    'reasons': prio['factors'],
                 })
-            attention.sort(
-                key=lambda item: (
-                    rank[item['status']],
-                    item['score'] if item['score'] is not None else 101,
-                )
-            )
+            attention.sort(key=lambda item: -item['priority'])
         except Exception:
             pass
 

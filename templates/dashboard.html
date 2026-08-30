@@ -52,7 +52,7 @@
     <div class="stack">
       <div class="briefing-card" id="attention">
         <h2>نیازمند توجه</h2>
-        <div class="briefing-card-sub">بر اساس آخرین تعامل و انتظار هر رابطه</div>
+        <div class="briefing-card-sub">ترکیب سلامت رابطه، پیگیری‌های عقب‌افتاده، حال اخیر و رویدادهای نزدیک</div>
         {% if attention %}
         <div class="attention-list">
           {% for item in attention %}
@@ -60,7 +60,7 @@
             <span class="attention-dot"></span>
             <span class="attention-main">
               <span class="attention-name">{{ item.node.display_name }}</span>
-              <span class="attention-note">{% if item.days_since is not None %}{{ item.days_since }} روز از آخرین تعامل گذشته{% else %}هنوز تعامل کافی ثبت نشده{% endif %}</span>
+              <span class="attention-note">{% if item.reasons %}{{ item.reasons|join:' · ' }}{% elif item.days_since is not None %}{{ item.days_since }} روز از آخرین تعامل گذشته{% else %}هنوز تعامل کافی ثبت نشده{% endif %}</span>
             </span>
             <span class="attention-arrow">←</span>
           </a>

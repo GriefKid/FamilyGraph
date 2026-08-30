@@ -540,6 +540,46 @@ class PersonaVersioningTests(TestCase):
         self.assertEqual([s['text'] for s in p.statements], ['نسخهٔ دوم'])
 
 
+class AttentionPriorityTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='attn', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='attn-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.a = Node.objects.create(owner=self.user, username='green-but-overdue-task', name='آدم اول')
+        self.b = Node.objects.create(owner=self.user, username='just-quiet', name='آدم دوم')
+        Relationship.objects.create(owner=self.user, source=self.root, target=self.a, strength=4)
+        Relationship.objects.create(owner=self.user, source=self.root, target=self.b, strength=4)
+
+    def test_overdue_followup_lifts_priority_and_explains_why(self):
+        from main.health import attention_priority
+        Interaction.objects.create(
+            owner=self.user, node=self.a, kind='call',
+            date=timezone.localdate() - timedelta(days=2),
+        )
+        FollowUp.objects.create(
+            owner=self.user, node=self.a, text='زنگ بزن',
+            due_date=timezone.localdate() - timedelta(days=5),
+        )
+        prio = attention_priority(self.user)
+        self.assertGreater(prio[self.a.id]['score'], prio[self.b.id]['score'])
+        self.assertIn('پیگیری عقب‌افتاده دارد', prio[self.a.id]['factors'])
+
+    def test_dashboard_lists_a_person_flagged_only_by_an_overdue_task(self):
+        Interaction.objects.create(
+            owner=self.user, node=self.a, kind='call', date=timezone.localdate(),
+        )
+        FollowUp.objects.create(
+            owner=self.user, node=self.a, text='قرار بود کتاب را برگردانم',
+            due_date=timezone.localdate() - timedelta(days=3),
+        )
+        self.client.force_login(self.user)
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        names = [item['node'].id for item in response.context['attention']]
+        self.assertIn(self.a.id, names)
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

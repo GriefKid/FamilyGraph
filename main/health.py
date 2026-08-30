@@ -234,3 +234,90 @@ def health_summary(health_map):
     for h in health_map.values():
         counts[h['status']] = counts.get(h['status'], 0) + 1
     return counts
+
+
+_STATUS_WEIGHT = {'red': 45, 'yellow': 22, 'unknown': 8, 'green': 0}
+_NEG_MOOD_WORDS = (
+    'ناراحت', 'غمگین', 'استرس', 'اضطراب', 'عصبانی', 'نگران', 'تنها', 'افسرده',
+    'sad', 'stress', 'anxious', 'worried', 'upset', 'depressed',
+)
+
+
+def attention_priority(user, health_map=None):
+    """node_id → {'score': float, 'factors': [str]}
+
+    ترکیب سلامت رابطه با نشانه‌های فوریت (پیگیری عقب‌افتاده، حال بد اخیر،
+    رویداد نزدیک، بدهی باز) تا رتبه‌بندی «نیازمند توجه» واقعی‌تر شود و برای
+    هر نفر یک «چرا» به دست بیاید.
+    """
+    from datetime import timedelta
+
+    if health_map is None:
+        health_map = compute_health(user)
+    today = timezone.localdate()
+    out = {}
+    for nid, h in health_map.items():
+        factors = []
+        score = float(_STATUS_WEIGHT.get(h.get('status'), 0))
+        days = h.get('days_since')
+        expected = h.get('expected')
+        if days and expected:
+            over = days - expected
+            if over > 0:
+                score += min(25, over / max(1, expected) * 15)
+        if h.get('status') == 'red':
+            factors.append('مدت‌هاست تعاملی نبوده')
+        elif h.get('status') == 'yellow':
+            factors.append('دارد از رابطه فاصله می‌افتد')
+        out[nid] = {'score': score, 'factors': factors}
+
+    def _bump(nid, amount, reason):
+        row = out.setdefault(nid, {'score': 0.0, 'factors': []})
+        row['score'] += amount
+        if reason not in row['factors']:
+            row['factors'].append(reason)
+
+    # پیگیری‌های عقب‌افتاده
+    try:
+        from .models import FollowUp
+        for nid in FollowUp.objects.filter(
+            owner=user, node__owner=user, done=False, due_date__lt=today,
+        ).values_list('node_id', flat=True):
+            _bump(nid, 30, 'پیگیری عقب‌افتاده دارد')
+    except Exception:
+        pass
+
+    # حال بدِ اخیر در یادداشت‌ها (۱۴ روز)
+    try:
+        cutoff = today - timedelta(days=14)
+        rows = JournalEntry.objects.filter(
+            owner=user, entry_date__gte=cutoff,
+        ).exclude(mood='').values_list('mentioned_nodes__id', 'mood')
+        for nid, mood in rows:
+            if nid and mood and any(w in mood.lower() for w in _NEG_MOOD_WORDS):
+                _bump(nid, 20, 'حال‌وهوایش اخیراً خوب نبوده')
+    except Exception:
+        pass
+
+    # رویداد نزدیک (۳ روز آینده) — آمادگی لازم است
+    try:
+        soon = today + timedelta(days=3)
+        for nid in Event.objects.filter(
+            owner=user, date__gte=today, date__lte=soon,
+        ).values_list('participants__id', flat=True):
+            if nid:
+                _bump(nid, 15, 'رویداد نزدیک با او داری')
+    except Exception:
+        pass
+
+    # بدهی باز
+    try:
+        from .models import Debt
+        for nid in Debt.objects.filter(
+            owner=user, node__owner=user, settled=False,
+        ).values_list('node_id', flat=True):
+            _bump(nid, 8, 'حساب مالی باز دارید')
+    except Exception:
+        pass
+
+    return out
