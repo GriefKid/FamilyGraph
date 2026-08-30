@@ -484,10 +484,25 @@ JSON خالص:
     return clean, str(result.get('summary', ''))[:600]
 
 
+def _statement_text(s):
+    if isinstance(s, dict):
+        return str(s.get('text', '')).strip()
+    return str(s or '').strip()
+
+
 def _payload(p):
+    prev_texts = {_statement_text(s) for s in (getattr(p, 'previous_statements', None) or [])}
+    statements = p.statements or []
+    fresh = [_statement_text(s) for s in statements if _statement_text(s) not in prev_texts]
     return {
-        'statements': p.statements or [],
+        'statements': statements,
         'summary': p.summary or '',
+        'new_statements': fresh if prev_texts else [],
+        'had_previous': bool(prev_texts),
+        'previous_synth_at': (
+            p.previous_synth_at.strftime('%Y-%m-%d %H:%M')
+            if getattr(p, 'previous_synth_at', None) else None
+        ),
         'updated_at': p.updated_at.strftime('%Y-%m-%d %H:%M') if p.updated_at else None,
     }
 
@@ -525,9 +540,14 @@ def persona_synthesize_api(request, pk):
 
     try:
         from .models import PersonaProfile
+        existing = PersonaProfile.objects.filter(node=node, owner=request.user).first()
+        prev_statements = list(existing.statements or []) if existing else []
+        prev_at = existing.updated_at if existing else None
         p, _ = PersonaProfile.objects.update_or_create(
             node=node, defaults={'statements': statements, 'summary': summary,
-                                 'owner': request.user})
+                                 'owner': request.user,
+                                 'previous_statements': prev_statements,
+                                 'previous_synth_at': prev_at})
         return JsonResponse({'ok': True, 'persona': _payload(p)})
     except Exception:
         return JsonResponse({'ok': True, 'persona': {
@@ -580,9 +600,14 @@ def rel_persona_synthesize_api(request, pk):
 
     try:
         from .models import RelationshipProfile
+        existing = RelationshipProfile.objects.filter(relationship=rel, owner=request.user).first()
+        prev_statements = list(existing.statements or []) if existing else []
+        prev_at = existing.updated_at if existing else None
         p, _ = RelationshipProfile.objects.update_or_create(
             relationship=rel, defaults={'statements': statements, 'summary': summary,
-                                        'owner': request.user})
+                                        'owner': request.user,
+                                        'previous_statements': prev_statements,
+                                        'previous_synth_at': prev_at})
         return JsonResponse({'ok': True, 'persona': _payload(p)})
     except Exception:
         return JsonResponse({'ok': True, 'persona': {

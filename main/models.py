@@ -1359,6 +1359,10 @@ class PersonaProfile(models.Model):
     summary    = models.TextField(blank=True, default='', verbose_name='جمع‌بندی')
     statements = models.JSONField(default=list, blank=True,
                                    verbose_name='جملات شناخت')
+    previous_statements = models.JSONField(default=list, blank=True,
+                                           verbose_name='جملات نسخهٔ قبل')
+    previous_synth_at = models.DateTimeField(null=True, blank=True,
+                                             verbose_name='زمان سنتز قبلی')
     updated_at = models.DateTimeField(auto_now=True)
     owner      = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
@@ -1386,6 +1390,8 @@ class RelationshipProfile(models.Model):
                                          related_name='profile', verbose_name='رابطه')
     summary      = models.TextField(blank=True, default='')
     statements   = models.JSONField(default=list, blank=True)
+    previous_statements = models.JSONField(default=list, blank=True)
+    previous_synth_at = models.DateTimeField(null=True, blank=True)
     updated_at   = models.DateTimeField(auto_now=True)
     owner        = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,

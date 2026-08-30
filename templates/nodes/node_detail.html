@@ -1355,13 +1355,19 @@ function npersonaRender(p){
   const box = document.getElementById('npersonaBox');
   if(!p || !(p.statements||[]).length){ box.textContent = 'هنوز شناختی ساخته نشده — دکمه بالا رو بزن.'; return; }
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fresh = new Set(p.new_statements || []);
   let html = '';
   if(p.summary) html += `<div style="padding:11px 14px;border-radius:12px;background:rgba(99,102,241,.07);border:1px dashed rgba(99,102,241,.3);line-height:1.9;margin-bottom:10px;color:var(--text);">${esc(p.summary)}</div>`;
-  html += (p.statements||[]).map(s => `
-    <div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px dashed var(--border);align-items:baseline;color:var(--text);">
-      <span style="color:#a5b4fc;">✦</span><span style="flex:1;line-height:1.9;">${esc(s.text)}</span>
+  if(p.had_previous && fresh.size) html += `<div style="font-size:11px;color:#34d399;margin-bottom:6px;">✦ ${fresh.size} برداشت تازه از آخرین سنتز${p.previous_synth_at?(' ('+esc(p.previous_synth_at)+')'):''}</div>`;
+  html += (p.statements||[]).map(s => {
+    const isNew = fresh.has((s.text||'').trim());
+    return `
+    <div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px dashed var(--border);align-items:baseline;color:var(--text);${isNew?'background:rgba(52,211,153,.06);':''}">
+      <span style="color:${isNew?'#34d399':'#a5b4fc'};">✦</span><span style="flex:1;line-height:1.9;">${esc(s.text)}</span>
+      ${isNew?`<span class="chip" style="font-size:10px;flex-shrink:0;background:rgba(52,211,153,.15);color:#34d399;">تازه</span>`:''}
       ${s.kind?`<span class="chip chip-gray" style="font-size:10px;flex-shrink:0;">${esc(s.kind)}</span>`:''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   if(p.updated_at) html += `<div style="font-size:10px;color:var(--text-muted);margin-top:8px;">آخرین به‌روزرسانی: ${esc(p.updated_at)}</div>`;
   box.innerHTML = html;
 }

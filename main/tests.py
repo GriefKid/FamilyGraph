@@ -492,6 +492,54 @@ class AIPanelRenderingTests(TestCase):
         self.assertNotIn("${s.action||''}", source)
 
 
+class PersonaVersioningTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='persona-v', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='persona-friend')
+
+    def test_payload_flags_statements_added_since_the_previous_synthesis(self):
+        from main.models import PersonaProfile
+        from main.views_persona import _payload
+        p = PersonaProfile.objects.create(
+            node=self.node, owner=self.user,
+            previous_statements=[{'text': 'قهوه دوست دارد', 'kind': 'سلیقه'}],
+            statements=[
+                {'text': 'قهوه دوست دارد', 'kind': 'سلیقه'},
+                {'text': 'شب‌ها سرحال‌تر است', 'kind': 'عادت'},
+            ],
+        )
+        data = _payload(p)
+        self.assertTrue(data['had_previous'])
+        self.assertEqual(data['new_statements'], ['شب‌ها سرحال‌تر است'])
+
+    def test_first_synthesis_has_no_new_badge(self):
+        from main.models import PersonaProfile
+        from main.views_persona import _payload
+        p = PersonaProfile.objects.create(
+            node=self.node, owner=self.user,
+            statements=[{'text': 'اهل کتاب است', 'kind': 'سلیقه'}],
+        )
+        self.assertFalse(_payload(p)['had_previous'])
+        self.assertEqual(_payload(p)['new_statements'], [])
+
+    def test_synthesize_snapshots_the_prior_statements(self):
+        from main.models import PersonaProfile
+        PersonaProfile.objects.create(
+            node=self.node, owner=self.user,
+            statements=[{'text': 'نسخهٔ اول', 'kind': ''}],
+        )
+        self.client.force_login(self.user)
+        with mock.patch(
+            'main.views_persona._synthesize',
+            return_value=([{'text': 'نسخهٔ دوم', 'kind': ''}], 'جمع‌بندی'),
+        ), mock.patch('main.views_persona.gather_person_signals', return_value=['a', 'b', 'c']):
+            response = self.client.post(f'/api/persona/node/{self.node.id}/synthesize/')
+        self.assertEqual(response.status_code, 200)
+        p = PersonaProfile.objects.get(node=self.node)
+        self.assertEqual([s['text'] for s in p.previous_statements], ['نسخهٔ اول'])
+        self.assertEqual([s['text'] for s in p.statements], ['نسخهٔ دوم'])
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')
