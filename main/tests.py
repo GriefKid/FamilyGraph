@@ -470,6 +470,28 @@ class WarmestIntroPathTests(TestCase):
         self.assertEqual(data['hops'], 2)
 
 
+class AIPanelRenderingTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='ai-panel', password='SecurePass1')
+        self.client.force_login(self.user)
+
+    def test_person_page_uses_a_skeleton_while_ai_panels_load(self):
+        node = Node.objects.create(owner=self.user, username='ai-panel-friend')
+        from django.template.loader import get_template
+        source = get_template('nodes/node_detail.html').template.source
+        self.assertIn('function aiSkel', source)
+        self.assertIn('aiSkel(', source.split('function aiSkel', 1)[1])
+        response = self.client.get(f'/nodes/{node.id}/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_alerts_recommendation_panel_escapes_model_output(self):
+        from django.template.loader import get_template
+        source = get_template('alerts/alerts.html').template.source
+        self.assertIn('const escA =', source)
+        self.assertIn('${escA(s.action)}', source)
+        self.assertNotIn("${s.action||''}", source)
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

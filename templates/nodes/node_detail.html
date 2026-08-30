@@ -449,6 +449,15 @@
 
 .empty-sec{ padding:28px 20px; text-align:center; color:var(--text-muted); font-size:13px; }
 
+/* Shimmer placeholder shown while an AI panel is thinking */
+.ai-skel{display:flex;flex-direction:column;gap:9px;padding:4px 0}
+.ai-skel i{display:block;height:12px;border-radius:7px;
+  background:linear-gradient(90deg,rgba(148,163,184,.12) 25%,rgba(148,163,184,.28) 37%,rgba(148,163,184,.12) 63%);
+  background-size:400% 100%;animation:aiskel 1.3s ease-in-out infinite}
+.ai-skel i:nth-child(2){width:82%}.ai-skel i:nth-child(3){width:64%}.ai-skel i:nth-child(4){width:90%}
+@keyframes aiskel{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media(prefers-reduced-motion:reduce){.ai-skel i{animation:none}}
+
 </style>
 {% endblock %}
 
@@ -1277,6 +1286,7 @@ async function analyzeRelation(){
   const btn = document.getElementById('relBtn');
   const body = document.getElementById('aiBody');
   btn.disabled = true; btn.textContent = '💠 در حال تحلیل…';
+  body.innerHTML = aiSkel(4);
   try{
     const r = await fetch('/api/nodes/{{ node.id }}/relation-analyze/', {
       method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}});
@@ -1333,6 +1343,13 @@ async function saveRelation(){
   }catch(e){ m.style.color='#f43f5e'; m.textContent='خطای سرور'; }
 }
 
+// Shimmer skeleton markup for AI panels that are waiting on a model reply
+function aiSkel(rows){
+  rows = rows || 4;
+  return '<div class="ai-skel" role="status" aria-label="در حال پردازش">'
+    + '<i></i>'.repeat(rows) + '</div>';
+}
+
 // ═══ V11: شناخت ═══
 function npersonaRender(p){
   const box = document.getElementById('npersonaBox');
@@ -1351,7 +1368,7 @@ function npersonaRender(p){
 async function npersonaLoad(fresh){
   const box = document.getElementById('npersonaBox');
   if(!box) return;
-  box.textContent = fresh ? '✦ دارم همه‌چیز رو کنار هم می‌ذارم…' : '…';
+  box.innerHTML = fresh ? aiSkel(5) : aiSkel(3);
   try{
     const r = await fetch(fresh ? '/api/persona/node/{{ node.id }}/synthesize/' : '/api/persona/node/{{ node.id }}/',
       fresh ? {method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}} : {});
@@ -1533,7 +1550,7 @@ async function loadSummary(){
   const body = document.getElementById('aiBody');
   btn.disabled = true;
   btn.textContent = 'در حال تحلیل...';
-  body.innerHTML = '<span style="color:var(--text-muted);font-size:13px;">✦ در حال پردازش...</span>';
+  body.innerHTML = aiSkel(4);
   try{
     const res = await fetch('/api/node/{{ node.id }}/summary/', {
       method:'POST',

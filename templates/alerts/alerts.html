@@ -301,17 +301,18 @@ async function toggleSuggestions(btn){
     });
     const d = await r.json();
     if(d.ok && d.result){
+      const escA = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
       let html = (d.result.suggestions||[]).map(s=>`
         <div class="sugg-item">
-          <div class="sugg-rank">${s.rank}</div>
+          <div class="sugg-rank">${escA(s.rank)}</div>
           <div>
-            <div class="sugg-action">${s.action||''}</div>
-            <div class="sugg-reason">${s.reason||''}</div>
-            <span class="sugg-diff">${s.difficulty||''}</span>
+            <div class="sugg-action">${escA(s.action)}</div>
+            <div class="sugg-reason">${escA(s.reason)}</div>
+            <span class="sugg-diff">${escA(s.difficulty)}</span>
           </div>
         </div>`).join('');
       if(d.result.personal_note)
-        html += `<div class="personal-note">💬 ${d.result.personal_note}</div>`;
+        html += `<div class="personal-note">💬 ${escA(d.result.personal_note)}</div>`;
       panel.innerHTML = html;
       panel.dataset.loaded = '1';
     } else {
