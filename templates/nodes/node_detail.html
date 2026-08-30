@@ -488,10 +488,26 @@
       </div>
       {% if not is_root_node %}
       <div class="hero-quick-actions">
+        <button type="button" onclick="togglePersonPin(this)">{% if node.is_pinned %}★ برداشتن پین{% else %}☆ پین‌کردن{% endif %}</button>
+        <button type="button" onclick="createPersonShareLink()">🔗 لینک امن</button>
+        <a href="/people/{{ node.id }}/card/">🪪 کارت شخص</a>
+        <button type="button" onclick="showMeetingBrief()">🧳 آمادگی ملاقات</button>
+        <button type="button" onclick="startMeetingReflection()">📝 بازتاب ملاقات</button>
+        {% if request.user.root_node_id %}<a href="/relationships/create/?target={{ node.id }}">🔗 ثبت رابطه با من</a>{% endif %}
         <button type="button" onclick="document.getElementById('interaction-section').scrollIntoView({behavior:'smooth',block:'start'})">⚡ ثبت تعامل</button>
         <button type="button" onclick="document.getElementById('followup-section').scrollIntoView({behavior:'smooth',block:'start'})">📌 ثبت پیگیری</button>
         <a href="/journal/?person={{ node.username|urlencode }}">✍ خاطره دربارهٔ این شخص</a>
       </div>
+      {% endif %}
+      {% if is_new_person and not is_root_node %}
+      <div style="margin-top:12px;padding:10px 12px;border:1px solid rgba(129,140,248,.24);border-radius:11px;background:rgba(99,102,241,.07);font-size:12px;line-height:1.8;color:var(--text-soft)">
+        برای شروع لازم نیست همه‌چیز را کامل کنی؛ یک تعامل، پیگیری یا خاطرهٔ کوتاه دربارهٔ این شخص ثبت کن.
+      </div>
+      {% endif %}
+      {% if relationship_focus %}
+      <button type="button" onclick="document.getElementById('{{ relationship_focus.target }}').scrollIntoView({behavior:'smooth',block:'start'})" style="display:block;width:100%;text-align:right;margin-top:10px;padding:10px 12px;border:1px solid rgba(52,211,153,.28);border-radius:11px;background:rgba(16,185,129,.08);color:var(--text);cursor:pointer;font:inherit">
+        <b style="display:block;font-size:12px">قدم بعدی: {{ relationship_focus.title }}</b><span style="font-size:11px;color:var(--text-muted)">{{ relationship_focus.note }}</span>
+      </button>
       {% endif %}
     </div>
   </div>
@@ -701,6 +717,7 @@
           {% if f.due_date < today %}⏰ گذشته: {% elif f.due_date == today %}⏰ امروز{% else %}📅 {% endif %}{% if f.due_date != today %}{{ f.due_date|date:"Y/m/d" }}{% endif %}
         </span>
       {% endif %}
+      <button class="fu-del" onclick="fuSnooze({{ f.id }})" title="یک هفته بعد">↷</button>
       <button class="fu-del" onclick="fuDelete({{ f.id }})" title="حذف">✕</button>
     </div>
     {% empty %}
@@ -1583,5 +1600,46 @@ window.loadSummary=async function(){
   }catch(e){body.textContent='خطا در ارتباط با سرور'}
   finally{btn.disabled=false;btn.textContent='تولید دوباره'}
 }
+</script>
+<script>
+async function showMeetingBrief(){
+  const actions=document.querySelector('.hero-quick-actions');
+  let box=document.getElementById('meetingBrief');
+  if(!box){box=document.createElement('div');box.id='meetingBrief';box.style.cssText='margin-top:10px;padding:11px;border:1px solid rgba(59,130,246,.25);border-radius:10px;background:rgba(59,130,246,.07);font-size:12px;line-height:1.9';actions.insertAdjacentElement('afterend',box)}
+  box.textContent='در حال آماده‌سازی…';
+  try{const r=await fetch('/api/relationship-life/briefing/{{ node.id }}/'),d=await r.json();if(!r.ok)throw new Error(d.error||'خطا');const lines=[];if(d.last_interaction)lines.push('آخرین تعامل: '+d.last_interaction);if(d.commitments?.length)lines.push('قول‌های باز: '+d.commitments.map(x=>x.text).join('، '));if(d.gift_suggestions?.length)lines.push('ایدهٔ هدیه: '+d.gift_suggestions.join('، '));if(d.facts?.length)lines.push('نکات مهم: '+d.facts.slice(0,4).map(x=>x.value).join('، '));box.textContent=lines.join('\n')||'هنوز نکتهٔ ثبت‌شده‌ای برای این ملاقات نداریم.';box.style.whiteSpace='pre-line'}catch(e){box.textContent=e.message||'خطا در آماده‌سازی خلاصه.'}}
+async function startMeetingReflection(){const summary=window.prompt('دیدار یا گفتگو چطور بود؟ یک جمله کافی است.');if(!summary?.trim())return;const r=await fetch('/api/relationship-life/reflection/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({node_id:{{ node.id }},summary,relationship_change:'same',feeling:0})}),d=await r.json();if(!r.ok)return fgToast(d.error||'ثبت بازتاب انجام نشد.',true);fgToast('بازتاب ثبت شد.');setTimeout(()=>location.reload(),500)}
+</script>
+<script>
+// Override the compact browser prompt with an inline, mobile-friendly reflection form.
+function startMeetingReflection(){
+  let box=document.getElementById('meetingReflectionForm');
+  if(box){box.remove();return}
+  const actions=document.querySelector('.hero-quick-actions');
+  box=document.createElement('div');box.id='meetingReflectionForm';box.style.cssText='margin-top:10px;padding:12px;border:1px solid rgba(129,140,248,.28);border-radius:11px;background:rgba(99,102,241,.07)';
+  box.innerHTML='<label style="display:block;font-size:12px;font-weight:700;margin-bottom:7px">دیدار یا گفتگو چطور بود؟</label><textarea rows="3" style="width:100%;box-sizing:border-box;padding:9px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font:inherit" placeholder="یک جمله کافی است…"></textarea><div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary btn-sm">ثبت بازتاب</button><button class="btn btn-sm" type="button">لغو</button></div>';
+  actions.insertAdjacentElement('afterend',box);const text=box.querySelector('textarea');text.focus();const [save,cancel]=box.querySelectorAll('button');cancel.onclick=()=>box.remove();save.onclick=async()=>{const summary=text.value.trim();if(!summary)return fgToast('اول یک جمله بنویس.',true);save.disabled=true;const r=await fetch('/api/relationship-life/reflection/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({node_id:{{ node.id }},summary,relationship_change:'same',feeling:0})}),d=await r.json();if(!r.ok){save.disabled=false;return fgToast(d.error||'ثبت بازتاب انجام نشد.',true)}fgToast('بازتاب ثبت شد.');setTimeout(()=>location.reload(),450)};
+}
+</script>
+<script>
+async function loadRelationAssistant(){
+  const box=document.getElementById('relationAssistant');if(!box)return;
+  box.textContent='در حال آماده‌سازی…';
+  try{const r=await fetch('/api/memory/assistant/{{ node.id }}/'),d=await r.json();if(!r.ok)throw new Error(d.error||'خطا');box.replaceChildren();
+    const add=(label,value)=>{if(!value)return;const row=document.createElement('div');const strong=document.createElement('b');strong.textContent=label+' ';row.append(strong,document.createTextNode(value));box.append(row)};
+    add('موضوع پیشنهادی:',d.topic);add('پیش‌نویس پیام:',d.draft);if(d.open_topics?.length)add('موضوعات باز:',d.open_topics.join('، '));if(d.avoid?.length)add('مرزها و حساسیت‌ها:',d.avoid.join('، '));
+    if(d.draft){const copy=document.createElement('button');copy.className='btn btn-sm';copy.style.marginTop='9px';copy.textContent='کپی متن پیام';copy.onclick=async()=>{try{await navigator.clipboard.writeText(d.draft);fgToast('متن پیام کپی شد.')}catch(e){fgToast('کپی خودکار ممکن نشد.',true)}};box.append(copy)}
+    const note=document.createElement('small');note.style.cssText='display:block;margin-top:8px;color:var(--text-muted)';note.textContent=(d.reason||'')+' · '+(d.safety||'');box.append(note);
+  }catch(e){box.textContent=e.message||'خطا در آماده‌سازی پیشنهاد.'}
+}
+</script>
+<script>
+async function fuSnooze(id){const r=await fetch('/api/followups/'+id+'/snooze/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({days:7})}),d=await r.json();if(!r.ok)return fgToast(d.error||'عقب‌انداختن انجام نشد.',true);fgToast('برای یک هفته بعد یادآوری می‌شود.');setTimeout(()=>location.reload(),350)}
+</script>
+<script>
+async function createPersonShareLink(){const r=await fetch('/api/people/{{ node.id }}/share-link/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},body:JSON.stringify({days:7})}),d=await r.json();if(!r.ok)return fgToast(d.error||'ساخت لینک انجام نشد.',true);const url=location.origin+'/shared/person/'+d.token+'/';try{await navigator.clipboard.writeText(url);fgToast('لینک امن ۷ روزه کپی شد.')}catch(e){window.prompt('این لینک را کپی کن:',url)}}
+</script>
+<script>
+async function togglePersonPin(button){const r=await fetch('/api/nodes/{{ node.id }}/pin/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}}),d=await r.json();if(!r.ok)return fgToast(d.error||'تغییر پین انجام نشد.',true);button.textContent=d.is_pinned?'★ برداشتن پین':'☆ پین‌کردن';fgToast(d.is_pinned?'به افراد پین‌شده اضافه شد.':'پین برداشته شد.')}
 </script>
 {% endblock %}

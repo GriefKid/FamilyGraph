@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .models import Node, JournalEntry
 from .utils_jalali import jalali_full_str, jalali_day_name
@@ -125,6 +126,7 @@ def checkin_view(request):
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
+@require_POST
 def checkin_submit_api(request):
     """POST {contacts:[{node_id,kind}], mood, highlight?, followup?{node_id,text}}"""
     if request.method != 'POST':

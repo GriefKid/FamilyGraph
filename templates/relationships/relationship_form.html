@@ -137,7 +137,9 @@ margin-top:8px;
         </select>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+      <details style="margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text-soft)">جزئیات رابطه، برای بعد</summary>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px">
         <div class="form-group">
           <label class="form-label">قدرت رابطه (۱-۵)</label>
           <select name="strength" class="form-select">
@@ -160,6 +162,7 @@ margin-top:8px;
                  value="{{ form.instance.met_at|date:'Y-m-d'|default:'' }}">
         </div>
       </div>
+      </details>
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">ذخیره</button>

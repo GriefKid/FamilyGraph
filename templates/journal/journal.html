@@ -240,9 +240,8 @@
   font-family:'Vazirmatn',sans-serif;
 }
 .filter-clear:hover{background:rgba(239,68,68,.2);}
-.filter-summary{font-size:11px;color:var(--text-muted);margin:0 0 10px;padding:0 3px;min-height:18px;}
-.filter-summary strong{color:var(--primary-light);}
-.journal-empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:42px 20px;text-align:center;color:var(--text-muted);}
+.filter-result-status{min-height:18px;margin:-5px 2px 10px;font-size:11px;color:var(--text-muted);}
+.empty-state .filter-clear{margin-top:12px;}
 
 /* ══ Entry cards (list tab) ═══════════════════════════ */
 .entry-card{
@@ -495,7 +494,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
       <input type="date" id="fTo" class="date-input-sm" onchange="loadEntries()">
       <button class="filter-clear" onclick="clearFilters()">× پاک کردن</button>
     </div>
-    <div id="journalResultSummary" class="filter-summary" role="status" aria-live="polite"></div>
+    <div id="entriesStatus" class="filter-result-status" aria-live="polite"></div>
     <div id="entriesList">
       <div class="empty-state">در حال بارگذاری...</div>
     </div>
@@ -1286,103 +1285,48 @@ async function loadEntries(){
   if(dTo)    params.set('to', dTo);
 
   const list = document.getElementById('entriesList');
+  const status = document.getElementById('entriesStatus');
+  const hasActiveFilters = [q, tag, person, mood, dFrom, dTo].some(Boolean);
+  status.textContent = '';
   list.innerHTML = '<div class="empty-state"><span class="spinner"></span> بارگذاری...</div>';
 
   try{
     const r = await fetch('/api/journal/entries/?'+params);
     const d = await r.json();
-    if(requestId !== entryLoadRequestId) return;
-    if(!r.ok) throw new Error(d.error||'load failed');
-    const entries=Array.isArray(d.entries)?d.entries:[];
-    const summary = document.getElementById('journalResultSummary');
-    if(!entries.length){
-      summary.innerHTML = 'تعداد نتایج: <strong>۰</strong>';
-      list.innerHTML = '<div class="journal-empty"><div>یادداشتی با این فیلترها پیدا نشد.</div><button class="filter-clear" type="button" onclick="clearFilters()">پاک‌کردن فیلترها</button></div>';
+    if(!d.entries.length){
+      status.textContent = hasActiveFilters ? '۰ نتیجه' : '';
+      list.innerHTML = hasActiveFilters
+        ? '<div class="empty-state">با این فیلترها یادداشتی پیدا نشد<br><button class="filter-clear" onclick="clearFilters()">پاک‌کردن فیلترها</button></div>'
+        : '<div class="empty-state">هنوز یادداشتی ثبت نشده است</div>';
       return;
     }
-    summary.replaceChildren();
-    summary.append('تعداد نتایج: ');
-    const count=document.createElement('strong');
-    count.textContent=String(entries.length);
-    summary.appendChild(count);
-    if(entries.length===60) summary.append(' (۶۰ مورد اول)');
-
-    list.replaceChildren();
-    entries.forEach(e=>{
-      const id=Number(e.id);
-      if(!Number.isInteger(id)) return;
-      const card=document.createElement('div');
-      card.className='entry-card';
-      const top=document.createElement('div');
-      top.className='entry-card-top';
-      const imageUrl=journalSafeURL(e.image);
-      if(imageUrl){
-        const image=document.createElement('img');
-        image.className='entry-card-thumb';
-        image.src=imageUrl;
-        image.alt='';
-        top.appendChild(image);
-      }else{
-        const placeholder=document.createElement('div');
-        placeholder.className='entry-card-ph';
-        placeholder.textContent='📝';
-        top.appendChild(placeholder);
-      }
-
-      const body=document.createElement('div');
-      body.className='entry-card-body';
-      const date=document.createElement('div');
-      date.className='entry-card-date';
-      date.textContent=String(e.entry_date||e.created_at||'')+
-        (e.occurred_at?' · '+String(e.occurred_at):'')+
-        (e.kind==='moment'?' · ✦ لحظه':' · ☾ جمع‌بندی');
-      const text=document.createElement('div');
-      text.className='entry-card-text';
-      text.id='et'+id;
-      text.textContent=String(e.text||'');
-      const meta=document.createElement('div');
-      meta.className='entry-card-meta';
-      const addMeta=(className,value)=>{
-        const badge=document.createElement('span');
-        badge.className=className;
-        badge.textContent=value;
-        meta.appendChild(badge);
-      };
-      (Array.isArray(e.tags)?e.tags:[]).forEach(tag=>addMeta('entry-tag','#'+String(tag)));
-      if(e.mood) addMeta('entry-mood-badge',String(e.mood));
-      (Array.isArray(e.mentioned)?e.mentioned:[]).forEach(username=>addMeta('entry-person','@'+String(username)));
-      if(e.analyzed) addMeta('entry-ai-badge','✦ AI');
-      body.append(date,text,meta);
-      top.appendChild(body);
-
-      const actions=document.createElement('div');
-      actions.className='entry-card-actions';
-      const expand=document.createElement('button');
-      expand.className='entry-btn';
-      expand.textContent='نمایش کامل';
-      expand.addEventListener('click',()=>toggleText(id));
-      const edit=document.createElement('button');
-      edit.className='entry-btn primary';
-      edit.textContent='✎ ویرایش';
-      edit.addEventListener('click',()=>loadEntry(
-        String(e.text||''), String(e.entry_date||''), Array.isArray(e.tags)?e.tags:[]
-      ));
-      actions.append(expand,edit);
-      if(!e.analyzed){
-        const analyze=document.createElement('button');
-        analyze.className='entry-btn primary';
-        analyze.textContent='✦ آنالیز AI';
-        analyze.addEventListener('click',()=>analyzeExisting(
-          id, String(e.text||''), String(e.entry_date||'')
-        ));
-        actions.appendChild(analyze);
-      }
-      card.append(top,actions);
-      list.appendChild(card);
-    });
+    status.textContent = d.total > d.entries.length
+      ? `${d.total} نتیجه پیدا شد؛ ۶۰ مورد اول نمایش داده می‌شود`
+      : `${d.total} نتیجه پیدا شد`;
+    list.innerHTML = d.entries.map(e => `
+      <div class="entry-card">
+        <div class="entry-card-top">
+          ${e.image ? `<img class="entry-card-thumb" src="${e.image}">` : `<div class="entry-card-ph">📝</div>`}
+          <div class="entry-card-body">
+            <div class="entry-card-date">${e.entry_date || e.created_at}${e.occurred_at ? ' · '+e.occurred_at : ''}${e.kind === 'moment' ? ' · ✦ لحظه' : ' · ☾ جمع‌بندی'}</div>
+            <div class="entry-card-text" id="et${e.id}">${e.preview}</div>
+            <div class="entry-card-meta">
+              ${e.tags.map(t=>`<span class="entry-tag">#${t}</span>`).join('')}
+              ${e.mood ? `<span class="entry-mood-badge">${e.mood}</span>` : ''}
+              ${e.mentioned.map(u=>`<span class="entry-person">@${u}</span>`).join('')}
+              ${e.analyzed ? '<span class="entry-ai-badge">✦ AI</span>' : ''}
+            </div>
+          </div>
+        </div>
+        <div class="entry-card-actions">
+          <button class="entry-btn" onclick="toggleText(${e.id})">نمایش کامل</button>
+          <button class="entry-btn primary" onclick="loadEntry('${e.text.replace(/'/g,"\\'").replace(/\n/g,' ')}','${e.entry_date||''}',${JSON.stringify(e.tags)})">✎ ویرایش</button>
+          ${!e.analyzed ? `<button class="entry-btn primary" onclick="analyzeExisting(${e.id},'${e.text.replace(/'/g,"\\'").replace(/\n/g,' ')}','${e.entry_date||''}')">✦ آنالیز AI</button>` : ''}
+        </div>
+      </div>
+    `).join('');
   }catch(err){
-    if(requestId !== entryLoadRequestId) return;
-    document.getElementById('journalResultSummary').textContent = 'بارگذاری نتایج ناموفق بود.';
+    status.textContent = '';
     list.innerHTML = '<div class="empty-state">خطا در بارگذاری</div>';
   }
 }

@@ -27,6 +27,7 @@ def notifications_view(request):
         'sync_notifs':    sync_notifs,
         'general_notifs': general_notifs,
         'unread_count': Notification.objects.filter(user=user, is_read=False).count(),
+        'notification_mode': (user.feature_overrides or {}).get('notification_mode', 'important'),
     })
 
 
@@ -50,6 +51,38 @@ def notifications_read_all_api(request):
         user=request.user, is_read=False,
     ).update(is_read=True)
     return JsonResponse({'ok': True, 'updated': updated, 'unread_count': 0})
+
+
+@login_required
+@require_POST
+def mark_notifications_read_api(request):
+    """Explicitly clear only the current user's unread notifications."""
+    updated = Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    return JsonResponse({'ok': True, 'updated': updated})
+
+
+@login_required
+@require_POST
+def notification_preferences_api(request):
+    """Save the user's preferred cadence for non-essential notifications.
+
+    This is deliberately separate from sync requests: those are direct data
+    changes and must remain visible until the owner responds to them.
+    """
+    try:
+        data = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON نامعتبر است.'}, status=400)
+
+    mode = data.get('mode')
+    if mode not in {'important', 'daily', 'weekly'}:
+        return JsonResponse({'error': 'تنظیم اعلان نامعتبر است.'}, status=400)
+
+    overrides = dict(request.user.feature_overrides or {})
+    overrides['notification_mode'] = mode
+    request.user.feature_overrides = overrides
+    request.user.save(update_fields=['feature_overrides'])
+    return JsonResponse({'ok': True, 'mode': mode})
 
 
 @login_required

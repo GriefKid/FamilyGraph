@@ -29,6 +29,9 @@
 	flex-direction:column;
 }
 
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:560px){.field-row{grid-template-columns:1fr;gap:0;}.form-container{margin:24px auto;}}
+
 .form-group label{
 	margin-bottom:6px;
 	color:#94a3b8;
@@ -84,25 +87,22 @@
 
 		{% csrf_token %}
 
-		{% for field in form %}
+		<p style="color:var(--text-muted);font-size:13px;line-height:1.8;margin:0 0 20px;">برای شروع فقط نام کافی است؛ باقی اطلاعات را هر وقت خواستی اضافه کن.</p>
 
-		<div class="form-group">
-
-			<label>
-				{{ field.label }}
-			</label>
-
-			{{ field }}
-
-			{% if field.errors %}
-			<div style="color:#ef4444;font-size:13px;margin-top:4px;">
-				{{ field.errors }}
-			</div>
-			{% endif %}
-
+		<div class="field-row">
+			<div class="form-group"><label>{{ form.first_name.label }}</label>{{ form.first_name }}{{ form.first_name.errors }}</div>
+			<div class="form-group"><label>{{ form.last_name.label }}</label>{{ form.last_name }}{{ form.last_name.errors }}</div>
 		</div>
+		<div class="form-group"><label>{{ form.nickname.label }}</label>{{ form.nickname }}{{ form.nickname.errors }}</div>
 
-		{% endfor %}
+		<details style="margin-top:8px;border:1px solid var(--border);border-radius:12px;padding:12px 14px;">
+			<summary style="cursor:pointer;font-size:13px;font-weight:700;">جزئیات بیشتر، برای بعد</summary>
+			<div style="margin-top:14px;">
+				{% for field in form %}{% if field.name != 'first_name' and field.name != 'last_name' and field.name != 'nickname' %}
+				<div class="form-group"><label>{{ field.label }}</label>{{ field }}{% if field.errors %}<div style="color:#ef4444;font-size:13px;margin-top:4px;">{{ field.errors }}</div>{% endif %}</div>
+				{% endif %}{% endfor %}
+			</div>
+		</details>
 
 		<div class="form-actions">
 

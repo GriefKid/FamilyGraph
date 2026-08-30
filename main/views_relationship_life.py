@@ -1,7 +1,7 @@
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -16,7 +16,7 @@ from pathlib import Path
 from .extraction import extract_text
 from .models import (Commitment, Debt, Event, GiftIdea, Information, Interaction,
                      JournalEntry, MeetingReflection, MemoryFact, Node, NodeSafetySetting,
-                     Relationship)
+                     Relationship, ShareLink)
 
 
 def _body(request):
@@ -60,6 +60,70 @@ def relationship_life_hub(request):
         'reflections': MeetingReflection.objects.filter(owner=user).select_related('node')[:20],
         'progress': progress,
     })
+
+
+@login_required
+def trust_center_view(request):
+    """Explain the user's private-data and AI boundaries in plain language."""
+    user = request.user
+    safety = list(NodeSafetySetting.objects.filter(owner=user, pause_contact_suggestions=True)
+                  .select_related('node').order_by('node__username'))
+    no_ai_facts = MemoryFact.objects.filter(owner=user, confidentiality='no_ai').count()
+    private_nodes = Node.objects.filter(owner=user, is_public=False).count()
+    return render(request, 'relationship_life/trust_center.html', {
+        'private_nodes': private_nodes,
+        'no_ai_facts': no_ai_facts,
+        'paused_people': safety,
+        'ai_enabled': user.ai_chat_enabled or user.ai_extraction_enabled or user.ai_journal_enabled,
+        'share_links': ShareLink.objects.filter(owner=user, revoked=False,
+                                                expires_at__gt=timezone.now()).select_related('node')[:20],
+    })
+
+
+@login_required
+def person_card_view(request, pk):
+    """A concise, private, print-friendly brief for one person."""
+    node = get_object_or_404(Node, owner=request.user, pk=pk, merged_into__isnull=True)
+    from .models import FollowUp
+    return render(request, 'relationship_life/person_card.html', {
+        'node': node,
+        'facts': MemoryFact.objects.filter(owner=request.user, node=node, active=True,
+                                            confidentiality__in=('normal', 'personal'))[:8],
+        'followups': FollowUp.objects.filter(owner=request.user, node=node, done=False)[:5],
+        'events': Event.objects.filter(owner=request.user, participants=node,
+                                       date__gte=timezone.localdate()).order_by('date')[:4],
+    })
+
+
+@login_required
+@require_POST
+def share_link_create_api(request, pk):
+    node = get_object_or_404(Node, owner=request.user, pk=pk, merged_into__isnull=True)
+    data = _body(request) or {}
+    try:
+        days = max(1, min(int(data.get('days', 7)), 30))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'مدت اعتبار نامعتبر است.'}, status=400)
+    link = ShareLink.objects.create(owner=request.user, node=node,
+                                    expires_at=timezone.now() + timedelta(days=days))
+    return JsonResponse({'ok': True, 'token': str(link.token), 'expires_at': link.expires_at.isoformat()})
+
+
+@login_required
+@require_POST
+def share_link_revoke_api(request, token):
+    link = get_object_or_404(ShareLink, owner=request.user, token=token, revoked=False)
+    link.revoked = True
+    link.save(update_fields=['revoked'])
+    return JsonResponse({'ok': True})
+
+
+def shared_person_card_view(request, token):
+    link = get_object_or_404(ShareLink, token=token, revoked=False,
+                             expires_at__gt=timezone.now())
+    facts = MemoryFact.objects.filter(owner=link.owner, node=link.node, active=True,
+                                      confidentiality='normal')[:6]
+    return render(request, 'relationship_life/shared_person_card.html', {'node': link.node, 'facts': facts})
 
 
 @login_required

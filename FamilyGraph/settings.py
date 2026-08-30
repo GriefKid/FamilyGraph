@@ -198,8 +198,9 @@ if _redis_url:
 else:
     CACHES = {
         'default': {
-            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
-            'LOCATION': BASE_DIR / 'django_cache',
+            'BACKEND': ('django.core.cache.backends.locmem.LocMemCache'
+                        if DEBUG else 'django.core.cache.backends.filebased.FileBasedCache'),
+            'LOCATION': ('familygraph-local' if DEBUG else BASE_DIR / 'django_cache'),
             'TIMEOUT': 21600,
             'OPTIONS': {'MAX_ENTRIES': 500},
         }

@@ -1,9 +1,10 @@
 import json
 import logging
 import os
-from datetime import timedelta
+from datetime import date, timedelta
 from django.db.models import Q, ProtectedError, Prefetch
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
+from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse, HttpResponse
@@ -18,7 +19,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from .models import Node, Information, Event
+from .models import Group, Node, Information, Event
 from django.views.generic import ListView
 from django.views.generic import TemplateView
 
@@ -92,6 +93,19 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         today = timezone.localdate()
+        snoozes = (user.feature_overrides or {}).get('daily_snoozed_until', {})
+
+        def is_snoozed(key):
+            try:
+                return date.fromisoformat(snoozes.get(key, '')) >= today
+            except (TypeError, ValueError):
+                return False
+
+        def is_muted(key):
+            try:
+                return date.fromisoformat((user.feature_overrides or {}).get('daily_muted_until', {}).get(key, '')) >= today
+            except (TypeError, ValueError):
+                return False
         root_id = user.root_node_id
 
         nodes = Node.objects.filter(
@@ -179,14 +193,16 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
             owner=user, status='pending'
         ).count()
         today_actions = []
-        if not checkin_done:
+        if not checkin_done and not is_snoozed('checkin') and not is_muted('checkin'):
             today_actions.append({'icon': '⚡', 'title': 'چک‌این امروز',
                                   'note': 'حال و انرژی امروزت را ثبت کن.', 'url': '/checkin/'})
         for item in attention[:2]:
+            if is_snoozed(f'node-{item["node"].id}') or is_muted(f'node-{item["node"].id}'):
+                continue
             today_actions.append({'icon': '💬', 'title': f'یک قدم برای {item["node"].display_name()}',
                                   'note': 'مدتی از آخرین تعامل گذشته است.',
                                   'url': f'/nodes/{item["node"].id}/'})
-        if pending_suggestions:
+        if pending_suggestions and not is_snoozed('suggestions') and not is_muted('suggestions'):
             today_actions.append({'icon': '✨', 'title': f'{pending_suggestions} پیشنهاد منتظر تصمیم',
                                   'note': 'حافظهٔ AI را مرور و اصلاح کن.', 'url': '/extractions/'})
 
@@ -200,15 +216,55 @@ class HomeBriefingView(LoginRequiredMixin, TemplateView):
             'checkin_done': checkin_done,
             'open_debts': open_debts,
             'pending_suggestions': pending_suggestions,
-            'today_actions': today_actions[:5],
+            # A daily briefing should create focus, not another task list.
+            'today_actions': today_actions[:3],
             'people_count': nodes.count(),
             'pinned_people': pinned_people,
+            'is_new_workspace': not nodes.exists(),
             'relationship_count': relationships.count(),
             'onboarding_ready': bool(
                 root_id and Information.objects.filter(node_id=root_id).exists()
             ),
         })
         return context
+
+
+@login_required
+@require_http_methods(['POST'])
+def daily_action_snooze_api(request):
+    try:
+        body = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON نامعتبر است.'}, status=400)
+    key = str(body.get('key', ''))
+    if key not in {'checkin', 'suggestions'} and (not key.startswith('node-') or not key[5:].isdigit() or not Node.objects.filter(owner=request.user, pk=key[5:]).exists()):
+        return JsonResponse({'error': 'پیشنهاد نامعتبر است.'}, status=400)
+    overrides = dict(request.user.feature_overrides or {})
+    snoozes = dict(overrides.get('daily_snoozed_until') or {})
+    snoozes[key] = (timezone.localdate() + timedelta(days=1)).isoformat()
+    overrides['daily_snoozed_until'] = snoozes
+    request.user.feature_overrides = overrides
+    request.user.save(update_fields=['feature_overrides'])
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_http_methods(['POST'])
+def daily_action_feedback_api(request):
+    try:
+        body = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'JSON نامعتبر است.'}, status=400)
+    key = str(body.get('key', ''))
+    if key not in {'checkin', 'suggestions'} and (not key.startswith('node-') or not key[5:].isdigit() or not Node.objects.filter(owner=request.user, pk=key[5:]).exists()):
+        return JsonResponse({'error': 'پیشنهاد نامعتبر است.'}, status=400)
+    overrides = dict(request.user.feature_overrides or {})
+    muted = dict(overrides.get('daily_muted_until') or {})
+    muted[key] = (timezone.localdate() + timedelta(days=30)).isoformat()
+    overrides['daily_muted_until'] = muted
+    request.user.feature_overrides = overrides
+    request.user.save(update_fields=['feature_overrides'])
+    return JsonResponse({'ok': True})
 
 
 class NodeListView(LoginRequiredMixin, ListView):
@@ -218,53 +274,44 @@ class NodeListView(LoginRequiredMixin, ListView):
     paginate_by = 24
 
     def get_queryset(self):
-        queryset = Node.objects.filter(
-            owner=self.request.user,
-            merged_into__isnull=True,
-        ).select_related('owner')
-        if self.request.GET.get('pinned') == '1':
-            queryset = queryset.filter(is_pinned=True)
+        queryset = Node.objects.filter(owner=self.request.user, merged_into__isnull=True).select_related('owner')
         query = self.request.GET.get('q', '').strip()[:80]
         if query:
-            # Search equivalent Arabic/Persian spellings for ی/ي and ک/ك.
             normalized = query.replace('ي', 'ی').replace('ك', 'ک')
             variants = {
-                query,
-                normalized,
-                normalized.replace('ی', 'ي'),
-                normalized.replace('ک', 'ك'),
+                query, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'),
                 normalized.replace('ی', 'ي').replace('ک', 'ك'),
             }
             search_filter = Q()
             for term in variants:
                 search_filter |= (
-                    Q(username__icontains=term)
-                    | Q(name__icontains=term)
-                    | Q(first_name__icontains=term)
-                    | Q(last_name__icontains=term)
-                    | Q(nickname__icontains=term)
-                    | Q(career__icontains=term)
+                    Q(username__icontains=term) | Q(name__icontains=term) |
+                    Q(first_name__icontains=term) | Q(last_name__icontains=term) |
+                    Q(nickname__icontains=term) | Q(career__icontains=term)
                 )
             queryset = queryset.filter(search_filter)
         group_id = self.request.GET.get('group', '').strip()
         if group_id.isdigit():
-            queryset = queryset.filter(
-                groups__id=int(group_id), groups__owner=self.request.user,
-            ).distinct()
-        return queryset.order_by('-is_pinned', 'username', 'id')
+            queryset = queryset.filter(groups__id=group_id, groups__owner=self.request.user).distinct()
+        focus = self.request.GET.get('focus')
+        if focus == 'pinned':
+            queryset = queryset.filter(is_pinned=True)
+        elif focus == 'attention':
+            try:
+                from .health import compute_health
+                attention_ids = [node_id for node_id, item in compute_health(self.request.user).items()
+                                 if item.get('status') in {'yellow', 'red'}]
+                queryset = queryset.filter(pk__in=attention_ids)
+            except Exception:
+                queryset = queryset.none()
+        return queryset.order_by('-is_pinned', 'username')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        query = self.request.GET.get('q', '').strip()[:80]
-        selected_group = self.request.GET.get('group', '').strip()
-        context.update({
-            'groups': Group.objects.filter(owner=self.request.user).order_by('name'),
-            'current_query': query,
-            'selected_group': selected_group if selected_group.isdigit() else '',
-            'has_directory_filters': bool(
-                query or selected_group.isdigit() or self.request.GET.get('pinned') == '1'
-            ),
-        })
+        context['search_query'] = self.request.GET.get('q', '').strip()[:80]
+        context['groups'] = Group.objects.filter(owner=self.request.user)
+        context['selected_group'] = self.request.GET.get('group', '').strip()
+        context['selected_focus'] = self.request.GET.get('focus', '').strip()
         return context
 
 
@@ -275,7 +322,6 @@ def toggle_node_pin_api(request, pk):
     node.is_pinned = not node.is_pinned
     node.save(update_fields=['is_pinned'])
     return JsonResponse({'ok': True, 'is_pinned': node.is_pinned})
-
 
 @login_required
 def home(request):
@@ -461,6 +507,26 @@ def node_detail(request, pk):
     except Exception:
         pass
 
+    relationship_focus = None
+    if followups_open:
+        relationship_focus = {
+            'title': 'یک پیگیری باز داری',
+            'note': followups_open[0].text[:120],
+            'target': 'followup-section',
+        }
+    elif not interactions:
+        relationship_focus = {
+            'title': 'اولین تعامل را ثبت کن',
+            'note': 'یک تماس، پیام یا دیدار کوتاه کافی است.',
+            'target': 'interaction-section',
+        }
+    elif node_health and node_health.get('status') in ('yellow', 'red'):
+        relationship_focus = {
+            'title': 'یک قدم کوچک برای این رابطه',
+            'note': 'مدتی از آخرین تعامل گذشته است؛ یک پیام کوتاه هم ارزش دارد.',
+            'target': 'interaction-section',
+        }
+
     # V6: قرض و طلب با این شخص
     node_debts, node_debt_balance = [], 0
     try:
@@ -620,6 +686,7 @@ def node_detail(request, pk):
         'is_root_node':      is_root_node,
         'followups_open':    followups_open,
         'followups_done':    followups_done,
+        'relationship_focus': relationship_focus,
         'today':             timezone.localdate(),
         'node_debts':        node_debts,
         'node_debt_balance': node_debt_balance,
@@ -638,6 +705,7 @@ def node_detail(request, pk):
         'commitments': commitments,
         'gift_ideas': gifts,
         'meeting_reflections': meeting_reflections,
+        'is_new_person': not any((relationships, interactions, journal_entries, events, informations)),
     }
     return render(request, 'nodes/node_detail.html', context)
 
@@ -649,6 +717,12 @@ def create_node(request):
         if form.is_valid():
             node = form.save(commit=False)
             node.owner = request.user
+            if Node.objects.filter(owner=request.user, username=node.username).exists():
+                base = node.username[:90] or 'person'
+                suffix = 2
+                while Node.objects.filter(owner=request.user, username=f'{base}-{suffix}').exists():
+                    suffix += 1
+                node.username = f'{base}-{suffix}'
             node.save()
             form.save_m2m()
             # BUGFIX مفهومی: فیلد متنی «گروه» توی فرم هیچ اثری نداشت —
@@ -658,7 +732,7 @@ def create_node(request):
                 _g, _ = _G.objects.get_or_create(name=node.group.strip(), owner=request.user)
                 node.groups.add(_g)
             messages.success(request, f'نود "{node.username}" ایجاد شد')
-            return redirect('node_list')
+            return redirect('node_detail', pk=node.pk)
     else:
         form = NodeForm()
 
@@ -731,16 +805,34 @@ class RelationshipCreateView(LoginRequiredMixin, CreateView):
     template_name = 'relationships/relationship_form.html'
     success_url = reverse_lazy('relationship_list')
 
+    def get_initial(self):
+        initial = super().get_initial()
+        target_id = self.request.GET.get('target')
+        if target_id and Node.objects.filter(owner=self.request.user, pk=target_id).exists():
+            initial['target'] = target_id
+        if self.request.user.root_node_id:
+            initial['source'] = self.request.user.root_node_id
+        return initial
+
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
         qs = Node.objects.filter(owner=self.request.user)
         form.fields['source'].queryset = qs
         form.fields['target'].queryset = qs
+        if not form.instance.pk:
+            form.instance.source_id = form.initial.get('source') or None
+            form.instance.target_id = form.initial.get('target') or None
         return form
 
     def form_valid(self, form):
         form.instance.owner = self.request.user
         return super().form_valid(form)
+
+    def get_success_url(self):
+        target_id = self.request.GET.get('target')
+        if target_id and Node.objects.filter(owner=self.request.user, pk=target_id).exists():
+            return reverse_lazy('node_detail', kwargs={'pk': target_id})
+        return super().get_success_url()
 
 class RelationshipUpdateView(LoginRequiredMixin, UpdateView):
     model = Relationship
@@ -1027,11 +1119,10 @@ def event_create(request):
     return render(request, 'events/event_form.html', {'form': form})
 
 @login_required
+@require_POST
 def event_complete_api(request, pk):
     """V11: «✓ برگزار شد» — برای همه‌ی شرکت‌کننده‌ها تعامل حضوری ثبت می‌کنه.
     این همون چیزیه که صفحه رویدادها رو به موتور سلامت رابطه وصل می‌کنه."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     event = get_object_or_404(Event, pk=pk, owner=request.user)
     logged = 0
     try:
@@ -1133,14 +1224,13 @@ def groups_view(request):
 
 
 @login_required
+@require_POST
 def assign_group_api(request):
     """
     POST {node_ids, group_name, action}
     action: 'add' (default) | 'remove'
     group_name: اسم گروه — اگه وجود نداشت ساخته می‌شه
     """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     try:
         body = json.loads(request.body)
     except Exception:
@@ -1156,7 +1246,15 @@ def assign_group_api(request):
     if not node_ids:
         return JsonResponse({'error': 'node_ids لازم است'}, status=400)
 
+    if not isinstance(node_ids, list) or len(node_ids) > 100:
+        return JsonResponse({'error': 'invalid node_ids'}, status=400)
+    try:
+        node_ids = [int(node_id) for node_id in node_ids]
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'invalid node_ids'}, status=400)
     nodes = list(Node.objects.filter(pk__in=node_ids, owner=request.user))
+    if len(nodes) != len(set(node_ids)):
+        return JsonResponse({'error': 'one or more people were not found'}, status=404)
 
     if action == 'remove':
         if not group_name:
@@ -1247,10 +1345,9 @@ def chat_view(request):
 
 
 @login_required
+@require_POST
 def chat_clear_api(request):
     """POST → پاک کردن حافظه‌ی همدم (شروع گفتگوی نو)."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     try:
         from .models import ChatMessage
         ChatMessage.objects.filter(owner=request.user).delete()
@@ -1260,6 +1357,7 @@ def chat_clear_api(request):
 
 
 @login_required
+@require_POST
 def chat_to_journal_api(request):
     """POST → حرف‌های امروزِ کاربر در چت → یادداشت ژورنال.
     این‌طوری درد دل‌ها وارد موتور mood-alert و روانشناسی می‌شن."""
@@ -1738,18 +1836,18 @@ def journal_view(request):
 
 
 @login_required
+@require_POST
 def journal_image_upload_api(request):
     """Upload an image for a journal entry (before or after entry creation)."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     image_file = request.FILES.get('image')
     if not image_file:
         return JsonResponse({'error': 'فایلی ارسال نشد'}, status=400)
-    img = JournalImage.objects.create(owner=request.user, image=image_file)
+    img = JournalImage.objects.create(image=image_file, owner=request.user)
     return JsonResponse({'id': img.id, 'url': img.image.url})
 
 
 @login_required
+@require_POST
 def journal_analyze_api(request):
     """Diary text → rich structured extraction with root-node awareness."""
     if request.method != 'POST':
@@ -1934,9 +2032,7 @@ def journal_analyze_api(request):
             if isinstance(image_id, int) and not isinstance(image_id, bool)
         ] if isinstance(image_ids, list) else []
         if image_ids:
-            JournalImage.objects.filter(
-                id__in=image_ids, owner=request.user, entry__isnull=True,
-            ).update(entry=entry)
+            JournalImage.objects.filter(id__in=image_ids, entry__isnull=True, owner=request.user).update(entry=entry)
 
         try:
             from .views_journal_extra import _extract_profile_media_from_journal
@@ -1952,6 +2048,7 @@ def journal_analyze_api(request):
 
 
 @login_required
+@require_POST
 def journal_apply_api(request):
     """Apply extracted entities + rich attributes to DB."""
     if request.method != 'POST':
@@ -2354,10 +2451,9 @@ def public_node_search(request):
 # ─────────────────────────────────────────────────────────────────
 
 @login_required
+@require_POST
 def node_quick_update(request, pk):
     """آپدیت سریع فیلدهای پایه یک نود — برای فرم inline در journal."""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     try:
         data = json.loads(request.body)
     except Exception:
@@ -2388,6 +2484,7 @@ def node_quick_update(request, pk):
 
 
 @login_required
+@require_POST
 def node_create_from_image(request):
     """ایجاد نود از عکس drag-drop شده روی گراف — wizard step per image."""
     if request.method != 'POST':
@@ -2469,6 +2566,7 @@ def node_create_from_image(request):
 
 
 @login_required
+@require_POST
 def relationship_quick_create(request):
     """ایجاد یا merge یال از طریق drag روی گراف."""
     if request.method != 'POST':

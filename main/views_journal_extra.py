@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.db.models import Q
 from django.utils import timezone
 from .models import ArtisticWork, JournalEntry, JournalImage, ProfileMediaItem
 
@@ -185,7 +186,13 @@ def journal_entries_api(request):
     has_img = request.GET.get('has_image', '')
 
     if q:
-        qs = qs.filter(text__icontains=q)
+        normalized = q.replace('ي', 'ی').replace('ك', 'ک')
+        variants = {q, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'),
+                    normalized.replace('ی', 'ي').replace('ک', 'ك')}
+        text_filter = Q()
+        for term in variants:
+            text_filter |= Q(text__icontains=term)
+        qs = qs.filter(text_filter)
     if tag:
         qs = qs.filter(tags__contains=[tag])
     if person:
@@ -199,6 +206,7 @@ def journal_entries_api(request):
     if has_img == '1':
         qs = qs.filter(images__isnull=False).distinct()
 
+    total = qs.count()
     entries = []
     for e in qs[:60]:
         first_img = e.images.first()
@@ -216,4 +224,4 @@ def journal_entries_api(request):
             'image':      first_img.image.url if first_img else None,
             'mentioned':  [n.username for n in e.mentioned_nodes.all()[:5]],
         })
-    return JsonResponse({'entries': entries})
+    return JsonResponse({'entries': entries, 'total': total})

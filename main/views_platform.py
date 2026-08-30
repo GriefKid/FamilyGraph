@@ -7,7 +7,7 @@ from collections import Counter
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import connection
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -38,13 +38,19 @@ def command_palette_api(request):
         {'title': 'ثبت قرض یا طلب', 'subtitle': 'دفتر مالی', 'url': '/ledger/', 'icon': '💰'},
         {'title': 'ساخت رویداد', 'subtitle': 'تقویم', 'url': '/events/create/', 'icon': '📅'},
         {'title': 'جست‌وجوی حافظه', 'subtitle': 'پاسخ منبع‌دار', 'url': '/memory/', 'icon': '🔎'},
+        {'title': 'خط زمان خاطره‌ها', 'subtitle': 'عکس‌ها و لحظه‌ها به ترتیب زمان', 'url': '/memory/timeline/', 'icon': '🕰️'},
         {'title': 'افزودن شخص', 'subtitle': 'گراف رابطه', 'url': '/nodes/create/', 'icon': '👤'},
     ]
     if q:
         commands = [item for item in commands if q.casefold() in (item['title'] + item['subtitle']).casefold()]
     people = Node.objects.filter(owner=request.user, merged_into__isnull=True)
     if q:
-        people = people.filter(username__icontains=q) | people.filter(name__icontains=q) | people.filter(nickname__icontains=q)
+        normalized = q.replace('ي', 'ی').replace('ك', 'ک')
+        variants = {q, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}
+        query_filter = Q()
+        for term in variants:
+            query_filter |= Q(username__icontains=term) | Q(name__icontains=term) | Q(nickname__icontains=term) | Q(first_name__icontains=term) | Q(last_name__icontains=term)
+        people = people.filter(query_filter)
     results = commands + [{'title': node.display_name(), 'subtitle': f'@{node.username}',
                            'url': f'/nodes/{node.id}/', 'icon': '◉'} for node in people[:8]]
     return JsonResponse({'results': results[:12]})
@@ -53,14 +59,37 @@ def command_palette_api(request):
 @login_required
 def onboarding_api(request):
     user = request.user
+    goal = (user.feature_overrides or {}).get('onboarding_goal', '')
     steps = [
-        {'id': 'profile', 'title': 'معرفی خودت', 'done': bool(user.first_name and user.root_node_id), 'url': '/profile/edit/'},
         {'id': 'person', 'title': 'افزودن اولین شخص', 'done': user.nodes.exclude(pk=user.root_node_id).exists(), 'url': '/nodes/create/'},
         {'id': 'relationship', 'title': 'ساخت اولین رابطه', 'done': user.relationships.exists(), 'url': '/relationships/create/'},
-        {'id': 'journal', 'title': 'ثبت اولین خاطره', 'done': user.journal_entries.exists(), 'url': '/journal/'},
-        {'id': 'approval', 'title': 'بررسی اولین پیشنهاد AI', 'done': user.extraction_suggestions.filter(status='approved').exists(), 'url': '/extractions/'},
+        {'id': 'journal', 'title': 'ثبت یک خاطره یا لحظه', 'done': user.journal_entries.exists(), 'url': '/journal/'},
     ]
-    return JsonResponse({'completed': all(row['done'] for row in steps), 'steps': steps})
+    goal_choices = [
+        {'id': 'family', 'label': 'خانواده‌ام', 'description': 'آدم‌ها و خاطره‌های خانوادگی را مرتب کنم.'},
+        {'id': 'friends', 'label': 'دوستانم', 'description': 'رابطه‌های مهمم را در جریان نگه دارم.'},
+        {'id': 'memories', 'label': 'خاطره‌ها', 'description': 'لحظه‌ها و اتفاق‌های مهم را ثبت کنم.'},
+    ]
+    if goal == 'memories':
+        steps.sort(key=lambda row: {'journal': 0, 'person': 1, 'relationship': 2}[row['id']])
+    elif goal in ('family', 'friends'):
+        steps.sort(key=lambda row: {'person': 0, 'relationship': 1, 'journal': 2}[row['id']])
+    return JsonResponse({'completed': all(row['done'] for row in steps), 'goal': goal,
+                         'goal_choices': goal_choices, 'steps': steps})
+
+
+@login_required
+@require_POST
+def onboarding_goal_api(request):
+    data = _body(request) or {}
+    goal = data.get('goal', '')
+    if goal not in {'family', 'friends', 'memories'}:
+        return JsonResponse({'error': 'هدف شروع نامعتبر است.'}, status=400)
+    overrides = dict(request.user.feature_overrides or {})
+    overrides['onboarding_goal'] = goal
+    request.user.feature_overrides = overrides
+    request.user.save(update_fields=['feature_overrides'])
+    return JsonResponse({'ok': True, 'goal': goal})
 
 
 @login_required

@@ -335,24 +335,22 @@
   </div>
 </div>
 
-<form class="toolbar" method="get" action="{% url 'node_list' %}">
-  <div class="search-wrap">
+<div class="toolbar">
+  <form class="search-wrap" method="get" role="search">
     <span class="search-icon">🔍</span>
-    <input class="search-input" type="search" id="searchInput" name="q"
-           value="{{ current_query }}"
+    <input class="search-input" type="search" id="searchInput" name="q" value="{{ search_query }}"
            placeholder="جستجو با نام، username یا شغل..."
-           >
-  </div>
-  <label class="sr-only" for="groupFilter">ظپغŒظ„طھط± ع¯ط±ظˆظ‡</label>
-  <select class="form-control" id="groupFilter" name="group" style="max-width:190px;">
-    <option value="">ظ‡ظ…ظ‡ ع¯ط±ظˆظ‡â€Œظ‡ط§</option>
-    {% for group in groups %}
-    <option value="{{ group.id }}" {% if selected_group == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>
-    {% endfor %}
+           onkeyup="filterNodes(this.value)">
+  </form>
+  <select id="peopleGroupFilter" aria-label="فیلتر گروه افراد" onchange="filterPeopleByGroup(this.value)">
+    <option value="">همهٔ گروه‌ها</option>
+    {% for group in groups %}<option value="{{ group.id }}" {% if selected_group == group.id|stringformat:'s' %}selected{% endif %}>{{ group.name }}</option>{% endfor %}
   </select>
-  {% if request.GET.pinned == '1' %}<input type="hidden" name="pinned" value="1">{% endif %}
-  <button class="btn btn-sm btn-primary" type="submit">ط¬ط³طھط¬ظˆ</button>
-  {% if has_directory_filters %}<a class="btn btn-sm" href="{% url 'node_list' %}">ط§ظ¾ط§ط²ظ‡ ط´ط¯ظ†</a>{% endif %}
+  <select id="peopleFocusFilter" aria-label="فیلتر اولویت افراد" onchange="filterPeopleByFocus(this.value)">
+    <option value="">همهٔ افراد</option>
+    <option value="pinned" {% if selected_focus == 'pinned' %}selected{% endif %}>فقط پین‌شده‌ها</option>
+    <option value="attention" {% if selected_focus == 'attention' %}selected{% endif %}>نیازمند توجه</option>
+  </select>
   <div class="view-toggle">
     <button class="vt-btn active" id="vt-grid" onclick="setView('grid')" title="نمایش کارتی">⊞</button>
     <button class="vt-btn" id="vt-list" onclick="setView('list')" title="نمایش لیستی">☰</button>
@@ -370,6 +368,8 @@
   <a class="node-card"
      href="{% url 'node_detail' node.id %}"
      data-search="{{ node.username|lower }} {{ node.first_name|lower }} {{ node.last_name|lower }} {{ node.nickname|lower }} {{ node.career|lower }} {{ node.name|lower }}">
+
+    {% if node.is_pinned %}<span class="nc-root-badge" title="پین‌شده" style="right:8px;left:auto">★</span>{% endif %}
 
     <div class="nc-avatar-wrap">
       <div class="nc-avatar-ring">
@@ -395,6 +395,13 @@
 
   </a>
   {% empty %}
+  {% if search_query or selected_group or selected_focus %}
+  <div class="empty-state">
+    <div class="empty-icon">🔎</div>
+    <div class="empty-text">برای این فیلتر نتیجه‌ای پیدا نشد</div>
+    <a href="{% url 'node_list' %}" class="btn btn-sm">پاک‌کردن فیلترها</a>
+  </div>
+  {% else %}
   <div class="empty-state">
     {% if has_directory_filters %}<a href="{% url 'node_list' %}" class="btn btn-primary">Clear filters</a>{% endif %}
     <div class="empty-icon">◎</div>
@@ -404,6 +411,7 @@
     </div>
     <a href="{% url 'node_create' %}" class="btn btn-primary">＋ افزودن اولین شخص</a>
   </div>
+  {% endif %}
   {% endfor %}
 </div>
 
@@ -425,7 +433,7 @@
     <div class="nli-info">
       <div class="nli-name">
         {{ node.display_name }}
-        {% if node.is_pinned %}<span class="chip chip-warning" title="فرد پین‌شده">★</span>{% endif %}
+        {% if node.is_pinned %}<span class="chip" style="font-size:9px;padding:1px 6px;margin-right:6px;">★</span>{% endif %}
         {% if request.user.root_node and node.id == request.user.root_node.id %}
         <span class="chip" style="font-size:9px;padding:1px 6px;margin-right:6px;">من</span>
         {% endif %}
@@ -479,7 +487,30 @@ document.querySelectorAll('.pagination a').forEach(link => {
   ['q', 'group', 'pinned'].forEach(key => {
     if (directoryParams.has(key)) next.searchParams.set(key, directoryParams.get(key));
   });
-  link.href = next.pathname + '?' + next.searchParams.toString();
-});
+}
+// Keep all server-side directory filters active while moving through pages.
+const activePeopleFilters = new URLSearchParams(location.search);
+if(['q','group','focus'].some(key=>activePeopleFilters.has(key))){
+  document.querySelectorAll('.pagination a').forEach(link=>{
+    const url = new URL(link.href, location.origin);
+    ['q','group','focus'].forEach(key=>{
+      const value=activePeopleFilters.get(key);
+      if(value) url.searchParams.set(key,value);
+    });
+    link.href = url.pathname + url.search;
+  });
+}
+function filterPeopleByGroup(group){
+  const url = new URL(location.href);
+  if(group) url.searchParams.set('group', group); else url.searchParams.delete('group');
+  url.searchParams.delete('page');
+  location.href = url.pathname + url.search;
+}
+function filterPeopleByFocus(focus){
+  const url = new URL(location.href);
+  if(focus) url.searchParams.set('focus', focus); else url.searchParams.delete('focus');
+  url.searchParams.delete('page');
+  location.href = url.pathname + url.search;
+}
 </script>
 {% endblock %}

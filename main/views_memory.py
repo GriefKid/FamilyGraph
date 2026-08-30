@@ -79,6 +79,24 @@ def memory_hub(request):
 
 
 @login_required
+def memory_timeline_view(request):
+    selected_node = request.GET.get('person', '')
+    entries = JournalEntry.objects.filter(owner=request.user).prefetch_related(
+        'images', 'mentioned_nodes'
+    )
+    if selected_node.isdigit():
+        entries = entries.filter(mentioned_nodes__id=selected_node)
+    if request.GET.get('images') == '1':
+        entries = entries.filter(images__isnull=False).distinct()
+    return render(request, 'memory/timeline.html', {
+        'entries': entries.order_by('-entry_date', '-created_at')[:120],
+        'nodes': Node.objects.filter(owner=request.user, merged_into__isnull=True).order_by('username'),
+        'selected_node': selected_node,
+        'images_only': request.GET.get('images') == '1',
+    })
+
+
+@login_required
 def knowledge_graph_view(request):
     triples = KnowledgeTriple.objects.filter(owner=request.user, active=True).select_related(
         'subject', 'object_node')[:500]
@@ -148,26 +166,25 @@ def memory_search_api(request):
               if len(token.strip('؟?!،,.')) > 1 and token.strip('؟?!،,.') not in stop]
     fact_query = Q()
     for token in tokens or [q]:
-        for spelling in _search_spellings(token):
-            fact_query |= (
-                Q(value__icontains=spelling)
-                | Q(node__username__icontains=spelling)
-                | Q(node__name__icontains=spelling)
-            )
+        normalized = token.replace('ي', 'ی').replace('ك', 'ک')
+        for term in {token, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}:
+            fact_query |= Q(value__icontains=term) | Q(node__username__icontains=term) | Q(node__name__icontains=term)
     for fact in MemoryFact.objects.filter(owner=user, active=True).filter(fact_query).select_related('node')[:30]:
         results.append({'kind': 'memory', 'title': fact.node.display_name(), 'text': fact.value,
                         'source': f'{fact.source} #{fact.source_id or "—"}', 'url': f'/nodes/{fact.node_id}/'})
     journal_query = Q()
     for token in tokens or [q]:
-        for spelling in _search_spellings(token):
-            journal_query |= Q(text__icontains=spelling)
+        normalized = token.replace('ي', 'ی').replace('ك', 'ک')
+        for term in {token, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}:
+            journal_query |= Q(text__icontains=term)
     for entry in JournalEntry.objects.filter(owner=user).filter(journal_query).prefetch_related('mentioned_nodes')[:20]:
         results.append({'kind': 'journal', 'title': 'خاطره', 'text': entry.text[:220],
                         'source': f'journal #{entry.id}', 'url': '/journal/'})
     debt_query = Q(settled=False) if any(word in q for word in ('مالی', 'قرض', 'طلب', 'بدهی')) else Q()
     for token in tokens:
-        for spelling in _search_spellings(token):
-            debt_query |= Q(note__icontains=spelling) | Q(node__name__icontains=spelling)
+        normalized = token.replace('ي', 'ی').replace('ك', 'ک')
+        for term in {token, normalized, normalized.replace('ی', 'ي'), normalized.replace('ک', 'ك'), normalized.replace('ی', 'ي').replace('ک', 'ك')}:
+            debt_query |= Q(note__icontains=term) | Q(node__name__icontains=term)
     for debt in Debt.objects.filter(owner=user).filter(debt_query).select_related('node')[:15]:
         results.append({'kind': 'debt', 'title': debt.node.display_name(),
                         'text': f'{debt.remaining:,} {debt.currency}', 'source': f'debt #{debt.id}', 'url': '/ledger/'})

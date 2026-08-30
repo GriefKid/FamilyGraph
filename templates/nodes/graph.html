@@ -159,6 +159,9 @@
 .ng.edge-target-hover > circle:nth-child(2){
   stroke:#10b981 !important; stroke-width:2.5 !important;
 }
+.ng.search-match > circle:nth-child(2){
+  stroke:#fbbf24 !important; stroke-width:3px !important;
+}
 
 /* ── Rel quick-create modal ── */
 #rel-modal{
@@ -276,8 +279,8 @@
       <svg width="13" height="13" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input id="searchInput" type="text" placeholder="جستجوی نود..." oninput="highlightSearch(this.value)" onkeydown="searchKeydown(event)" aria-controls="graph-search-results" aria-autocomplete="list">
-      <div id="graph-search-results" role="listbox" aria-label="نتایج جستجوی گراف"></div>
+      <input id="searchInput" type="search" aria-label="جستجوی شخص در گراف" placeholder="جستجوی نود..." oninput="highlightSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';highlightSearch('');this.blur()}else if(event.key==='Enter'){openExactGraphMatch(this.value)}">
+      <span id="searchStatus" aria-live="polite" style="font-size:10px;color:#94a3b8;white-space:nowrap"></span>
     </div>
     <!-- Hop filter -->
     <div class="tb-glass">
@@ -1226,65 +1229,52 @@ function closePanel(){
 // ═══════════════════════════════════════════════════════════
 // Toolbar actions
 // ═══════════════════════════════════════════════════════════
-let graphSearchMatches = [];
-
-function graphSearchText(d){
-  return [d.username, d.label, d.first_name, d.last_name, d.nickname]
-    .filter(Boolean).join(' ').toLocaleLowerCase();
+function normalizeGraphSearch(value){
+  return String(value||"").trim().toLowerCase().replace(/ي/g, "ی").replace(/ك/g, "ک");
 }
-
-function highlightSearch(rawQuery){
-  const q = rawQuery.trim().toLocaleLowerCase();
-  const visibleNodes = nLayer.selectAll('.ng').data();
-  graphSearchMatches = q ? visibleNodes.filter(d => graphSearchText(d).includes(q)) : [];
-  nLayer.selectAll('.ng').attr('opacity', d =>
-    !q || graphSearchMatches.includes(d) ? 1 : .08
+function graphSearchMatches(query){
+  const q = normalizeGraphSearch(query);
+  return (gData?.nodes||[]).filter(d => q && (
+    normalizeGraphSearch(d.username).includes(q) || normalizeGraphSearch(d.label).includes(q)
+  ));
+}
+function highlightSearch(q){
+  q = normalizeGraphSearch(q);
+  const matches = graphSearchMatches(q);
+  const matched = matches.length;
+  nLayer.selectAll(".ng").attr("opacity", d =>
+    !q || matches.some(match => match.id === d.id) ? 1 : .08
   );
-
-  const results = document.getElementById('graph-search-results');
-  if(!results) return;
-  results.replaceChildren();
-  if(!q) { results.classList.remove('open'); return; }
-  results.classList.add('open');
-  if(!graphSearchMatches.length){
-    const empty = document.createElement('div');
-    empty.className = 'graph-search-empty';
-    empty.textContent = 'نتیجه‌ای پیدا نشد';
-    results.appendChild(empty);
+  nLayer.selectAll(".ng").classed("search-match", d => q && matches.some(match => match.id === d.id));
+  document.getElementById("searchStatus").textContent = q ? `${matched} نتیجه — Enter برای تمرکز` : "";
+}
+function focusGraphMatches(matches){
+  const matchIds = new Set(matches.map(match => match.id));
+  const visibleMatches = nLayer.selectAll(".ng").filter(d => matchIds.has(d.id)).data();
+  if(!visibleMatches.length){
+    document.getElementById("searchStatus").textContent = "نتیجه در فیلتر فعلی پنهان است";
     return;
   }
-  graphSearchMatches.slice(0, 8).forEach((node, index) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'graph-search-result';
-    button.setAttribute('role', 'option');
-    button.textContent = `${node.label || node.username}  @${node.username}`;
-    button.onclick = () => focusGraphNode(node);
-    results.appendChild(button);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  visibleMatches.forEach(node => {
+    const radius = nr(node) + 18;
+    x0 = Math.min(x0, node.x - radius); y0 = Math.min(y0, node.y - radius);
+    x1 = Math.max(x1, node.x + radius); y1 = Math.max(y1, node.y + radius);
   });
+  const padding = 64;
+  const scale = Math.max(.35, Math.min(2.5, Math.min(W() / (x1 - x0 + padding * 2), H() / (y1 - y0 + padding * 2))));
+  const tx = W() / 2 - scale * (x0 + x1) / 2;
+  const ty = H() / 2 - scale * (y0 + y1) / 2;
+  svgEl.transition().duration(350).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  document.getElementById("searchStatus").textContent = `${visibleMatches.length} نتیجه در مرکز گراف`;
 }
-
-function searchKeydown(event){
-  if(event.key === 'Escape'){
-    event.target.value = '';
-    highlightSearch('');
-  } else if(event.key === 'Enter' && graphSearchMatches.length){
-    event.preventDefault();
-    focusGraphNode(graphSearchMatches[0]);
-  }
-}
-
-function focusGraphNode(node){
-  if(!node || node.x === undefined || node.y === undefined) return;
-  const scale = Math.max(1.35, Math.min(2.8, d3.zoomTransform(svgEl.node()).k * 1.15));
-  const transform = d3.zoomIdentity
-    .translate(W()/2 - scale * node.x, H()/2 - scale * node.y)
-    .scale(scale);
-  svgEl.transition().duration(500).call(zoom.transform, transform);
-  nLayer.selectAll('.ng').attr('opacity', d => d.id === node.id ? 1 : .2);
-  onClick({stopPropagation: () => {}}, node);
-  const results = document.getElementById('graph-search-results');
-  if(results) results.classList.remove('open');
+function openExactGraphMatch(query){
+  const q = normalizeGraphSearch(query);
+  const exactMatch = (gData?.nodes||[]).find(node =>
+    normalizeGraphSearch(node.username) === q || normalizeGraphSearch(node.label) === q
+  );
+  if(exactMatch) window.location.href = `/nodes/${exactMatch.id}/`;
+  else focusGraphMatches(graphSearchMatches(q));
 }
 function toggleLayout(){
   useEgo = !useEgo;

@@ -32,7 +32,9 @@
       <a href="#attention">دیدن جزئیات ←</a>
     </div>
     <div class="briefing-actions">
+      {% if is_new_workspace %}<a class="briefing-btn" href="/nodes/create/">＋ افزودن اولین شخص مهم</a>{% endif %}
       <a class="briefing-btn" href="/checkin/">{% if checkin_done %}✓ چک‌این امروز ثبت شده{% else %}⚡ چک‌این ۶۰ ثانیه‌ای{% endif %}</a>
+      <a class="briefing-btn secondary" href="/relationship-life/?quick=1">＋ ثبت سریع</a>
       <a class="briefing-btn secondary" href="/journal/">✍ ثبت یک خاطره</a>
       <a class="briefing-btn secondary" href="/graph/">🕸 دیدن نقشهٔ رابطه‌ها</a>
     </div>
@@ -140,4 +142,11 @@
   <div class="onboarding-note">برای اینکه AI پیشنهادهای شخصی‌تری بدهد، <a href="/profile/">پروفایل و اطلاعات اولیه‌ات</a> را کامل کن.</div>
   {% endif %}
 </main>
+<script>
+document.querySelectorAll('.attention-list > a.attention-item').forEach(link=>{
+  const path=new URL(link.href).pathname;let key=path==='/checkin/'?'checkin':path==='/extractions/'?'suggestions':'';
+  const node=path.match(/^\/nodes\/(\d+)\/$/);if(node)key='node-'+node[1];if(!key)return;
+  const controls=document.createElement('span');controls.style.cssText='display:flex;gap:5px;margin-right:auto';const action=async(url,message)=>{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':(document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop()||''},body:JSON.stringify({key})});if(r.ok){link.remove();controls.remove();fgToast(message)}};for(const [label,url,message] of [['فردا','/api/daily/snooze/','فردا دوباره یادآوری می‌کنم.'],['کمتر','/api/daily/feedback/','این نوع پیشنهاد را کمتر نشان می‌دهم.']]){const button=document.createElement('button');button.type='button';button.textContent=label;button.style.cssText='border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-muted);padding:5px 8px;font:11px inherit;cursor:pointer';button.onclick=event=>{event.preventDefault();event.stopPropagation();action(url,message)};controls.append(button)}link.insertAdjacentElement('afterend',controls);
+});
+</script>
 {% endblock %}

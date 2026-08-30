@@ -5,7 +5,7 @@ from .views_auth import (
 )
 from .views_notifications import (
     notifications_view, notification_read_api, notifications_read_all_api,
-    sync_respond_api,
+    sync_respond_api, notification_preferences_api, mark_notifications_read_api,
 )
 from .views import (
     groups_view,
@@ -32,7 +32,7 @@ from .views_followups import (
     followups_view,
     followup_create_api,
     followup_toggle_api,
-    followup_delete_api,
+    followup_delete_api, followup_snooze_api,
     followups_list_api,
 )
 from .views_checkin import checkin_view, checkin_submit_api
@@ -56,14 +56,16 @@ from .views_persona import (
     rel_persona_synthesize_api,
 )
 from .views_psychology import relationship_pulse_create_api, extraction_inbox, extraction_suggestions_api, extraction_suggestion_decide_api
-from .views_memory import (memory_hub, knowledge_graph_view, memory_fact_api, memory_search_api,
+from .views_memory import (memory_hub, memory_timeline_view, knowledge_graph_view, memory_fact_api, memory_search_api,
     relationship_assistant_api, recommendation_feedback_api, node_merge_preview_api,
     node_merge_apply_api, node_merge_undo_api, clear_psychology_inferences_api)
 from .views_relationship_life import (relationship_life_hub, meeting_briefing_api,
     quick_capture_api, meeting_reflection_api, commitment_action_api,
     safety_setting_api, person_export, csv_import_preview, csv_import_apply, service_worker,
-    introduction_brief_api, person_delete_complete)
+    introduction_brief_api, person_delete_complete, trust_center_view, person_card_view,
+    share_link_create_api, share_link_revoke_api, shared_person_card_view)
 from .views_platform import (platform_tools_view, command_palette_api, onboarding_api, onboarding_complete_api,
+    onboarding_goal_api,
     ai_quality_dashboard, ai_debug_private, ai_trace_rerun, feature_flags_view, frontend_error_api,
     system_health_api, encrypted_backup_download, encrypted_backup_preview,
     encrypted_backup_restore, demo_mode_api)
@@ -143,6 +145,7 @@ urlpatterns = [
     path('platform/tools/', platform_tools_view, name='platform_tools'),
     path('api/platform/command-palette/', command_palette_api, name='command_palette'),
     path('api/platform/onboarding/', onboarding_api, name='onboarding_status'),
+    path('api/platform/onboarding/goal/', onboarding_goal_api, name='onboarding_goal'),
     path('api/platform/onboarding/complete/', onboarding_complete_api, name='onboarding_complete'),
     path('api/platform/frontend-error/', frontend_error_api, name='frontend_error'),
     path('api/platform/backup/download/', encrypted_backup_download, name='encrypted_backup_download'),
@@ -175,12 +178,16 @@ urlpatterns = [
     path('api/notifications/<int:pk>/read/', notification_read_api, name='notification_read'),
     path('api/notifications/read-all/', notifications_read_all_api, name='notifications_read_all'),
     path('api/sync/<int:notif_id>/respond/', sync_respond_api, name='sync_respond'),
+    path('api/notifications/preferences/', notification_preferences_api, name='notification_preferences'),
+    path('api/notifications/mark-read/', mark_notifications_read_api, name='mark_notifications_read'),
     path('export/',                  views.export_graph,       name='export_graph'),
 
     # ======================
     # HOME
     # ======================
     path('', views.HomeBriefingView.as_view(), name='home'),
+    path('api/daily/snooze/', views.daily_action_snooze_api, name='daily_action_snooze'),
+    path('api/daily/feedback/', views.daily_action_feedback_api, name='daily_action_feedback'),
 
     # ======================
     # NODE CRUD
@@ -190,6 +197,7 @@ urlpatterns = [
     path('nodes/<int:pk>/', views.node_detail, name='node_detail'),
     path('nodes/<int:pk>/edit/', views.UpdateNodeView.as_view(), name='node_update'),
     path('nodes/<int:pk>/delete/', views.node_delete, name='node_delete'),
+    path('api/nodes/<int:pk>/pin/', views.toggle_node_pin_api, name='toggle_node_pin'),
 
     # ======================
     # RELATIONSHIP CRUD
@@ -256,6 +264,7 @@ urlpatterns = [
     path('api/health/',                  health_api,              name='health_api'),
     path('api/followups/create/',        followup_create_api,     name='followup_create'),
     path('api/followups/<int:pk>/toggle/', followup_toggle_api,   name='followup_toggle'),
+    path('api/followups/<int:pk>/snooze/', followup_snooze_api,   name='followup_snooze'),
     path('api/followups/<int:pk>/delete/', followup_delete_api,   name='followup_delete'),
     path('api/followups/',               followups_list_api,      name='followups_list'),
     path('followups/',                   followups_view,          name='followups'),
@@ -309,6 +318,7 @@ urlpatterns = [
     path('api/psychology/pulse/',        relationship_pulse_create_api, name='relationship_pulse_create'),
     path('extractions/',                 extraction_inbox, name='extraction_inbox'),
     path('memory/',                      memory_hub, name='memory_hub'),
+    path('memory/timeline/',             memory_timeline_view, name='memory_timeline'),
     path('memory/knowledge/',            knowledge_graph_view, name='knowledge_graph'),
     path('api/memory/facts/',            memory_fact_api, name='memory_fact_create'),
     path('api/memory/facts/<int:pk>/',   memory_fact_api, name='memory_fact_update'),
@@ -320,6 +330,11 @@ urlpatterns = [
     path('api/memory/merge/<int:pk>/undo/', node_merge_undo_api, name='node_merge_undo'),
     path('api/memory/psychology/clear/', clear_psychology_inferences_api, name='clear_psychology_inferences'),
     path('relationship-life/',           relationship_life_hub, name='relationship_life_hub'),
+    path('trust/',                       trust_center_view, name='trust_center'),
+    path('people/<int:pk>/card/',        person_card_view, name='person_card'),
+    path('api/people/<int:pk>/share-link/', share_link_create_api, name='share_link_create'),
+    path('api/share-links/<uuid:token>/revoke/', share_link_revoke_api, name='share_link_revoke'),
+    path('shared/person/<uuid:token>/', shared_person_card_view, name='shared_person_card'),
     path('api/relationship-life/briefing/<int:pk>/', meeting_briefing_api, name='meeting_briefing'),
     path('api/relationship-life/capture/', quick_capture_api, name='quick_capture'),
     path('api/relationship-life/reflection/', meeting_reflection_api, name='meeting_reflection'),

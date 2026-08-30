@@ -80,6 +80,7 @@
     <div class="rl-stat"><div class="n" style="color:#34d399" id="rlActive">—</div><div class="l">🟢 فعال</div></div>
     <div class="rl-stat"><div class="n" style="color:#a5b4fc" id="rlAvg">—</div><div class="l">⚡ میانگین قدرت</div></div>
     <input class="rl-search" id="rlSearch" placeholder="🔍 جستجو — اسم یا نوع رابطه…" oninput="rlFilter(this.value)">
+    <span id="rlSearchStatus" aria-live="polite" style="font-size:11px;color:var(--text-muted)"></span>
   </div>
 
   <div class="rl-grid" id="rlGrid">
@@ -151,14 +152,14 @@ if (rlSearch) rlSearch.value = rlParams.get('q') || '';
 // The relationship directory is filtered by the server so results are not
 // limited to the cards currently rendered in the browser.
 function rlFilter(q){
-  clearTimeout(rlFilterTimer);
-  rlFilterTimer = setTimeout(() => {
-    const next = new URLSearchParams();
-    q = q.trim();
-    if (q) next.set('q', q);
-    if (rlParams.get('status')) next.set('status', rlParams.get('status'));
-    window.location.href = '/relationships/' + (next.toString() ? '?' + next : '');
-  }, 350);
+  const normalize = value => String(value||'').trim().toLowerCase().replace(/ي/g, 'ی').replace(/ك/g, 'ک');
+  q = normalize(q);
+  const cards = [...document.querySelectorAll('.rl-card')];
+  const visible = cards.filter(c => !q || normalize(c.dataset.search).includes(q));
+  cards.forEach(c => {
+    c.style.display = visible.includes(c) ? '' : 'none';
+  });
+  document.getElementById('rlSearchStatus').textContent = q ? `${visible.length} نتیجه` : '';
 }
 
 const rlStatus = document.createElement('select');
