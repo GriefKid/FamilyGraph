@@ -1587,6 +1587,22 @@ def chat_api(request):
     if chat_style not in STYLE_LABELS:
         chat_style = 'friendly'
 
+    # Avoid model startup/prompt work for deterministic small talk.
+    quick_text = user_message.casefold()
+    if len(user_message) <= 80:
+        if any(marker in quick_text for marker in ('چند شنبه', 'چه روزی', 'امروز چند')):
+            today = timezone.localdate()
+            from .utils_jalali import jalali_day_name
+            return JsonResponse({
+                'reply': f'امروز {jalali_day_name(today)} است.',
+                'style': chat_style,
+            })
+        if any(marker in quick_text for marker in ('سلام', 'درود', 'خوبی', 'صبح بخیر', 'شب بخیر')):
+            return JsonResponse({
+                'reply': 'سلام! من اینجام. چطور می‌تونم کمکت کنم؟',
+                'style': chat_style,
+            })
+
     # ── V5: تاریخچه گفتگو — چت دوطرفه و پیوسته ──
     history = []
     for m in raw_history[-8:]:
