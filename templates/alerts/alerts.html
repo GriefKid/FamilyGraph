@@ -159,7 +159,7 @@
     {% endif %}
   </div>
   <div class="daily-tips-wrap">
-    <button class="daily-tips-btn" onclick="loadDailyTips(this)">✦ نکات روزانه AI</button>
+    <button class="daily-tips-btn" onclick="loadDailyTips(this)">✦ پیشنهادهای امروز</button>
     <div id="daily-tips-result"></div>
   </div>
 </div>
@@ -236,7 +236,7 @@
         data-type="{{ alert.type }}"
         data-title="{{ alert.title }}"
         onclick="toggleSuggestions(this)">
-        ✦ دریافت پیشنهاد AI
+        ✦ پیشنهاد مبتنی بر داده
       </button>
       {% if alert.type == 'birthday' or alert.type == 'birthday_upcoming' or alert.type == 'anniversary' %}
       <button class="suggest-btn"
@@ -258,7 +258,7 @@
 
       <!-- فرم ثبت نتیجه (hidden) -->
       <div class="done-form" style="display:none">
-        <textarea placeholder="نتیجه چی شد؟ (اختیاری — به AI کمک می‌کنه الگوهای رابطه‌ات رو بهتر بفهمه)"></textarea>
+        <textarea placeholder="نتیجه چی شد؟ (اختیاری — به دقیق‌ترشدن سابقه رابطه کمک می‌کند)"></textarea>
         <div class="done-form-actions">
           <button class="done-save-btn" onclick="saveAction(this)">✓ ذخیره و بستن</button>
           <button class="done-cancel-btn" onclick="this.closest('.done-form').style.display='none'">انصراف</button>
@@ -278,7 +278,7 @@ function _card(el){ return el.closest('.alert-card'); }
 function _alertId(card){ return card.dataset.alertId; }
 function escA(value){ return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-// ── پیشنهاد AI ───────────────────────────────────────────────────────────
+// ── پیشنهاد مبتنی بر داده ───────────────────────────────────────────────
 async function toggleSuggestions(btn){
   const card  = _card(btn);
   const panel = card.querySelector('.suggestions-panel');
@@ -286,7 +286,7 @@ async function toggleSuggestions(btn){
 
   if(panel.style.display === 'block'){
     panel.style.display = 'none';
-    btn.textContent = '✦ دریافت پیشنهاد AI';
+    btn.textContent = '✦ پیشنهاد مبتنی بر داده';
     return;
   }
   if(panel.dataset.loaded){
@@ -295,10 +295,10 @@ async function toggleSuggestions(btn){
     return;
   }
 
-  btn.textContent = '⏳ در حال تحلیل...';
+  btn.textContent = '⏳ جمع‌بندی داده‌ها...';
   btn.style.opacity = '.7';
   panel.style.display = 'block';
-  panel.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted)">⏳ AI در حال تحلیل...</div>';
+  panel.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text-muted)">⏳ در حال ساخت پیشنهاد از داده‌های ثبت‌شده...</div>';
 
   try{
     const r = await fetch('/api/alerts/recommendation/', {
@@ -450,7 +450,7 @@ async function legacyLoadDailyTips(btn){
   } catch(e){
     res.innerHTML = '<div style="color:#f87171;font-size:12px">خطا در ارتباط با سرور</div>';
   }
-  btn.textContent = '✦ نکات روزانه AI';
+  btn.textContent = '✦ پیشنهادهای امروز';
   btn.style.opacity = '1';
 }
 window.loadDailyTips = async function(btn){
@@ -475,7 +475,7 @@ window.loadDailyTips = async function(btn){
     if(result.focus_person&&result.focus_person.name){const focus=document.createElement('div');focus.className='focus-box';focus.textContent='🎯 آدمِ امروز: '+result.focus_person.name+' — '+(result.focus_person.suggestion||'');res.appendChild(focus)}
     if(!res.childNodes.length)res.textContent='چیزی برنگشت';
     _dailyLoaded=true;
-  }catch(_){res.textContent='خطا در ارتباط با سرور'}finally{btn.disabled=false;btn.textContent='✦ نکات روزانه AI'}
+  }catch(_){res.textContent='خطا در ارتباط با سرور'}finally{btn.disabled=false;btn.textContent='✦ پیشنهادهای امروز'}
 };
 </script>
 {% endblock %}

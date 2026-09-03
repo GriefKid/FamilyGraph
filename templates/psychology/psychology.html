@@ -4,7 +4,7 @@
 {% block page_title %}🧠 روانشناسی و جامعه‌شناسی شبکه{% endblock %}
 
 {% block topbar_actions %}
-<button class="btn btn-primary" onclick="runAIAnalysis()" id="aiBtn">✦ تحلیل AI جامع</button>
+<button class="btn btn-primary" onclick="runAIAnalysis()" id="aiBtn">✦ جمع‌بندی شواهدمحور</button>
 {% endblock %}
 
 {% block extra_css %}
@@ -341,7 +341,7 @@
       </div>
       <p style="font-size:12px;color:var(--text-soft);line-height:1.7;margin:0 0 18px;">{{ my_role_desc }}</p>
       {% if attachment_style %}
-      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">سبک دلبستگی (Bowlby & Ainsworth)</div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">محدودیت تحلیل دلبستگی</div>
       <div class="attachment-badge" style="color:{{ attachment_color }};border-color:{{ attachment_color }}44;background:{{ attachment_color }}11;">
         🔗 {{ attachment_style }}
       </div>
@@ -485,15 +485,15 @@
     </div>
     <div class="capital-labels"><span>← درون‌گروهی</span><span>برون‌گروهی →</span></div>
     <div class="info-note" style="border-color:{% if social_capital_status == 'balanced' %}#10b981{% elif social_capital_status == 'weak' %}#f43f5e{% else %}#f59e0b{% endif %}">{{ social_capital_note }}</div>
-    <div class="info-note" style="border-color:#6b7280;margin-top:6px;">📚 پاتنام: Bonding = حمایت درونی · Bridging = منابع بیرونی. هر دو برای سلامت اجتماعی لازم‌اند.</div>
+    <div class="info-note" style="border-color:#6b7280;margin-top:6px;">Bonding در این صفحه از تراکم محلی و Bridging از پل‌های بین خوشه‌ها ساخته می‌شود؛ این‌ها شاخص ساختاری‌اند، نه سنجش کیفیت رابطه.</div>
   </div>
 
-  <!-- 4. Echo Chamber -->
+  <!-- 4. Clustering -->
   <div class="metric-card">
     <div class="metric-head">
       <span class="metric-icon">📡</span>
       <div>
-        <div class="metric-name">ریسک اتاق پژواک</div>
+        <div class="metric-name">ضریب خوشه‌بندی</div>
         <div class="metric-theory">Clustering Coefficient — تراکم محلی</div>
       </div>
     </div>
@@ -512,12 +512,10 @@
       </div>
       <div class="gauge-info">
         <div class="gauge-info-title">
-          <span class="status-pill {% if echo_risk == 'high' %}status-danger{% elif echo_risk == 'medium' %}status-warning{% else %}status-optimal{% endif %}">ریسک {{ echo_label }}</span>
+          <span class="status-pill">{{ echo_label }}</span>
         </div>
         <div class="gauge-info-desc" style="margin-top:8px;">
-          {% if echo_risk == 'high' %}شبکه خیلی متراکم — احتمال اتاق پژواک بالا.
-          {% elif echo_risk == 'medium' %}تراکم متوسط — تعادل نسبی بین انسجام و تنوع.
-          {% else %}شبکه باز — دیدگاه‌های متنوع جریان دارد.{% endif %}
+          این عدد سهم همسایه‌هایی را نشان می‌دهد که با هم نیز رابطه دارند. از آن به‌تنهایی نمی‌توان تنوع دیدگاه یا «اتاق پژواک» را تشخیص داد.
         </div>
         {% if homophily_note %}<div style="font-size:11px;margin-top:8px;color:var(--text-muted)">{{ homophily_note }}</div>{% endif %}
       </div>
@@ -860,7 +858,7 @@
 
 </div><!-- /row 4 -->
 
-<!-- ══ روانکاوی همهٔ افراد و روابط ══════════════════════════════ -->
+<!-- ══ ساخت شناخت شواهدمحور برای افراد و روابط ═════════════════ -->
 <div class="psych-section-title">شناختِ همهٔ افراد و روابط</div>
 <div class="ai-card" id="batchCard">
   <div class="ai-card-head">
@@ -871,7 +869,7 @@
     </div>
   </div>
   <div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <button class="btn btn-primary" id="batchBtn" onclick="runBatchPersona()">✦ روانکاوی همه</button>
+    <button class="btn btn-primary" id="batchBtn" onclick="runBatchPersona()">✦ تحلیل همه با شواهد</button>
     <span id="batchMsg" style="font-size:12px;color:var(--text-muted)"></span>
   </div>
   <div id="batchBar" style="display:none;margin-top:12px">
@@ -888,16 +886,16 @@
   <div class="ai-card-head">
     <span style="font-size:24px">🧠</span>
     <div>
-      <div class="ai-card-title">تحلیل جامع روانشناسی و جامعه‌شناسی شبکه</div>
+      <div class="ai-card-title">جمع‌بندی ساختار شبکه و ریتم ارتباط‌ها</div>
       <div style="font-size:11px;color:var(--text-muted)">داونبار · گرانووتر · بورت · واتس‌استروگاتز · پاتنام · بولبی · بلاو · مک‌فرسون · باراباسی</div>
     </div>
   </div>
   <div id="aiContent"></div>
 </div>
 <!-- ════════════════════════════════════════════════════════════
-     امتیاز سلامت شبکه — NETWORK HEALTH SCORE (FamilyGraph)
+     پوشش و تازگی داده — DATA COVERAGE SCORE (FamilyGraph)
      ════════════════════════════════════════════════════════════ -->
-<div class="psych-section-title">امتیاز سلامت شبکه</div>
+<div class="psych-section-title">امتیاز پوشش و تازگی داده</div>
 <div class="full-card" style="border-color:{{ health_color }}33">
   <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:18px;">
     <div style="text-align:center;">
@@ -920,23 +918,23 @@
     </div>
   </div>
   <div class="info-note" style="border-color:{{ health_color }}55">
-    💡 این امتیاز ترکیبی از ۶ بُعد مستقل است: تنوع رابطه، سرمایه پل‌سازی، روابط صمیمی، تعادل پیوند، نرخ فعالیت، و تاب‌آوری شبکه.
+    این یک شاخص کیفیت دادهٔ داخل برنامه است: پوشش تاریخ تماس، تازگی تماس‌های ثبت‌شده، وضعیت فعال و تکمیل نوع رابطه. دربارهٔ سلامت روان یا کیفیت واقعی زندگی اجتماعی حکم نمی‌دهد.
   </div>
 </div>
 
 <!-- ════════════════════════════════════════════════════════════
-     بخش‌های روانشناسی جدید
+     شاخص‌های ساختاری تکمیلی
      ════════════════════════════════════════════════════════════ -->
-<div class="psych-section-title">روانشناسی پیشرفته شبکه</div>
+<div class="psych-section-title">شاخص‌های ساختاری تکمیلی</div>
 <div class="psych-grid">
 
-  <!-- ریسک تنهایی — Cacioppo & Patrick, 2008 -->
+  <!-- Registered contact gap -->
   <div class="metric-card">
     <div class="metric-head">
       <span class="metric-icon">🫂</span>
       <div>
-        <div class="metric-name">ریسک تنهایی اجتماعی</div>
-        <div class="metric-theory">Social Isolation Theory — Cacioppo & Patrick (2008)</div>
+        <div class="metric-name">فاصلهٔ تماس ثبت‌شده</div>
+        <div class="metric-theory">مقایسه با فاصلهٔ تماس دلخواه</div>
       </div>
     </div>
     <div style="text-align:center;margin:16px 0;">
@@ -951,7 +949,7 @@
       {% for f in loneliness_factors %}<li style="margin-bottom:3px;">{{ f }}</li>{% endfor %}
     </ul>
     {% endif %}
-    <div class="info-note">📚 کاچیوپو و پاتریک: تنهایی اجتماعی یک عامل ریسک برای سلامت جسمی و ذهنی معادل کشیدن ۱۵ سیگار در روز است. شبکه‌ای با حداقل ۲ رابطه صمیمی و ۵ رابطه نزدیک محافظت‌کننده است.</div>
+    <div class="info-note">این عدد فقط تازگی تعامل‌های تاریخ‌دار را نسبت به انتظار تماس می‌سنجد. کم‌بودن تعداد رابطه یا نبود داده، تشخیص تنهایی نیست.</div>
   </div>
 
   <!-- تنوع شانون — Shannon Diversity -->
@@ -975,7 +973,7 @@
         <div style="font-size:11px;color:var(--text-muted)">Shannon H شغلی</div>
       </div>
     </div>
-    <div class="info-note">📚 شانون: H=0 یعنی همه روابط یک نوع‌اند. H=1 یعنی حداکثر تنوع. بورت ثابت کرد شبکه‌های متنوع‌تر، اطلاعات و فرصت‌های بیشتری در اختیار صاحبشان می‌گذارند.</div>
+    <div class="info-note">آنتروپی شانون در اینجا فقط تنوع برچسب نوع رابطه و شغل‌های ثبت‌شده را خلاصه می‌کند؛ نتیجهٔ فردی درباره فرصت یا کیفیت شبکه نمی‌دهد.</div>
   </div>
 
   <!-- نظریه تعادل هایدر -->
@@ -983,8 +981,8 @@
     <div class="metric-head">
       <span class="metric-icon">⚖️</span>
       <div>
-        <div class="metric-name">تعادل ساختاری شبکه</div>
-        <div class="metric-theory">Heider Balance Theory (1946) — Transitivity</div>
+        <div class="metric-name">بسته‌شدگی سه‌نفره</div>
+        <div class="metric-theory">Graph Transitivity</div>
       </div>
     </div>
     <div style="text-align:center;margin:14px 0;">
@@ -996,16 +994,16 @@
     {% if balance_note %}
     <div class="info-note">{{ balance_note }}</div>
     {% endif %}
-    <div class="info-note" style="margin-top:6px">📚 هایدر: «دوست دوست من، دوست من است» — وقتی A-B-C یک مثلث کامل می‌سازند، شبکه متعادل و پایدار است. نظریه‌ای که پایه Facebook Friend Suggestions است.</div>
+    <div class="info-note" style="margin-top:6px">مثلث بسته فقط نشان می‌دهد سه فرد در گراف به هم متصل‌اند؛ از آن نمی‌توان اعتماد، پایداری یا کیفیت رابطه را نتیجه گرفت.</div>
   </div>
 
-  <!-- ریسک سرایت احساسی -->
+  <!-- Recent mood words -->
   <div class="metric-card">
     <div class="metric-head">
       <span class="metric-icon">🌊</span>
       <div>
-        <div class="metric-name">ریسک سرایت احساسی</div>
-        <div class="metric-theory">Emotional Contagion — Hatfield et al. (1993)</div>
+        <div class="metric-name">حال‌وهوای منفی ثبت‌شده</div>
+        <div class="metric-theory">یادداشت‌های دارای mood در ۱۴ روز اخیر</div>
       </div>
     </div>
     <div style="text-align:center;margin:16px 0;">
@@ -1015,7 +1013,7 @@
         <div style="height:6px;width:{{ contagion_risk_pct }}%;background:{{ contagion_color }};border-radius:3px;"></div>
       </div>
     </div>
-    <div class="info-note">📚 هاتفیلد: احساسات مثل ویروس از طریق روابط نزدیک منتقل می‌شوند. اگه چند نفر از دوستان صمیمی‌ات اخیراً حال بدی داشتن، احتمال تأثیرپذیری‌ات بالاست. این خودآگاهی یعنی می‌تونی مراقب باشی.</div>
+    <div class="info-note">این درصد فقط فراوانی واژه‌های منفی در moodهای ثبت‌شده است. دربارهٔ علت، حال واقعی افراد یا اثر آن‌ها روی تو نتیجه‌گیری نمی‌کند.</div>
   </div>
 
 </div><!-- .psych-grid -->
@@ -1087,7 +1085,7 @@
       {% endfor %}
     </div>
     {% endif %}
-    <div class="info-note" style="margin-top:8px">📚 گرانووتر: هر چه رابطه‌ای دوستان مشترک بیشتری داشته باشد، «تعبیه» عمیق‌تری در بافت اجتماعی دارد — اعتماد بالاتر، نظارت اجتماعی بیشتر.</div>
+    <div class="info-note" style="margin-top:8px">دوستان مشترک بیشتر یعنی رابطه در گراف فعلی مسیرهای جایگزین بیشتری دارد؛ این عدد به‌تنهایی اعتماد یا کیفیت رابطه را اندازه نمی‌گیرد.</div>
   </div>
 
   <!-- Core-Periphery -->
@@ -1282,7 +1280,7 @@ async function runAIAnalysis(){
   card.style.display='block';
   cont.innerHTML=`<div style="text-align:center;padding:48px;color:var(--text-muted)">
     <span class="spinner" style="width:40px;height:40px;border-width:3px;"></span>
-    <p style="margin-top:20px;font-size:13px">تحلیل عمیق با ۱۰+ تئوری علمی...</p></div>`;
+    <p style="margin-top:20px;font-size:13px">در حال محاسبه از داده‌های ثبت‌شده...</p></div>`;
   card.scrollIntoView({behavior:'smooth',block:'start'});
   try{
     const r=await fetch('/api/psychology/analyze/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrf()},body:'{}'});
@@ -1290,7 +1288,7 @@ async function runAIAnalysis(){
     if(d.ok&&d.result) renderAI(d.result,d.from_cache);
     else renderPsychologyError(cont,d.error||'خطا در تحلیل');
   }catch(e){ renderPsychologyError(cont,'خطا: '+e.message); }
-  btn.innerHTML='✦ تحلیل AI جامع'; btn.disabled=false;
+  btn.innerHTML='✦ جمع‌بندی شواهدمحور'; btn.disabled=false;
 }
 
 function renderPsychologyError(container,message){
@@ -1347,6 +1345,7 @@ function legacyRenderAI(res,fromCache){
   const cont=document.getElementById('aiContent');
   let html='';
   if(fromCache) html+=`<div style="font-size:10px;color:var(--text-muted);margin-bottom:12px;text-align:center">📦 از کش امروز</div>`;
+  if(res.generated_by) html+=`<div style="font-size:11px;color:#6ee7b7;margin-bottom:12px;text-align:center">✓ محاسبهٔ محلی${res.confidence!=null?' · اطمینان '+res.confidence+'٪':''}${res.coverage?.contact_coverage_percent!=null?' · پوشش تماس '+res.coverage.contact_coverage_percent+'٪':''}</div>`;
 
   if(res.health){
     html+=`<div class="health-score-big">
@@ -1357,8 +1356,8 @@ function legacyRenderAI(res,fromCache){
   }
 
   const sections=[
-    {key:'patterns', icon:'🔄', title:'الگوهای رفتاری', color:'var(--primary)'},
-    {key:'risks',    icon:'⚠️', title:'ریسک‌ها',         color:'#f43f5e'},
+    {key:'patterns', icon:'🔄', title:'الگوهای قابل مشاهده', color:'var(--primary)'},
+    {key:'risks',    icon:'⚠️', title:'نکات نیازمند توجه', color:'#f43f5e'},
     {key:'opportunities',icon:'✨',title:'فرصت‌های رشد',color:'#10b981'},
   ];
   sections.forEach(s=>{
@@ -1382,7 +1381,7 @@ function legacyRenderAI(res,fromCache){
   }
 
   if(res.psychological_profile){
-    html+=`<div class="ai-result-section"><h4>🧬 پروفایل روانشناختی</h4>
+    html+=`<div class="ai-result-section"><h4>🧬 حدود تفسیر روان‌شناختی</h4>
       <div style="font-size:13px;color:var(--text-soft);line-height:1.8;padding:16px;background:rgba(255,255,255,.03);border-radius:12px">${res.psychological_profile}</div></div>`;
   }
   if(res.sociological_summary){

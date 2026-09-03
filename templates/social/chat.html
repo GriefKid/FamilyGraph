@@ -211,7 +211,7 @@ async function analyze(){
     document.getElementById('analysis').innerHTML='<span style="color:var(--danger,#f87171)">تحلیل ناموفق بود — بعداً دوباره امتحان کن.</span>';
   }
 }
-function renderAnalysis(a){const box=document.getElementById('analysis');box.style.display='block';box.innerHTML=`<b>تحلیل:</b> ${esc(a.summary||'')}<br><b>حال‌وهوا:</b> ${esc(a.mood||'')}<div>${(a.topics||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}${(a.signals||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>`}
+function renderAnalysis(a){const box=document.getElementById('analysis');box.style.display='block';box.innerHTML=`<b>گزارش شواهدمحور:</b> ${esc(a.summary||'')}<br><b>محدودیت:</b> ${esc(a.mood||'')}<div>${(a.topics||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}${(a.signals||[]).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>${a.grounded?'<small style="color:var(--text-muted)">محاسبهٔ محلی · بدون حدس شخصیت</small>':''}`}
 async function badges(){const d=await api('/api/social/messages/unread/');document.querySelectorAll('.unread').forEach(x=>{const n=d.counts[x.id.slice(1)]||0;x.style.display=n?'flex':'none';x.textContent=n})}
 badges();setInterval(badges,5000);
 if(selectedId){const btn=document.querySelector(`.contact[data-id="${selectedId}"]`);if(btn)openThread(Number(selectedId),btn)}

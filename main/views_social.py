@@ -310,25 +310,24 @@ def messages_api(request, user_id):
             'content': m.content,
             'created_at': m.created_at.strftime('%Y-%m-%d %H:%M'),
         } for m in qs],
-        'analysis': {
-            'summary': analysis.summary,
-            'mood': analysis.mood,
-            'topics': analysis.topics,
-            'signals': analysis.signals,
-            'suggestions': analysis.suggestions,
-        } if analysis else None,
+        'analysis': _analysis_payload(analysis),
     })
 
 
 def _analysis_payload(analysis):
     if not analysis:
         return None
+    raw = analysis.raw if isinstance(analysis.raw, dict) else {}
     return {
         'summary': analysis.summary,
         'mood': analysis.mood,
         'topics': analysis.topics,
         'signals': analysis.signals,
         'suggestions': analysis.suggestions,
+        'confidence': raw.get('confidence'),
+        'generated_by': raw.get('generated_by'),
+        'grounded': bool(raw.get('grounded')),
+        'metrics': raw.get('metrics') or {},
     }
 
 
@@ -341,53 +340,9 @@ def _chat_analysis_for(user, friend):
     if len(msgs) < 2:
         return None
 
-    try:
-        from .views_smart_features import _ai_client, _extract_json, _model
-        client, api_key, _provider = _ai_client()
-        if not api_key:
-            raise RuntimeError('AI key is not configured')
-        transcript = '\n'.join(
-            f"{'من' if m.sender_id == user.id else friend.username}: {m.content[:500]}"
-            for m in msgs
-        )
-        prompt = f"""این چت بین من و {friend.username} را برای FamilyGraph تحلیل کن.
-هدف: شناخت عمیق «هر دو نفر» و «خودِ رابطه» از دل گفتگو —
-شخصیت و حال‌وهوای هر طرف، دینامیک بینشون (کی پیش‌قدمه، لحن، تعادل)، موضوعات تکراری،
-قول‌وقرارها، نیاز به پیگیری و تغییر حال‌وهوا.
-فقط JSON معتبر بده:
-{{"summary":"خلاصه کوتاه","mood":"حال‌وهوای رابطه",
-  "person_read":"شناختی که از {friend.username} از این چت به دست میاد (۱-۲ جمله)",
-  "my_read":"شناختی که از خودِ من از این چت به دست میاد (۱ جمله)",
-  "relationship_read":"شناخت یال/دینامیک رابطه (۱-۲ جمله)",
-  "topics":[],"signals":[],"suggestions":[],"followups":[]}}
+    from .grounded_insights import direct_chat_analysis
 
-چت:
-{transcript}"""
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'تحلیل‌گر روابط هستی. فقط JSON معتبر بده.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=900,
-        )
-        data = _extract_json(resp.choices[0].message.content)
-    except Exception:
-        joined = ' '.join(m.content for m in msgs[-20:])
-        data = {
-            'summary': joined[:240] + ('...' if len(joined) > 240 else ''),
-            'mood': 'تحلیل آفلاین',
-            'topics': [],
-            'signals': ['AI در دسترس نبود؛ خلاصه آفلاین ساخته شد.'],
-            'suggestions': ['بعد از تنظیم کلید AI دوباره تحلیل کن.'],
-            'followups': [],
-        }
-
-    # V12: خوانش شخص و رابطه هم وارد سیگنال‌ها بشه تا موتور شناخت بخوره
-    extra_signals = []
-    for k in ('person_read', 'relationship_read', 'my_read'):
-        if data.get(k):
-            extra_signals.append(str(data[k])[:250])
+    data = direct_chat_analysis(user, friend, msgs)
     analysis, _ = ChatAnalysis.objects.update_or_create(
         user=user,
         friend=friend,
@@ -395,23 +350,11 @@ def _chat_analysis_for(user, friend):
             'summary': data.get('summary', ''),
             'mood': data.get('mood', ''),
             'topics': data.get('topics') or [],
-            'signals': (data.get('signals') or []) + extra_signals,
+            'signals': data.get('signals') or [],
             'suggestions': data.get('suggestions') or [],
             'raw': data,
         },
     )
-
-    try:
-        node = Node.objects.filter(owner=user, username=friend.username).first()
-        followups = data.get('followups') or []
-        if node and isinstance(followups, list):
-            from .models import FollowUp
-            for text in followups[:3]:
-                text = str(text).strip()[:300]
-                if text and not FollowUp.objects.filter(owner=user, node=node, text=text, done=False).exists():
-                    FollowUp.objects.create(owner=user, node=node, text=text)
-    except Exception:
-        pass
 
     DirectMessage.objects.filter(id__in=[m.id for m in msgs], sender=user).update(analyzed=True)
     return analysis
@@ -870,34 +813,9 @@ def _user_card(user, viewer=None):
 
 
 def _work_analysis(kind, title, creator=''):
-    label = {'book': 'کتاب', 'movie': 'فیلم', 'series': 'سریال', 'music': 'موسیقی'}.get(kind, 'اثر')
-    base = {
-        'summary': f'{label} «{title}» به عنوان یک سیگنال فرهنگی برای شناخت سلیقه، ارزش‌ها، تخیل و حساسیت‌های فرد استفاده می‌شود.',
-        'personality_signals': [
-            'اگر امتیاز بالا باشد، این اثر احتمالا با جهان‌بینی یا نیازهای عاطفی فرد هم‌راستاست.',
-            'اگر امتیاز پایین باشد، تضاد فرد با مضمون یا سبک اثر می‌تواند برای شناخت مرزهای سلیقه‌ای او مهم باشد.',
-        ],
-        'relationship_signals': [
-            'شباهت یا تفاوت در واکنش به این اثر می‌تواند موضوع گفتگو، نزدیکی یا فاصله فرهنگی بین دو نفر باشد.',
-        ],
-    }
-    try:
-        from .views_smart_features import _ai_client, _extract_json, _model
-        client, api_key, _provider = _ai_client()
-        if not api_key:
-            return base
-        prompt = f"""برای FamilyGraph این اثر را تحلیل کن: نوع={label}، عنوان={title}، سازنده={creator}.
-هدف اپ شناخت شخصیت فرد و واقعیت رابطه‌هاست. فقط JSON بده:
-{{"summary":"","personality_signals":[],"relationship_signals":[],"themes":[]}}"""
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=700,
-        )
-        data = _extract_json(resp.choices[0].message.content)
-        return data if isinstance(data, dict) else base
-    except Exception:
-        return base
+    from .grounded_insights import cultural_work_analysis
+
+    return cultural_work_analysis(kind, title, creator)
 
 
 def _fetch_cover_url(kind, title, creator=''):

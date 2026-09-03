@@ -6,7 +6,7 @@ views_import.py — ایمپورت تعاملی تلگرام (V8.1)
   2. کاربر برای هر مخاطب تصمیم می‌گیره: نود موجود / نود جدید / رد شو
   3. apply  → فقط طبق تصمیم‌های کاربر می‌نویسه
   + undo    → پاک‌سازی کامل هر چیزی که ایمپورت ساخته
-  + analyze → AI متن گفتگو رو می‌خونه، آدم‌های ذکرشده رو درمیاره و از کاربر می‌پرسه کی‌ان
+  + analyze → نام‌های صریح گفتگو را با شاهد درمی‌آورد و از کاربر می‌پرسد کی‌اند
 """
 import io
 import json
@@ -23,7 +23,7 @@ from .models import Node, Relationship
 
 MAX_SIZE = 400 * 1024 * 1024
 SCAN_TTL = 2 * 3600           # کش اسکن: ۲ ساعت
-SAMPLE_CHARS = 7000           # حجم نمونه‌ی متن هر مخاطب برای AI
+SAMPLE_CHARS = 7000           # حجم نمونه‌ی متن هر مخاطب برای استخراج محلی
 IMPORT_NOTE = 'ایمپورت تلگرام'
 IMPORT_REL = 'تلگرام'
 
@@ -352,12 +352,12 @@ def telegram_undo_api(request):
 
 
 # ═══════════════════════════════════════════════════════════════
-#  تحلیل AI — POST /api/import/telegram/analyze/
+#  استخراج نام‌های صریح — POST /api/import/telegram/analyze/
 # ═══════════════════════════════════════════════════════════════
 
 @login_required
 def telegram_analyze_api(request):
-    """{name} → AI متن گفتگو رو می‌خونه و آدم‌های ذکرشده رو درمیاره."""
+    """{name} → explicit third-person mentions with exact evidence lines."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     body = _body(request) or {}
@@ -368,40 +368,10 @@ def telegram_analyze_api(request):
     if not info or not info.get('sample'):
         return JsonResponse({'error': 'نمونه‌ی متن در دسترس نیست — دوباره اسکن کن'}, status=410)
 
-    from .views_smart_features import _ai_client, _model, _extract_json, _rate_limit_msg
-    client, api_key, _prov = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'کلید AI تنظیم نشده'}, status=500)
+    from .grounded_insights import telegram_people
 
-    prompt = f"""این نمونه‌ی گفتگوی من با «{name}» در تلگرامه («من» = خودم، «او» = {name}):
-
-{info['sample']}
-
-آدم‌های سومی که توی گفتگو ذکر شدن رو دربیار (اسم کوچیک، لقب، هرچی صداشون کردن).
-برای هرکدوم حدس بزن نسبتش با {name} یا با من چیه (از بافت جمله‌ها).
-اسم‌های عمومی/سلبریتی/برند رو نیار — فقط آدم‌های واقعیِ زندگی ما.
-حداکثر ۶ نفر، مرتب بر اساس تکرار.
-
-JSON خالص:
-{{"people": [
-  {{"name": "...", "relation": "مثلاً: دوستِ {name} / همکارِ من / خواهرش",
-    "evidence": "نقل‌قول کوتاهی که ازش فهمیدی"}}
-]}}"""
-
-    try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'تحلیلگر شبکه‌ی اجتماعی. فقط JSON خروجی بده.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=800,
-        )
-        result = _extract_json(resp.choices[0].message.content)
-        people = result.get('people') or []
-        return JsonResponse({'ok': True, 'people': people[:6]})
-    except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+    result = telegram_people(request.user, name, info['sample'])
+    return JsonResponse({'ok': True, **result})
 
 
 # ═══════════════════════════════════════════════════════════════

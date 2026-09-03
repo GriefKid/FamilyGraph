@@ -111,7 +111,7 @@ def gather_person_signals(user, node):
         if feels:
             avg = sum(feels) / len(feels)
             out.append(f'میانگین حس بعد از تعامل: {avg:+.2f} '
-                       f'({"انرژی‌بخش" if avg > 0.3 else ("انرژی‌گیر" if avg < -0.3 else "خنثی")})')
+                       f'({"حس مثبت ثبت‌شده" if avg > 0.3 else ("حس ناخوشایند ثبت‌شده" if avg < -0.3 else "خنثی")})')
         notes = [i.note for i in rows[:20] if i.note and i.note not in
                  ('ایمپورت تلگرام', 'چک-این روزانه', 'از هشدار ثبت شد')][:5]
         if notes:
@@ -121,6 +121,8 @@ def gather_person_signals(user, node):
 
     # ── ژورنال ──
     def _journal():
+        if not getattr(user, 'ai_journal_enabled', True):
+            return []
         entries = list(node.journal_entries.filter(owner=user).order_by('-created_at')[:6])
         return [f'از خاطرات ({e.entry_date or e.created_at.date()}): {e.text[:180]}'
                 + (f' [حس: {e.mood}]' if e.mood else '') for e in entries]
@@ -238,6 +240,8 @@ def gather_person_signals(user, node):
     # ── درد دل‌های من با «همدم» که اسمش توش اومده ──
     def _confessions():
         from .models import ChatMessage
+        if not getattr(user, 'ai_chat_enabled', True):
+            return []
         names = {node.display_name(), node.username, node.nickname}
         names = [n for n in names if n and len(n) >= 2]
         out = []
@@ -256,6 +260,8 @@ def gather_person_signals(user, node):
     # ── خاطراتی که با اسمش نوشتم ولی لینک نشدن ──
     def _journal_by_name():
         from .models import JournalEntry
+        if not getattr(user, 'ai_journal_enabled', True):
+            return []
         nm = node.display_name()
         if not nm or len(nm) < 2:
             return []
@@ -275,16 +281,6 @@ def gather_person_signals(user, node):
     v = _safe(_alert_behavior, None)
     if v:
         S.append(v)
-
-    # ── شناخت قبلی (انباشت — چیزی که قبلاً فهمیدیم گم نشه) ──
-    def _prior():
-        from .models import PersonaProfile
-        p = PersonaProfile.objects.filter(node=node, owner=user).first()
-        if p and p.statements:
-            return ['شناخت قبلی (اگه هنوز درسته نگهش دار): '
-                    + ' | '.join(str(s.get('text', s))[:100] for s in p.statements[:10])]
-        return []
-    S += _safe(_prior, [])
 
     # ── اگر این نود، یک کاربر واقعی اپه: آثار فرهنگی + تحلیل چت داخلی ──
     def _as_user():
@@ -318,24 +314,25 @@ def gather_person_signals(user, node):
                 if i.notes:
                     line += f' — نظرش: {i.notes[:150]}'
                 out.append('اثر فرهنگی: ' + line)
-        ca = ChatAnalysis.objects.filter(user=user, friend=u).first()
-        if ca:
-            if ca.summary:
-                out.append(f'از گفتگوهای داخلی: {ca.summary[:250]}')
-            if ca.mood:
-                out.append(f'حال‌وهوای گفتگوها: {ca.mood}')
-            for s in (ca.signals or [])[:4]:
-                out.append(f'سیگنال گفتگو: {str(s)[:150]}')
-        # نمونه‌ی خودِ پیام‌های اخیر — لحن و دنیای واقعیش
-        from .models import DirectMessage
-        msgs = list(DirectMessage.objects.filter(
-            Q(sender=user, receiver=u) | Q(sender=u, receiver=user)
-        ).order_by('-created_at')[:14])[::-1]
-        if msgs:
-            sample = ' / '.join(
-                f'{"من" if m.sender_id == user.id else "او"}: {m.content[:70]}'
-                for m in msgs)
-            out.append(f'نمونه گفتگوی اخیر: {sample[:600]}')
+        if getattr(user, 'ai_chat_enabled', True):
+            ca = ChatAnalysis.objects.filter(user=user, friend=u).first()
+            raw = ca.raw if ca and isinstance(ca.raw, dict) else {}
+            if ca and raw.get('grounded') and raw.get('generated_by') == 'grounded_insights_v1':
+                if ca.summary:
+                    out.append(f'از گفتگوهای داخلی: {ca.summary[:250]}')
+                for s in (ca.signals or [])[:4]:
+                    out.append(f'اندازه‌گیری گفتگو: {str(s)[:150]}')
+            # Recent messages are direct observations, but only when the owner
+            # has allowed chat data to feed analysis.
+            from .models import DirectMessage
+            msgs = list(DirectMessage.objects.filter(
+                Q(sender=user, receiver=u) | Q(sender=u, receiver=user)
+            ).order_by('-created_at')[:14])[::-1]
+            if msgs:
+                sample = ' / '.join(
+                    f'{"من" if m.sender_id == user.id else "او"}: {m.content[:70]}'
+                    for m in msgs)
+                out.append(f'نمونه گفتگوی اخیر: {sample[:600]}')
         # بیو و مشخصات پروفایلش
         if u.bio:
             out.append(f'بیوی خودش: {u.bio[:200]}')

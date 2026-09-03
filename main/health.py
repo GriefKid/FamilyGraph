@@ -102,9 +102,10 @@ def last_contact_map(user):
         rows = JournalEntry.objects.filter(owner=user) \
                                    .values_list('mentioned_nodes__id', 'entry_date', 'created_at')
         return list(rows)
-    for nid, ed, ca in _safe(_from_journal, []):
-        d = ed or (ca.date() if ca else None)
-        bump(nid, d, 'journal')
+    if getattr(user, 'ai_journal_enabled', True):
+        for nid, ed, ca in _safe(_from_journal, []):
+            d = ed or (ca.date() if ca else None)
+            bump(nid, d, 'journal')
 
     return result
 

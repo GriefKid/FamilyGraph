@@ -452,7 +452,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
           <button class="btn" id="saveBtn" onclick="quickSave()">💾 ثبت لحظه</button>
           <button class="btn btn-sm" type="button" onclick="showExtractions()">✨ پیشنهادها</button>
           <a class="btn btn-sm" href="{% url 'extraction_inbox' %}">تاریخچه و مدیریت</a>
-          <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">✦ تحلیل با AI</button>
+          <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeJournal()">✦ استخراج از متن</button>
         </div>
       </div>
     </div>
@@ -465,7 +465,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
       </div>
       <div class="result-body" id="resultBody"></div>
       <div style="padding:0 18px 12px;font-size:11px;color:var(--text-muted);line-height:1.8;">
-        پیشنهادهای AI از همین یادداشت استخراج شده‌اند؛ قبل از ذخیره، آن‌ها را مرور کن. فقط موارد تأییدشده وارد شبکه می‌شوند.
+        پیشنهادها فقط از عبارت‌های قابل‌مشاهدهٔ همین یادداشت استخراج شده‌اند؛ قبل از ذخیره مرورشان کن. فقط موارد تأییدشده وارد شبکه می‌شوند.
       </div>
       <div class="apply-row" id="applyRow" style="display:none;">
         <button class="btn btn-primary" onclick="applyResult()">✓ ذخیره در شبکه</button>
@@ -787,7 +787,7 @@ function loadEntry(text,date,tags){
 function closeResult(){document.getElementById('resultCard').classList.remove('show');}
 function getCookie(n){const v=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)');return v?v.pop():'';}
 
-// ── Quick Save (no AI) ──────────────────────────────────
+// ── Quick Save ──────────────────────────────────────────
 async function showExtractions(){
   const modal=document.getElementById('extractModal'), list=document.getElementById('extractList');modal.classList.add('open');list.textContent='در حال آماده‌سازی…';
   const r=await fetch('/api/extractions/');const d=await r.json();const options=(d.nodes||[]).map(n=>`<option value="${n.id}">${_esc(n.name)}</option>`).join('');
@@ -822,13 +822,13 @@ async function quickSave(){
   finally{btn.disabled=false;btn.textContent=entryKind === 'moment' ? '💾 ثبت لحظه' : '💾 ذخیره جمع‌بندی';}
 }
 
-// ── Analyze with AI ─────────────────────────────────────
+// ── Local evidence extraction ───────────────────────────
 async function analyzeJournal(){
   const text=document.getElementById('journalText').value.trim();
   if(!text){alert('متنی بنویس!');return;}
   const btn=document.getElementById('analyzeBtn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> در حال تحلیل...';
-  document.getElementById('resultBody').innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted)"><span class="spinner"></span> AI در حال خواندن خاطره...</div>';
+  document.getElementById('resultBody').innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted)"><span class="spinner"></span> در حال استخراج عبارت‌های قابل‌تأیید...</div>';
   document.getElementById('resultCard').classList.add('show');
   document.getElementById('applyRow').style.display='none';
   try{
@@ -851,7 +851,7 @@ async function analyzeJournal(){
     lastResult=data.result;
     renderResult(data.result);
   }catch(e){document.getElementById('resultBody').innerHTML='<div style="padding:16px;color:#f43f5e;">خطا در ارتباط با سرور</div>';}
-  finally{btn.disabled=false;btn.innerHTML='✦ تحلیل دوباره';}
+  finally{btn.disabled=false;btn.innerHTML='✦ استخراج دوباره';}
 }
 
 // privacy & link state
@@ -1196,7 +1196,7 @@ function selectDay(dateStr){
           ${e.tags.length ? `<div class="day-entry-tags">${e.tags.map(t=>`<span class="day-entry-tag">#${t}</span>`).join('')}</div>` : ''}
           ${e.mood ? `<div class="day-entry-mood">خلق‌وخو: ${e.mood}</div>` : ''}
         </div>
-        ${e.analyzed ? '<span style="font-size:10px;color:#c4b5fd;">✦ AI</span>' : ''}
+        ${e.analyzed ? '<span style="font-size:10px;color:#c4b5fd;">✦ بررسی‌شده</span>' : ''}
       </div>
     `).join('');
 
@@ -1302,7 +1302,7 @@ async function loadEntries(){
       (Array.isArray(e.tags)?e.tags:[]).forEach(tag=>addMeta('entry-tag','#'+String(tag)));
       if(e.mood) addMeta('entry-mood-badge',String(e.mood));
       (Array.isArray(e.mentioned)?e.mentioned:[]).forEach(username=>addMeta('entry-person','@'+String(username)));
-      if(e.analyzed) addMeta('entry-ai-badge','✦ AI');
+      if(e.analyzed) addMeta('entry-ai-badge','✦ بررسی‌شده');
       body.append(date,text,meta);
       top.appendChild(body);
 
@@ -1322,7 +1322,7 @@ async function loadEntries(){
       if(!e.analyzed){
         const analyze=document.createElement('button');
         analyze.className='entry-btn primary';
-        analyze.textContent='✦ آنالیز AI';
+        analyze.textContent='✦ استخراج از متن';
         analyze.addEventListener('click',()=>analyzeExisting(
           id, String(e.text||''), String(e.entry_date||'')
         ));

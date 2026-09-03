@@ -1363,48 +1363,15 @@ def node_ai_summary(request, pk):
         return JsonResponse({'error': 'POST required'}, status=405)
 
     node = get_object_or_404(Node, pk=pk, owner=request.user)
-    rels = Relationship.objects.filter(
-        Q(source=node) | Q(target=node), owner=request.user
-    ).select_related('source', 'target')
-    infos = Information.objects.filter(node=node)
+    from .grounded_insights import person_summary
+    from .relationship_intelligence import analyze_person_relationship
 
-    rels_text = "\n".join(
-        f"- {'خروجی به' if r.source == node else 'ورودی از'} {r.target.username if r.source == node else r.source.username}"
-        + (f" [{r.rel}]" if r.rel else "")
-        for r in rels
-    ) or "هیچ رابطه‌ای ندارد"
-
-    info_text = "\n".join(f"- {i.data}" for i in infos) or "اطلاعات اضافه‌ای ثبت نشده"
-
-    prompt = (
-        f"یک خلاصه تحلیلی از این شخص بنویس:\n\n"
-        f"نام کاربری: {node.username}\n"
-        f"نام: {node.name or '—'}\n"
-        f"شغل: {node.career or '—'}\n"
-        f"تولد: {node.birth_day or '—'}\n\n"
-        f"روابط:\n{rels_text}\n\n"
-        f"اطلاعات:\n{info_text}\n\n"
-        "در ۲-۳ پاراگراف کوتاه فارسی بنویس: این شخص کیه، چه نقشی در شبکه داره، و چه نکته مهمی درباره‌اش هست."
-    )
-
-    # ── کش: خلاصه node تا زمانی که اطلاعاتش تغییر کنه معتبره ──────────────
-    cache_key = f'node_summary_{pk}'
-    cached = cache.get(cache_key)
-    if cached:
-        return JsonResponse({'summary': cached, 'from_cache': True})
-
-    try:
-        client, ai_model = _get_ai_client_and_model()
-        response = client.chat.completions.create(
-            model=ai_model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=512,
-        )
-        summary_text = response.choices[0].message.content
-        cache.set(cache_key, summary_text, timeout=12 * 3600)  # کش ۱۲ ساعته
-        return JsonResponse({'summary': summary_text})
-    except Exception as e:
-        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
+    analysis = analyze_person_relationship(request.user, node)
+    return JsonResponse({
+        'summary': person_summary(node, analysis),
+        'analysis': analysis,
+        'generated_by': 'grounded_insights_v1',
+    })
 
 
 @login_required
@@ -2118,8 +2085,27 @@ def chat_api(request):
         )
 
         return JsonResponse({'reply': reply, 'style': chat_style})
-    except Exception as e:
-        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            'All chat providers failed for user_id=%s: %s',
+            request.user.id, type(exc).__name__,
+        )
+        normalized = _fa_norm(user_message)
+        if any(word in normalized.split() for word in ('سلام', 'درود')):
+            reply = 'سلام، خوش اومدی. بخش مولد الان موقتاً در دسترس نیست، ولی تحلیل‌های ثبت‌شدهٔ روابط همچنان کار می‌کنند.'
+        else:
+            reply = (
+                'بخش گفت‌وگوی آزاد الان موقتاً پاسخ‌گو نیست. '
+                'اگر دربارهٔ یکی از آدم‌های گرافت تحلیل بخواهی، می‌توانم همان لحظه از داده‌های ثبت‌شده جواب بدهم.'
+            )
+        _persist_chat_exchange(
+            request.user, user_message, reply,
+            ephemeral=bool(data.get('ephemeral')),
+        )
+        return JsonResponse({
+            'reply': reply, 'style': chat_style, 'degraded': True,
+            'reason': 'generation_provider_unavailable',
+        })
 
 
 @login_required
@@ -2386,8 +2372,11 @@ def journal_image_ocr_api(request):
 
     try:
         client, model = _get_ai_client_and_model()
-    except RuntimeError as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    except RuntimeError:
+        return JsonResponse({
+            'error': 'خواندن متن تصویر فعلاً در دسترس نیست؛ متن را دستی وارد کن یا بعداً دوباره امتحان کن.',
+            'code': 'vision_provider_unavailable',
+        }, status=503)
 
     try:
         resp = client.chat.completions.create(
@@ -2403,11 +2392,18 @@ def journal_image_ocr_api(request):
                     {'type': 'image_url', 'image_url': {'url': data_uri}},
                 ],
             }],
-            max_tokens=1200,
+            max_tokens=700,
         )
         text = (resp.choices[0].message.content or '').strip()
-    except Exception as e:
-        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            'Journal OCR provider failed for user_id=%s: %s',
+            request.user.id, type(exc).__name__,
+        )
+        return JsonResponse({
+            'error': 'خواندن متن تصویر کامل نشد؛ متن را دستی وارد کن یا بعداً دوباره امتحان کن.',
+            'code': 'vision_provider_failed',
+        }, status=503)
 
     if not text or text.startswith('(متنی'):
         return JsonResponse({'ok': True, 'text': '', 'empty': True})
@@ -2440,179 +2436,95 @@ def journal_analyze_api(request):
     if not isinstance(existing_entry_id, int) or isinstance(existing_entry_id, bool):
         existing_entry_id = None
 
-    # ── Who is "me"? ─────────────────────────────────────────
-    root_username = None
-    root_display  = None
-    if request.user.is_authenticated and request.user.root_node:
-        root_username = request.user.root_node.username
-        root_display  = request.user.root_node.display_name()
+    # The journal analysis path is local and approval-based.  The model must
+    # never block saving a memory or turn inferred traits into profile facts.
+    raw_tags = body.get('tags', [])
+    if isinstance(raw_tags, str):
+        raw_tags = [tag.strip() for tag in raw_tags.split(',') if tag.strip()]
+    elif isinstance(raw_tags, list):
+        raw_tags = [str(tag).strip()[:80] for tag in raw_tags if str(tag).strip()][:30]
+    else:
+        raw_tags = []
 
-    me_info = (
-        f'نویسنده این خاطره "{root_display}" با username "{root_username}" است. '
-        f'هر جا "من" یا اول شخص مفرد آمد یعنی همین شخص. '
-        f'برای نویسنده نود جدید نساز — روابط را به username "{root_username}" وصل کن.'
-        if root_username else
-        'نویسنده مشخص نیست — اگر "من" آمد، username آن را "me" بگذار.'
-    )
-
-    owner_filter = {'owner': request.user} if request.user.is_authenticated else {}
-    existing_nodes = ', '.join(Node.objects.filter(**owner_filter).values_list('username', flat=True)[:80]) or 'هیچ'
-
-    prompt = f"""تو یک تحلیلگر هوشمند خاطرات شخصی هستی.
-
-{me_info}
-نودهای موجود در شبکه: {existing_nodes}
-
-متن خاطره:
-\"\"\"
-{text}
-\"\"\"
-
-دقیقاً یک JSON برگردان. هیچ متنی خارج از JSON ننویس:
-
-{{
-  "nodes": [
-    {{"username": "نام_انگلیسی_بدون_فاصله", "name": "نام کامل فارسی"}}
-  ],
-  "relationships": [
-    {{
-      "from": "username_الف",
-      "to": "username_ب",
-      "type": "نوع رابطه (دوست، همکار، تیم‌لید، برادر، ...)",
-      "strength": 3
-    }}
-  ],
-  "events": [
-    {{"title": "عنوان", "date": "YYYY-MM-DD یا null", "description": "توضیح"}}
-  ],
-  "attributes": [
-    {{
-      "username": "نام_کاربری",
-      "personality":          ["ویژگی شخصیتی"],
-      "mood":                 "خلق‌وخو در این خاطره",
-      "interests":            ["علایق"],
-      "preferences":          ["سلایق و ترجیحات"],
-      "strengths":            ["نقاط قوت"],
-      "weaknesses":           ["نقاط ضعف"],
-      "goals":                ["اهداف"],
-      "values":               ["ارزش‌ها و باورها"],
-      "communication_style":  "شیوه ارتباطی",
-      "relationship_quality": "کیفیت رابطه با نویسنده",
-      "notable_facts":        ["نکات مهم دیگر"]
-    }}
-  ],
-  "my_mood": "خلق‌وخوی نویسنده در این خاطره",
-  "my_insights": ["چیزی که نویسنده فهمیده یا احساس کرده"],
-  "summary": "یک جمله خلاصه"
-}}
-
-قوانین:
-1. فقط افراد واقعی ذکر شده در متن — نه حدس
-2. نویسنده (من) نود جدید نمی‌شود — روابط از "{root_username or 'me'}" شروع می‌شود
-3. attributes فقط برای افراد دیگر (نه نویسنده) — مگر نویسنده چیزی درباره خودش گفته
-4. strength: عدد ۱ تا ۵ — ۵ خیلی قوی
-5. هر آرایه بدون اطلاعات را [] بگذار"""
-
-    try:
-        import re
-        client, ai_model = _get_ai_client_and_model()
-        response = client.chat.completions.create(
-            model=ai_model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=2048,
-        )
-        content = response.choices[0].message.content
-        match = re.search(r'\{[\s\S]*\}', content)
-        result = json.loads(match.group() if match else content)
-        if not isinstance(result, dict):
-            return JsonResponse({'error': 'AI response must be an object'}, status=502)
-        result['_root_username'] = root_username
-
-        # Parse tags from body
-        raw_tags = body.get('tags', [])
-        if isinstance(raw_tags, str):
-            raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
-        elif isinstance(raw_tags, list):
-            raw_tags = [str(tag).strip()[:80] for tag in raw_tags if str(tag).strip()][:30]
-        else:
-            raw_tags = []
-
-        # Save/update entry
-        entry_date_str = body.get('entry_date')
-        entry_date_str = entry_date_str.strip() if isinstance(entry_date_str, str) else ''
-        entry_date = None
-        if entry_date_str:
-            try:
-                from datetime import date
-                entry_date = date.fromisoformat(entry_date_str)
-            except Exception:
-                pass
-
-        entry_kind = body.get('entry_kind', 'moment')
-        if entry_kind not in dict(JournalEntry.ENTRY_KIND_CHOICES):
-            entry_kind = 'moment'
-        occurred_at = timezone.now()
-        raw_occurred_at = body.get('occurred_at', '')
-        raw_occurred_at = raw_occurred_at if isinstance(raw_occurred_at, str) else ''
-        if raw_occurred_at:
-            try:
-                from datetime import datetime
-                occurred_at = datetime.fromisoformat(raw_occurred_at.replace('Z', '+00:00'))
-                if timezone.is_naive(occurred_at):
-                    occurred_at = timezone.make_aware(occurred_at, timezone.get_current_timezone())
-            except (TypeError, ValueError):
-                pass
-        if entry_date is None:
-            entry_date = timezone.localdate(occurred_at)
-
-        entry_owner = request.user if request.user.is_authenticated else None
-        if existing_entry_id:
-            try:
-                entry = JournalEntry.objects.get(id=existing_entry_id, owner=entry_owner)
-                entry.ai_analyzed = True
-                entry.mood = result.get('my_mood', '')
-                entry.entry_kind = entry_kind
-                entry.occurred_at = occurred_at
-                if raw_tags:
-                    entry.tags = raw_tags
-                entry.save(update_fields=['ai_analyzed', 'mood', 'tags', 'entry_kind', 'occurred_at'])
-            except JournalEntry.DoesNotExist:
-                entry = JournalEntry.objects.create(
-                    text=text, entry_date=entry_date, occurred_at=occurred_at, entry_kind=entry_kind, tags=raw_tags,
-                    mood=result.get('my_mood', ''), ai_analyzed=True, owner=entry_owner,
-                )
-        else:
-            entry = JournalEntry.objects.create(
-                text=text, entry_date=entry_date, occurred_at=occurred_at, entry_kind=entry_kind, tags=raw_tags,
-                mood=result.get('my_mood', ''), ai_analyzed=True, owner=entry_owner,
-            )
-        result['_entry_id'] = entry.id
+    entry_date = None
+    entry_date_str = body.get('entry_date', '')
+    entry_date_str = entry_date_str.strip() if isinstance(entry_date_str, str) else ''
+    if entry_date_str:
         try:
-            from .memory_pipeline import capture_text
-            result['_suggestions_created'] = len(capture_text(request.user, entry.text, 'journal', entry.id))
-        except Exception:
-            result['_suggestions_created'] = 0
-
-        # Link any pre-uploaded images to this entry
-        image_ids = body.get('image_ids')
-        image_ids = [
-            image_id for image_id in image_ids
-            if isinstance(image_id, int) and not isinstance(image_id, bool)
-        ] if isinstance(image_ids, list) else []
-        if image_ids:
-            JournalImage.objects.filter(id__in=image_ids, entry__isnull=True, owner=request.user).update(entry=entry)
-
-        try:
-            from .views_journal_extra import _extract_profile_media_from_journal
-            _extract_profile_media_from_journal(entry)
-        except Exception:
+            entry_date = date.fromisoformat(entry_date_str)
+        except ValueError:
             pass
 
-        return JsonResponse({'result': result})
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'AI پاسخ معتبر JSON نداد', 'raw': content[:600]}, status=500)
-    except Exception as e:
-        return JsonResponse({'error': _ai_error_msg(e)}, status=500)
+    occurred_at = timezone.now()
+    raw_occurred_at = body.get('occurred_at', '')
+    if isinstance(raw_occurred_at, str) and raw_occurred_at:
+        try:
+            from datetime import datetime
+            occurred_at = datetime.fromisoformat(raw_occurred_at.replace('Z', '+00:00'))
+            if timezone.is_naive(occurred_at):
+                occurred_at = timezone.make_aware(occurred_at, timezone.get_current_timezone())
+        except ValueError:
+            return JsonResponse({'error': 'زمان خاطره معتبر نیست'}, status=400)
+    if entry_date is None:
+        entry_date = timezone.localdate(occurred_at)
+
+    entry_kind = body.get('entry_kind', 'moment')
+    if entry_kind not in dict(JournalEntry.ENTRY_KIND_CHOICES):
+        return JsonResponse({'error': 'نوع خاطره معتبر نیست'}, status=400)
+
+    if existing_entry_id:
+        entry = JournalEntry.objects.filter(
+            id=existing_entry_id, owner=request.user,
+        ).first()
+        if not entry:
+            return JsonResponse({'error': 'خاطره پیدا نشد'}, status=404)
+        entry.text = text
+        entry.entry_date = entry_date
+        entry.occurred_at = occurred_at
+        entry.entry_kind = entry_kind
+        entry.tags = raw_tags
+        entry.mood = ''
+        entry.ai_analyzed = True
+        entry.save(update_fields=[
+            'text', 'entry_date', 'occurred_at', 'entry_kind', 'tags',
+            'mood', 'ai_analyzed',
+        ])
+    else:
+        entry = JournalEntry.objects.create(
+            text=text, entry_date=entry_date, occurred_at=occurred_at,
+            entry_kind=entry_kind, tags=raw_tags, mood='', ai_analyzed=True,
+            owner=request.user,
+        )
+
+    image_ids = body.get('image_ids')
+    image_ids = [
+        image_id for image_id in image_ids
+        if isinstance(image_id, int) and not isinstance(image_id, bool)
+    ] if isinstance(image_ids, list) else []
+    if image_ids:
+        JournalImage.objects.filter(
+            id__in=image_ids, entry__isnull=True, owner=request.user,
+        ).update(entry=entry)
+
+    try:
+        from .views_journal_extra import _extract_profile_media_from_journal
+        _extract_profile_media_from_journal(entry)
+    except Exception:
+        pass
+
+    from .memory_pipeline import capture_text
+    capture_text(request.user, entry.text, 'journal', entry.id)
+    from .models import ExtractionSuggestion
+    suggestions = list(ExtractionSuggestion.objects.filter(
+        owner=request.user, source='journal', source_id=entry.id, status='pending',
+    ))
+    from .grounded_insights import journal_result
+    root_username = request.user.root_node.username if request.user.root_node else 'me'
+    result = journal_result(suggestions, text, root_username)
+    result['_root_username'] = root_username
+    result['_entry_id'] = entry.id
+    result['_suggestions_created'] = len(suggestions)
+    return JsonResponse({'result': result})
 
 
 @login_required
@@ -2646,7 +2558,52 @@ def journal_apply_api(request):
     node_rows = as_list(data.get('nodes'))
     relationship_rows = as_list(data.get('relationships'))
     event_rows = as_list(data.get('events'))
-    attribute_rows = as_list(data.get('attributes'))
+    supplied_attribute_rows = as_list(data.get('attributes'))
+
+    # Accept only candidates emitted for this exact owner-scoped journal.
+    # This prevents old model output or handcrafted JSON from being promoted
+    # to graph facts through the legacy apply endpoint.
+    entry_id = data.get('_entry_id')
+    if not isinstance(entry_id, int) or isinstance(entry_id, bool):
+        return JsonResponse({'error': 'منبع معتبر برای این تحلیل پیدا نشد'}, status=400)
+    source_entry = JournalEntry.objects.filter(id=entry_id, owner=request.user).first()
+    if not source_entry:
+        return JsonResponse({'error': 'خاطره پیدا نشد'}, status=404)
+    from .models import ExtractionSuggestion
+    allowed = {
+        suggestion.id: suggestion.kind
+        for suggestion in ExtractionSuggestion.objects.filter(
+            owner=request.user, source='journal', source_id=source_entry.id,
+            status='pending',
+        )
+    }
+
+    def suggestion_id(row):
+        if not isinstance(row, dict):
+            return None
+        value = row.get('_suggestion_id')
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    node_rows = [
+        row for row in node_rows
+        if allowed.get(suggestion_id(row)) in {'person', 'relationship'}
+    ]
+    relationship_rows = [
+        row for row in relationship_rows
+        if allowed.get(suggestion_id(row)) == 'relationship'
+    ]
+    event_rows = [
+        row for row in event_rows
+        if allowed.get(suggestion_id(row)) == 'event'
+    ]
+    applied_suggestion_ids = {
+        suggestion_id(row)
+        for row in [*node_rows, *relationship_rows, *event_rows]
+        if suggestion_id(row) is not None
+    }
+    attribute_rows = []
+    if supplied_attribute_rows:
+        created['ignored_unverified_attributes'] = len(supplied_attribute_rows)
 
     def resolve_public_link(link):
         if not isinstance(link, dict):
@@ -2868,7 +2825,6 @@ def journal_apply_api(request):
         created['attributes'].append(node.username)
 
     # ── Link mentioned nodes to JournalEntry ──────────────
-    entry_id = data.get('_entry_id')
     if entry_id:
         try:
             entry = JournalEntry.objects.get(id=entry_id, owner=req_user)
@@ -2919,6 +2875,13 @@ def journal_apply_api(request):
                 pass   # جدول هنوز migrate نشده — مشکلی نیست
         except JournalEntry.DoesNotExist:
             pass
+
+    if applied_suggestion_ids:
+        ExtractionSuggestion.objects.filter(
+            owner=request.user,
+            id__in=applied_suggestion_ids,
+            status='pending',
+        ).update(status='approved')
 
     return JsonResponse({'created': created})
 

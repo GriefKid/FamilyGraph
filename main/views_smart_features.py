@@ -12,7 +12,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from openai import OpenAI
@@ -637,9 +637,12 @@ def _compute_alerts(user=None):
                       'sad', 'stress', 'anxious', 'worried', 'upset', 'depressed', 'تنها', 'افسرده']
     cutoff7 = today - timedelta(days=7)
     seen_mood_nodes = set()
-    for entry in JournalEntry.objects.filter(
-        created_at__date__gte=cutoff7, ai_analyzed=True, **user_filter
-    ).prefetch_related(Prefetch('mentioned_nodes', queryset=participant_queryset))[:30]:
+    mood_entries = JournalEntry.objects.none()
+    if not user or not user.is_authenticated or getattr(user, 'ai_journal_enabled', True):
+        mood_entries = JournalEntry.objects.filter(
+            created_at__date__gte=cutoff7, ai_analyzed=True, **user_filter
+        ).prefetch_related(Prefetch('mentioned_nodes', queryset=participant_queryset))[:30]
+    for entry in mood_entries:
         if entry.mood and any(neg in entry.mood.lower() for neg in negative_words):
             for node in entry.mentioned_nodes.all()[:3]:
                 if node.id not in seen_mood_nodes:
@@ -659,7 +662,10 @@ def _compute_alerts(user=None):
     # ── 5. Dormant connections (no journal mention in 30+ days) ─
     # فقط اگه اپ حداقل ۳۰ روزه استفاده شده نشون بده
     try:
-        first_entry = JournalEntry.objects.filter(**user_filter).order_by('entry_date').first()
+        journal_qs = JournalEntry.objects.filter(**user_filter)
+        if user and user.is_authenticated and not getattr(user, 'ai_journal_enabled', True):
+            journal_qs = JournalEntry.objects.none()
+        first_entry = journal_qs.order_by('entry_date').first()
         app_age_days = (today - first_entry.entry_date).days if (first_entry and first_entry.entry_date) else 0
 
         if app_age_days >= 30:
@@ -667,7 +673,7 @@ def _compute_alerts(user=None):
             if root:
                 cutoff30 = today - timedelta(days=30)
                 recent_ids = set(
-                    JournalEntry.objects.filter(entry_date__gte=cutoff30, **user_filter)
+                    journal_qs.filter(entry_date__gte=cutoff30)
                     .values_list('mentioned_nodes__id', flat=True)
                 )
                 recent_ids.discard(None)
@@ -702,9 +708,10 @@ def _compute_alerts(user=None):
 
             # فقط اگه کاربر حداقل ۹۰ روزه از journal استفاده می‌کنه decay معنا داره
             # اگه قدیمی‌ترین entry بعد از cutoff باشه = کاربر تازه‌واردِ — skip
-            earliest_entry = JournalEntry.objects.filter(
-                **user_filter
-            ).order_by('created_at').values('created_at').first()
+            journal_qs = JournalEntry.objects.filter(**user_filter)
+            if not getattr(user, 'ai_journal_enabled', True):
+                journal_qs = JournalEntry.objects.none()
+            earliest_entry = journal_qs.order_by('created_at').values('created_at').first()
 
             journal_old_enough = (
                 earliest_entry is not None and
@@ -719,8 +726,8 @@ def _compute_alerts(user=None):
 
                 # پیش‌واکشی یک‌باره نودهایی که در ۹۰ روز اخیر ذکر شدن — جلوگیری از N+1
                 recently_mentioned_ids = set(
-                    JournalEntry.objects.filter(
-                        created_at__date__gte=cutoff90, **user_filter
+                    journal_qs.filter(
+                        created_at__date__gte=cutoff90,
                     ).values_list('mentioned_nodes__id', flat=True)
                 )
                 recently_mentioned_ids.discard(None)
@@ -1042,7 +1049,7 @@ def alerts_count_api(request):
 
 @login_required
 def alert_recommendation_api(request):
-    """POST {node_id, alert_type, title} → AI gift/action suggestions."""
+    """POST {node_id, alert_type, title} → fast grounded suggestions."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     try:
@@ -1083,41 +1090,11 @@ def alert_recommendation_api(request):
     if cached:
         return JsonResponse({'ok': True, 'result': cached, 'from_cache': True})
 
-    client, api_key, _provider = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'API key نیست'}, status=500)
+    from .grounded_insights import alert_recommendations
 
-    prompt = f"""هشدار: {alert_title}
-نوع: {alert_type}
-اطلاعات شخص: {json.dumps(person_data, ensure_ascii=False)}
-
-۵ پیشنهاد شخصی‌سازی‌شده بده:
-- تولد/رویداد: ایده هدیه یا کار بر اساس علایق
-- mood_alert: چطور حمایت کنیم
-- dormant: چطور رابطه رو احیا کنیم
-
-JSON:
-{{
-  "suggestions": [
-    {{"rank": 1, "action": "...", "reason": "...", "difficulty": "آسان/متوسط/سخت"}}
-  ],
-  "personal_note": "یه نکته شخصی"
-}}"""
-
-    try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'مشاور روابط اجتماعی. فقط JSON خروجی بده.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=900,
-        )
-        result = _extract_json(resp.choices[0].message.content)
-        cache.set(cache_key, result, timeout=24 * 3600)  # کش ۲۴ ساعته
-        return JsonResponse({'ok': True, 'result': result})
-    except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+    result = alert_recommendations(person_data, alert_type, alert_title)
+    cache.set(cache_key, result, timeout=24 * 3600)
+    return JsonResponse({'ok': True, 'result': result})
 
 
 @login_required
@@ -1163,38 +1140,13 @@ def alert_greeting_api(request):
     if cached:
         return JsonResponse({'ok': True, 'greeting': cached, 'from_cache': True})
 
-    client, api_key, _provider = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'API key نیست'}, status=500)
+    from .grounded_insights import greeting as build_greeting
 
-    prompt = f"""یک پیام تبریک کوتاه فارسی برای «{name}» بنویس.
-مناسبت: {alert_title} (نوع: {alert_type})
-{chr(10).join(person_bits) if person_bits else ''}
-
-قواعد:
-- گرم و صمیمی، نه رسمی و کلیشه‌ای
-- ۱ تا ۳ جمله، آمادهٔ ارسال
-- اگر مناسبت ایرانی است (نوروز، یلدا، عید و…) فضای همان مناسبت را داشته باشد
-- بدون هشتگ و بدون ایموجی زیاد (حداکثر یکی)
-فقط خودِ پیام را بده، بدون توضیح."""
-
-    try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'نویسندهٔ پیام‌های تبریک فارسیِ گرم و کوتاه.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=220,
-        )
-        greeting = (resp.choices[0].message.content or '').strip().strip('"').strip()
-        greeting = greeting[:600]
-        if not greeting:
-            return JsonResponse({'error': 'پیام خالی برگشت'}, status=502)
-        cache.set(cache_key, greeting, timeout=12 * 3600)
-        return JsonResponse({'ok': True, 'greeting': greeting})
-    except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+    message = build_greeting(name, alert_type, alert_title)
+    cache.set(cache_key, message, timeout=12 * 3600)
+    return JsonResponse({
+        'ok': True, 'greeting': message, 'generated_by': 'grounded_insights_v1',
+    })
 
 
 @login_required
@@ -1451,15 +1403,15 @@ def psychology_view(request):
             else:        dunbar['weak'] += 1
         total_direct = sum(dunbar.values())
         if dunbar['intimate'] > 5:
-            dunbar_notes.append(f"⚠️ لایه صمیمی ({dunbar['intimate']} نفر) از حد شناختی ۵ نفر بیشتر — کیفیت ممکن است افت کند")
+            dunbar_notes.append(f"لایهٔ قدرت ۵ شامل {dunbar['intimate']} نفر است؛ برچسب‌ها را مرور کن تا با تعریف خودت از نزدیکی هماهنگ باشند")
         elif dunbar['intimate'] < 2:
-            dunbar_notes.append(f"💡 لایه صمیمی ({dunbar['intimate']} نفر) بسیار کم — روابط عمیق را تقویت کن")
+            dunbar_notes.append(f"لایهٔ قدرت ۵ شامل {dunbar['intimate']} نفر است؛ این عدد به‌تنهایی کیفیت یا احساس تنهایی را نشان نمی‌دهد")
         if dunbar['close'] > 15:
-            dunbar_notes.append(f"⚠️ لایه نزدیک ({dunbar['close']} نفر) از حد ۱۵ نفر بیشتر — انرژی شناختی تقسیم می‌شود")
+            dunbar_notes.append(f"لایهٔ قدرت ۴ شامل {dunbar['close']} نفر است؛ این فقط دسته‌بندی فعلی گراف است")
         if total_direct > 150:
-            dunbar_notes.append(f"⚠️ {total_direct} ارتباط مستقیم — بالاتر از عدد داونبار (۱۵۰) — مدیریت سخت‌تر می‌شود")
+            dunbar_notes.append(f"{total_direct} ارتباط مستقیم ثبت شده؛ نظریهٔ داونبار یک میانگین پژوهشی است، نه سقف فردی")
         elif total_direct < 15:
-            dunbar_notes.append(f"💡 فقط {total_direct} ارتباط — شبکه کوچک است؛ گسترش توصیه می‌شود")
+            dunbar_notes.append(f"{total_direct} ارتباط مستقیم در برنامه ثبت شده؛ این عدد لزوماً کل شبکهٔ واقعی تو نیست")
     else:
         dunbar_notes.append('نود اصلی (من) را تعریف کن تا تحلیل داونبار انجام شود')
 
@@ -1473,14 +1425,14 @@ def psychology_view(request):
     medium = n_edges - strong - weak
     weak_ratio = weak / max(n_edges, 1)
     if 0.35 <= weak_ratio <= 0.65:
-        grano_status = 'optimal'; grano_label = 'بهینه'
-        grano_note = f'نسبت پیوندهای ضعیف ({weak_ratio:.0%}) در محدوده مناسب — تنوع اطلاعاتی خوب است'
+        grano_status = 'optimal'; grano_label = 'سهم میانه'
+        grano_note = f'{weak_ratio:.0%} یال‌ها با قدرت ۱ یا ۲ ثبت شده‌اند؛ این یک توصیف از برچسب‌های فعلی است'
     elif weak_ratio < 0.35:
-        grano_status = 'too_strong'; grano_label = 'بیش از حد صمیمی'
-        grano_note = f'پیوندهای ضعیف کم ({weak_ratio:.0%}) — خطر اتاق پژواک (Echo Chamber)'
+        grano_status = 'too_strong'; grano_label = 'سهم کمتر'
+        grano_note = f'{weak_ratio:.0%} یال‌ها با قدرت ۱ یا ۲ ثبت شده‌اند؛ از این نسبت نمی‌توان تنوع دیدگاه را نتیجه گرفت'
     else:
-        grano_status = 'too_weak'; grano_label = 'روابط کم‌عمق'
-        grano_note = f'پیوندهای ضعیف زیاد ({weak_ratio:.0%}) — روابط عمیق کافی نیست'
+        grano_status = 'too_weak'; grano_label = 'سهم بیشتر'
+        grano_note = f'{weak_ratio:.0%} یال‌ها با قدرت ۱ یا ۲ ثبت شده‌اند؛ قدرت کم الزاماً به معنی رابطهٔ بد نیست'
 
     # ═══════════════════════════════════════════════════════════
     # 3. CENTRALITY MEASURES
@@ -1515,17 +1467,16 @@ def psychology_view(request):
             pass
 
     # ═══════════════════════════════════════════════════════════
-    # 4. CLUSTERING COEFFICIENT + ECHO CHAMBER RISK
-    # High clustering = closed triangles → echo chamber risk
-    # Low clustering = open network → diverse info flow
+    # 4. CLUSTERING COEFFICIENT
+    # This measures closed triangles, not diversity of viewpoints.
     # ═══════════════════════════════════════════════════════════
     avg_clust = nx.average_clustering(G) if n_nodes > 2 else 0
     if avg_clust > 0.65:
-        echo_risk = 'high'; echo_label = 'زیاد'
+        echo_risk = 'high'; echo_label = 'تراکم زیاد'
     elif avg_clust > 0.35:
-        echo_risk = 'medium'; echo_label = 'متوسط'
+        echo_risk = 'medium'; echo_label = 'تراکم متوسط'
     else:
-        echo_risk = 'low'; echo_label = 'کم'
+        echo_risk = 'low'; echo_label = 'تراکم کم'
 
     # ═══════════════════════════════════════════════════════════
     # 5. NETWORK RESILIENCE — articulation points + connectivity
@@ -1676,16 +1627,16 @@ def psychology_view(request):
     bonding_score = round(avg_clust * 100)
     bridging_score = round(min(100, len(bridge_ids) / max(n_nodes, 1) * 200))
     if bonding_score > 70 and bridging_score < 30:
-        social_capital_note = '💡 سرمایه انسجامی قوی ولی سرمایه پل‌سازی ضعیف — با گروه‌های جدید ارتباط برقرار کن'
+        social_capital_note = 'تراکم درون خوشه‌ها بیشتر و تعداد پل‌های بین خوشه‌ها کمتر ثبت شده است'
         social_capital_status = 'bonding_heavy'
     elif bridging_score > 70 and bonding_score < 30:
-        social_capital_note = '💡 پل‌سازی زیاد ولی روابط عمیق کم — روابط موجود را تعمیق بده'
+        social_capital_note = 'پل‌های بین خوشه‌ها بیشتر و تراکم محلی کمتر ثبت شده است'
         social_capital_status = 'bridging_heavy'
     elif bonding_score >= 30 and bridging_score >= 30:
-        social_capital_note = '✅ ترکیب سالمی از سرمایه انسجامی و پل‌سازی داری'
+        social_capital_note = 'در داده‌های فعلی هم تراکم محلی و هم اتصال بین خوشه‌ها دیده می‌شود'
         social_capital_status = 'balanced'
     else:
-        social_capital_note = '⚠️ هر دو نوع سرمایه اجتماعی نیاز به تقویت دارند'
+        social_capital_note = 'برای تفسیر این دو شاخص، دادهٔ بیشتری از ارتباط‌ها لازم است'
         social_capital_status = 'weak'
 
     # ═══════════════════════════════════════════════════════════
@@ -1762,37 +1713,18 @@ def psychology_view(request):
             my_role_color = '#06b6d4'
 
     # ═══════════════════════════════════════════════════════════
-    # 12. ATTACHMENT STYLE HINTS (Bowlby & Ainsworth)
-    # Applied heuristically to network patterns:
-    # Secure: balanced intimate + active relationships
-    # Avoidant: large network, few deep ties
-    # Anxious/Preoccupied: very few intense ties, low total
+    # 12. ATTACHMENT STYLE LIMIT
+    # Attachment style cannot be inferred from graph topology.
     # ═══════════════════════════════════════════════════════════
     attachment_style = None
     attachment_desc = None
-    attachment_color = '#6366f1'
+    attachment_color = '#94a3b8'
     if root and root.id in G and total_direct > 0:
-        intimate_cnt = dunbar.get('intimate', 0)
-        close_cnt    = dunbar.get('close', 0)
-        active_cnt   = Relationship.objects.filter(status='active', **ufilter).count()
-        total_r      = len(all_rels)
-        active_ratio = active_cnt / max(total_r, 1)
-        if intimate_cnt >= 2 and close_cnt >= 3 and active_ratio >= 0.5:
-            attachment_style = 'احتمالاً ایمن (Secure)'
-            attachment_desc  = 'شواهد شبکه: روابط صمیمی متعادل با نرخ فعالیت بالا — ویژگی‌های دلبستگی ایمن طبق Bowlby & Ainsworth'
-            attachment_color = '#10b981'
-        elif intimate_cnt < 2 and total_direct > 15 and avg_clust < 0.3:
-            attachment_style = 'احتمالاً اجتنابی (Dismissing-Avoidant)'
-            attachment_desc  = 'شبکه بزرگ اما روابط عمیق کم — الگوی مرتبط با دلبستگی اجتنابی. توصیه: عمق دادن به روابط انتخابی'
-            attachment_color = '#f59e0b'
-        elif intimate_cnt >= 3 and total_direct <= 8:
-            attachment_style = 'احتمالاً دوسوگرا (Anxious-Preoccupied)'
-            attachment_desc  = 'تمرکز شدید روی تعداد کمی — الگوی مرتبط با دلبستگی اضطرابی. توصیه: گسترش شبکه با حفظ عمق'
-            attachment_color = '#f43f5e'
-        else:
-            attachment_style = 'نامشخص / متنوع'
-            attachment_desc  = 'داده کافی برای تشخیص قطعی الگوی دلبستگی وجود ندارد. با اضافه کردن اطلاعات بیشتر دقت افزایش می‌یابد.'
-            attachment_color = '#6366f1'
+        attachment_style = 'از گراف قابل تشخیص نیست'
+        attachment_desc = (
+            'تعداد و قدرت یال‌ها برای تعیین سبک دلبستگی کافی نیست. '
+            'این تشخیص نیازمند ارزیابی معتبر و زمینهٔ فردی است.'
+        )
 
     # ═══════════════════════════════════════════════════════════
     # 13. HOMOPHILY (McPherson et al., 2001)
@@ -1845,43 +1777,45 @@ def psychology_view(request):
     # ═══════════════════════════════════════════════════════════
     # 16. JOURNAL INSIGHTS
     # ═══════════════════════════════════════════════════════════
-    total_entries    = JournalEntry.objects.filter(**ufilter).count()
+    total_entries = JournalEntry.objects.filter(**ufilter).count()
     analyzed_entries = JournalEntry.objects.filter(ai_analyzed=True, **ufilter).count()
-    recent_moods     = list(
-        JournalEntry.objects.filter(**ufilter).exclude(mood='').order_by('-created_at')
-        .values_list('mood', flat=True)[:20]
-    )
+    recent_moods = []
+    if getattr(user, 'ai_journal_enabled', True):
+        recent_moods = list(
+            JournalEntry.objects.filter(**ufilter).exclude(mood='').order_by('-created_at')
+            .values_list('mood', flat=True)[:20]
+        )
 
     # ═══════════════════════════════════════════════════════════
-    # 17. LONELINESS RISK (Cacioppo & Patrick, 2008)
-    # عوامل ریسک تنهایی اجتماعی بر اساس معیارهای شبکه
-    # "Loneliness: Human Nature and the Need for Social Connection"
+    # 17. REGISTERED CONTACT-GAP INDEX
+    # Describes known contact recency; it is not a loneliness assessment.
     # ═══════════════════════════════════════════════════════════
     loneliness_risk = 0
     loneliness_factors = []
-    if root and root.id in G:
-        if dunbar['intimate'] < 2:
-            loneliness_risk += 30
-            loneliness_factors.append('روابط بسیار صمیمی کم است (کمتر از ۲ نفر)')
-        if dunbar['intimate'] + dunbar['close'] < 5:
-            loneliness_risk += 20
-            loneliness_factors.append('لایه‌های نزدیک شبکه ضعیف است')
-        if total_direct < 10:
-            loneliness_risk += 20
-            loneliness_factors.append('شبکه کلی محدود است (کمتر از ۱۰ ارتباط)')
-        if my_clust_val < 20:
-            loneliness_risk += 15
-            loneliness_factors.append('اعضای شبکه یکدیگر را نمی‌شناسند')
-        if total_r_count > 0 and active_rels < total_r_count * 0.3:
-            loneliness_risk += 15
-            loneliness_factors.append('نسبت روابط فعال پایین است')
-    loneliness_risk = min(100, loneliness_risk)
-    if loneliness_risk >= 60:
-        loneliness_label = 'ریسک بالا'; loneliness_color = '#ef4444'
-    elif loneliness_risk >= 35:
-        loneliness_label = 'ریسک متوسط'; loneliness_color = '#f59e0b'
-    else:
-        loneliness_label = 'ریسک پایین'; loneliness_color = '#10b981'
+    known_contact = []
+    try:
+        from .health import compute_health
+        contact_health = compute_health(user)
+        known_contact = [row for row in contact_health.values() if row.get('score') is not None]
+        if known_contact:
+            loneliness_risk = round(sum(100 - row['score'] for row in known_contact) / len(known_contact))
+            stale = [row['name'] for row in known_contact if row.get('status') in {'red', 'yellow'}]
+            if stale:
+                loneliness_factors.append('فاصلهٔ تماس ثبت‌شده بیشتر شده: ' + '، '.join(stale[:4]))
+            loneliness_factors.append(f'این شاخص فقط {len(known_contact)} رابطهٔ دارای تاریخ تماس را پوشش می‌دهد')
+            loneliness_label = 'فاصلهٔ زیاد' if loneliness_risk >= 60 else (
+                'فاصلهٔ متوسط' if loneliness_risk >= 35 else 'فاصلهٔ کم'
+            )
+            loneliness_color = '#ef4444' if loneliness_risk >= 60 else (
+                '#f59e0b' if loneliness_risk >= 35 else '#10b981'
+            )
+        else:
+            loneliness_label = 'داده کافی نیست'
+            loneliness_color = '#94a3b8'
+            loneliness_factors.append('تعامل تاریخ‌دار ثبت نشده؛ نبود داده به معنی تنهایی نیست')
+    except Exception:
+        loneliness_label = 'داده کافی نیست'
+        loneliness_color = '#94a3b8'
 
     # ═══════════════════════════════════════════════════════════
     # 18. SHANNON DIVERSITY INDEX (Shannon, 1948)
@@ -1982,10 +1916,8 @@ def psychology_view(request):
         )
 
     # ═══════════════════════════════════════════════════════════
-    # 21. STRUCTURAL TRANSITIVITY & BALANCE (Heider, 1946)
-    # "The Psychology of Interpersonal Relations"
-    # Transitivity = 3 × مثلث‌ها / مسیرهای دو گام
-    # هر چه بالاتر → شبکه متعادل‌تر و پایدارتر
+    # 21. STRUCTURAL TRANSITIVITY
+    # Transitivity = 3 × triangles / two-step paths.  It does not measure trust.
     # ═══════════════════════════════════════════════════════════
     transitivity_pct = 0
     n_triangles      = 0
@@ -1996,21 +1928,20 @@ def psychology_view(request):
         n_triangles      = sum(nx.triangles(G).values()) // 3
         transitivity_pct = round(transitivity * 100)
         if transitivity >= 0.5:
-            balance_label = 'بالا — شبکه منسجم'
-            balance_note  = 'بیش از نیمی از سه‌گانه‌ها بسته‌اند — نشانه روابط پایدار، اعتماد متقابل و تعادل ساختاری'
+            balance_label = 'بسته‌شدگی بالا'
+            balance_note  = 'بیش از نیمی از مسیرهای سه‌نفره به مثلث بسته تبدیل شده‌اند'
         elif transitivity >= 0.25:
-            balance_label = 'متوسط'
-            balance_note  = 'تعادل نسبی در شبکه — ترکیبی از روابط باز و بسته'
+            balance_label = 'بسته‌شدگی متوسط'
+            balance_note  = 'ترکیبی از مسیرهای باز و مثلث‌های بسته در گراف ثبت شده است'
         else:
-            balance_label = 'پایین'
-            balance_note  = 'بیشتر روابط مستقل‌اند — فرصت زیادی برای Triadic Closure وجود دارد'
+            balance_label = 'بسته‌شدگی پایین'
+            balance_note  = 'بیشتر مسیرهای سه‌نفره در گراف فعلی باز هستند'
     except Exception:
         transitivity = 0
 
     # ═══════════════════════════════════════════════════════════
-    # 22. EMOTIONAL CONTAGION RISK (Hatfield et al., 1993)
-    # "Emotional Contagion" — احساسات از طریق شبکه نزدیک منتقل می‌شن
-    # اگه دوستان صمیمی اخیراً حال بدی داشتن، خطر بالاتره
+    # 22. RECENT NEGATIVE-MOOD MENTIONS
+    # A descriptive count only; no contagion or mental-health prediction.
     # ═══════════════════════════════════════════════════════════
     negative_moods_nearby = 0
     contagion_risk_pct    = 0
@@ -2018,25 +1949,26 @@ def psychology_view(request):
         neg_words = ['ناراحت', 'غمگین', 'استرس', 'اضطراب', 'عصبانی', 'نگران',
                      'sad', 'stress', 'anxious', 'depressed', 'تنها', 'افسرده']
         cutoff14 = date.today() - timedelta(days=14)
-        for entry in JournalEntry.objects.filter(
-            created_at__date__gte=cutoff14, ai_analyzed=True, **ufilter
-        ).prefetch_related('mentioned_nodes')[:20]:
+        mood_entries = []
+        if getattr(user, 'ai_journal_enabled', True):
+            mood_entries = list(JournalEntry.objects.filter(
+                created_at__date__gte=cutoff14, **ufilter
+            ).exclude(mood='')[:20])
+        for entry in mood_entries:
             if entry.mood and any(neg in entry.mood.lower() for neg in neg_words):
-                for mnode in entry.mentioned_nodes.all():
-                    edata = G.get_edge_data(root.id, mnode.id) if root and mnode.id in G else None
-                    if edata and edata.get('weight', 3) >= 3:
-                        negative_moods_nearby += 1
-                        break
-        contagion_risk_pct = min(100, negative_moods_nearby * 25)
+                negative_moods_nearby += 1
+        contagion_risk_pct = round(
+            negative_moods_nearby / len(mood_entries) * 100
+        ) if mood_entries else 0
     except Exception:
         pass
 
-    if contagion_risk_pct >= 60:
-        contagion_label = 'بالا'; contagion_color = '#ef4444'
-    elif contagion_risk_pct >= 30:
-        contagion_label = 'متوسط'; contagion_color = '#f59e0b'
+    if negative_moods_nearby:
+        contagion_label = f'{negative_moods_nearby} ثبت در ۱۴ روز'
+        contagion_color = '#f59e0b'
     else:
-        contagion_label = 'پایین'; contagion_color = '#10b981'
+        contagion_label = 'ثبت صریحی دیده نشد'
+        contagion_color = '#10b981'
 
     # ═══════════════════════════════════════════════════════════
     # 23. CORE-PERIPHERY STRUCTURE (Borgatti & Everett, 2000)
@@ -2077,34 +2009,32 @@ def psychology_view(request):
         str_dist = {i: 0 for i in range(1, 6)}
 
     # ═══════════════════════════════════════════════════════════
-    # 25. NETWORK HEALTH SCORE — COMPOSITE (FamilyGraph)
-    # امتیاز سلامت کلی شبکه از ۶ بُعد مستقل
+    # 25. DATA COVERAGE AND RECENCY SCORE
+    # A product data-quality indicator, not relationship or mental health.
     # ═══════════════════════════════════════════════════════════
-    weak_ratio_pct_val = round(weak_ratio * 100)
+    connected_count = len(contact_health) if 'contact_health' in locals() else 0
+    contact_coverage = round(len(known_contact) / max(connected_count, 1) * 100) if connected_count else 0
+    contact_recency = round(
+        sum(row['score'] for row in known_contact) / len(known_contact)
+    ) if known_contact else 0
+    relation_type_coverage = round(
+        sum(1 for rel in all_rels if (rel.rel or '').strip()) / max(total_r_count, 1) * 100
+    ) if total_r_count else 0
     health_components = {
-        'تنوع رابطه':     min(100, diversity_normalized),
-        'سرمایه پل‌سازی': min(100, bridging_score),
-        'روابط صمیمی':    min(100, dunbar.get('intimate', 0) * 25),
-        'تعادل پیوند':    max(0, 100 - abs(weak_ratio_pct_val - 50) * 2) if n_edges else 0,
-        'نرخ فعالیت':     round(active_rels / max(total_r_count, 1) * 100),
-        'تاب‌آوری':       min(100, resilience_score),
+        'پوشش تاریخ تماس': contact_coverage,
+        'تازگی تماس ثبت‌شده': contact_recency,
+        'وضعیت فعال ثبت‌شده': round(active_rels / max(total_r_count, 1) * 100) if total_r_count else 0,
+        'تکمیل نوع رابطه': relation_type_coverage,
     }
-    health_score = round(
-        health_components['تنوع رابطه']     * 0.15
-        + health_components['سرمایه پل‌سازی'] * 0.15
-        + health_components['روابط صمیمی']   * 0.20
-        + health_components['تعادل پیوند']   * 0.15
-        + health_components['نرخ فعالیت']    * 0.20
-        + health_components['تاب‌آوری']      * 0.15
-    )
-    if health_score >= 75:
-        health_label = 'عالی'; health_color = '#10b981'
-    elif health_score >= 55:
-        health_label = 'خوب'; health_color = '#6366f1'
-    elif health_score >= 35:
-        health_label = 'متوسط'; health_color = '#f59e0b'
+    health_score = round(sum(health_components.values()) / len(health_components)) if total_r_count else 0
+    if not total_r_count:
+        health_label = 'داده کافی نیست'; health_color = '#94a3b8'
+    elif health_score >= 75:
+        health_label = 'پوشش زیاد'; health_color = '#10b981'
+    elif health_score >= 45:
+        health_label = 'پوشش متوسط'; health_color = '#6366f1'
     else:
-        health_label = 'نیاز به توجه'; health_color = '#ef4444'
+        health_label = 'پوشش کم'; health_color = '#f59e0b'
 
     context = {
         # Basic counts
@@ -2351,10 +2281,12 @@ def psychology_ai_api(request):
             top_brokers.append(node.display_name())
 
     # Recent moods
-    recent_moods = list(
-        JournalEntry.objects.filter(**ufilter).exclude(mood='').order_by('-created_at')
-        .values_list('mood', flat=True)[:10]
-    )
+    recent_moods = []
+    if getattr(user, 'ai_journal_enabled', True):
+        recent_moods = list(
+            JournalEntry.objects.filter(**ufilter).exclude(mood='').order_by('-created_at')
+            .values_list('mood', flat=True)[:10]
+        )
 
     active_cnt = Relationship.objects.filter(status='active', **ufilter).count()
 
@@ -2377,55 +2309,11 @@ def psychology_ai_api(request):
         'حال_و_هوای_اخیر': recent_moods,
     }
 
-    client, api_key, _provider = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'API key نیست'}, status=500)
+    from .grounded_insights import network_analysis
 
-    prompt = f"""تو یه روانشناس و جامعه‌شناس متخصص شبکه‌های اجتماعی هستی. داده‌های شبکه اجتماعی شخصی زیر رو با عمق کامل تحلیل کن:
-
-{json.dumps(network_summary, ensure_ascii=False, indent=2)}
-
-این تحلیل باید شامل همه این تئوری‌ها باشه:
-• نظریه داونبار (Dunbar): تحلیل لایه‌های شناختی و ظرفیت مدیریت روابط
-• نظریه گرانووتر (Granovetter): ارزیابی پیوندهای ضعیف و قوی و نقش اطلاع‌رسانی
-• حفره‌های ساختاری بورت (Burt): موقعیت واسطه‌ای و سرمایه اجتماعی
-• دنیای کوچک واتس-استروگاتز (Watts-Strogatz): تحلیل ساختار «شش درجه جدایی»
-• سرمایه اجتماعی پاتنام (Putnam): تعادل سرمایه انسجامی vs پل‌سازی
-• نظریه دلبستگی بولبی-اینسورث (Bowlby-Ainsworth): الگوی دلبستگی شبکه
-• نظریه مبادله اجتماعی بلاو (Blau): تعادل و عمل‌متقابل در روابط
-• همگنی مک‌فرسون (McPherson): تنوع یا همگنی در شبکه
-• شبکه‌های مقیاس‌آزاد باراباسی (Barabási): توزیع قدرت در شبکه
-
-خروجی JSON (به فارسی کامل):
-{{
-  "health": {{"score": 0-100, "label": "وضعیت کلی", "summary": "خلاصه ارزیابی (۳-۴ جمله)"}},
-  "patterns": ["الگوی ۱ با پشتوانه تئوری", "الگوی ۲", "الگوی ۳"],
-  "risks": ["ریسک ۱ با توضیح", "ریسک ۲", "ریسک ۳"],
-  "opportunities": ["فرصت ۱", "فرصت ۲", "فرصت ۳"],
-  "recommendations": [
-    {{"action": "اقدام مشخص عملی", "theory": "پشتوانه نظری", "impact": "بالا/متوسط/کم"}},
-    {{"action": "...", "theory": "...", "impact": "..."}}
-  ],
-  "psychological_profile": "پروفایل روانشناختی کامل (۵-۷ جمله عمیق)",
-  "sociological_summary": "خلاصه جامعه‌شناختی کامل (۵-۷ جمله)"
-}}
-
-فقط JSON. عمیق و تخصصی به فارسی."""
-
-    try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'متخصص روانشناسی و جامعه‌شناسی شبکه‌های اجتماعی. فقط JSON خروجی بده.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=2500,
-        )
-        result = _extract_json(resp.choices[0].message.content)
-        cache.set(cache_key, result, timeout=6 * 3600)
-        return JsonResponse({'ok': True, 'result': result})
-    except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+    result = network_analysis(user, network_summary)
+    cache.set(cache_key, result, timeout=6 * 3600)
+    return JsonResponse({'ok': True, 'result': result})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -2558,52 +2446,45 @@ def daily_tips_view(request):
 
 @login_required
 def daily_tips_api(request):
-    """POST → AI daily network tips — با تقویم شمسی و تعطیلات ایرانی."""
+    """POST → fast grounded daily network tips."""
     today       = timezone.localdate()
     is_hol, hol_name = is_holiday(today)
     day_name    = jalali_day_name(today)
     jalali_date = jalali_str(today)
-    season      = season_fa(today)
-
     req_user = request.user
     ufilter  = {'owner': req_user}
-
-    n_nodes = Node.objects.filter(**ufilter).count()
-    n_edges = Relationship.objects.filter(**ufilter).count()
 
     alerts = _compute_alerts(req_user)
     urgent = [a['title'] for a in alerts if a.get('priority') == 'high'][:3]
 
-    recent_moods = list(
-        JournalEntry.objects.filter(**ufilter).order_by('-created_at').exclude(mood='').values_list('mood', flat=True)[:5]
-    )
-
-    weak_rels  = list(Relationship.objects.filter(
-        strength__lte=2, target__owner=req_user, **ufilter
-    ).select_related('target')[:5])
-    weak_names = [r.target.display_name() for r in weak_rels]
-
     root = req_user.root_node
     cutoff14 = today - timedelta(days=14)
-    mentioned_ids = set(
-        JournalEntry.objects.filter(entry_date__gte=cutoff14, **ufilter).values_list('mentioned_nodes__id', flat=True)
-    )
+    mentioned_ids = set()
+    if getattr(req_user, 'ai_journal_enabled', True):
+        mentioned_ids = set(
+            JournalEntry.objects.filter(
+                entry_date__gte=cutoff14, **ufilter,
+            ).values_list('mentioned_nodes__id', flat=True)
+        )
     mentioned_ids.discard(None)
     if root:
-        connected_ids = set(
-            Relationship.objects.filter(source=root, **ufilter).values_list('target_id', flat=True)
-        ) | set(
-            Relationship.objects.filter(target=root, **ufilter).values_list('source_id', flat=True)
-        )
+        direct_rels = list(Relationship.objects.filter(**ufilter).filter(
+            Q(source=root) | Q(target=root)
+        ).select_related('source', 'target'))
+        connected_ids = {
+            rel.target_id if rel.source_id == root.id else rel.source_id
+            for rel in direct_rels
+        }
+        weak_names = [
+            (rel.target if rel.source_id == root.id else rel.source).display_name()
+            for rel in direct_rels if (rel.strength or 3) <= 2
+        ][:5]
     else:
         connected_ids = set()
+        weak_names = []
 
     overlooked = list(Node.objects.filter(id__in=connected_ids - mentioned_ids - {root.id if root else 0}, **ufilter)[:4])
     overlooked_names = [n.display_name() for n in overlooked]
-
-    # تعطیلات نزدیک (۱۴ روز آینده)
-    near_holidays = upcoming_holidays(14)
-    near_hol_str  = ', '.join(f'{h["jalali"]} ({h["holiday"]})' for h in near_holidays) if near_holidays else 'ندارد'
 
     # ── کش — per user so each user gets their own tips ──────────────────────
     uid = request.user.id if request.user.is_authenticated else 0
@@ -2612,66 +2493,16 @@ def daily_tips_api(request):
     if cached:
         return JsonResponse({'ok': True, 'result': cached, 'from_cache': True})
 
-    client, api_key, _provider = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'API key نیست'}, status=500)
+    from .grounded_insights import daily_tips
 
-    # ── نوع روز ─────────────────────────────────────────────────────────────
-    if is_hol and hol_name != 'جمعه':
-        day_type_desc = f'تعطیل رسمی ({hol_name}) — روز استراحت و جشن'
-        day_context   = f'امروز تعطیل رسمی ({hol_name}) است. نکاتی مناسب این مناسبت بده — تبریک، دید و بازدید، فعالیت‌های جمعی و لذت‌بخش.'
-    elif is_hol:
-        day_type_desc = 'جمعه — روز تعطیل'
-        day_context   = 'امروز جمعه و تعطیله. نکات برای وقت آزاد: خانواده، دوستان صمیمی، استراحت، شارژ انرژی.'
-    else:
-        day_type_desc = 'روز کاری'
-        day_context   = 'امروز روز کاریه. نکات برای ارتباطات هدفمند، پیگیری کارها، تقویت شبکه حرفه‌ای و شخصی.'
-
-    prompt = f"""تو یه مشاور روابط اجتماعی هستی.
-
-📅 امروز: {day_name}، {jalali_date} | فصل: {season} | وضعیت: {day_type_desc}
-🔜 تعطیلات نزدیک: {near_hol_str}
-
-وضعیت شبکه روابط:
-- {n_nodes} نفر، {n_edges} رابطه
-- حال و هوای اخیر: {', '.join(recent_moods) if recent_moods else 'ثبت نشده'}
-- هشدارهای فوری: {', '.join(urgent) if urgent else 'ندارد'}
-- روابط ضعیف (نیاز به توجه): {', '.join(weak_names) if weak_names else 'ندارد'}
-- مدتی از اینها بی‌خبری: {', '.join(overlooked_names) if overlooked_names else 'ندارد'}
-
-{day_context}
-
-اگه تعطیل رسمیه یا نزدیکه به تعطیل رسمی، نکاتت رو با اون مناسبت align کن.
-تقویم ایرانی و فرهنگ ایرانی رو در نظر بگیر.
-
-۴-۵ نکته عملی، کوتاه و قابل اجرا برای همین امروز بده.
-
-JSON:
-{{
-  "day_message": "پیام کوتاه متناسب با روز (مناسبت رو ذکر کن اگه داره)",
-  "tips": [
-    {{
-      "emoji": "...",
-      "title": "...",
-      "action": "اقدام مشخص و قابل اجرا",
-      "reason": "چرا این کار امروز مهمه؟",
-      "time_needed": "۵ دقیقه"
-    }}
-  ],
-  "focus_person": {{"name": "...", "suggestion": "..."}}
-}}"""
-
-    try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'مشاور روابط اجتماعی ایرانی. فقط JSON خروجی بده. بدون markdown.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=1400,
-        )
-        result = _extract_json(resp.choices[0].message.content)
-        cache.set(cache_key, result, timeout=24 * 3600)
-        return JsonResponse({'ok': True, 'result': result})
-    except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+    result = daily_tips(
+        day_name=day_name,
+        jalali_date=jalali_date,
+        is_holiday=is_hol,
+        holiday_name=hol_name,
+        urgent=urgent,
+        weak_names=weak_names,
+        overlooked_names=overlooked_names,
+    )
+    cache.set(cache_key, result, timeout=24 * 3600)
+    return JsonResponse({'ok': True, 'result': result})

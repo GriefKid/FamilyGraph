@@ -4,7 +4,7 @@ views_connect.py — مسیر آشنایی (V5)
 «می‌خوام با X دوست/همکار بشم — چطوری؟»
   1. مسیر گراف: کوتاه‌ترین زنجیره‌ی معرفی از من تا هدف
   2. آشناهای مشترک + گروه‌ها و رویدادهای مشترک
-  3. پلن AI: قدم‌به‌قدم، بر اساس شناختی که از آدم‌های وسط راه داریم
+  3. پلن محلی: قدم‌به‌قدم، فقط بر اساس شواهد ثبت‌شده
 """
 import heapq
 import json
@@ -178,7 +178,7 @@ def connect_info_api(request, pk):
 @login_required
 @require_POST
 def connect_plan_api(request, pk):
-    """پلن قدم‌به‌قدم AI برای ساختن رابطه با هدف."""
+    """پلن سریع و شواهدمحور برای ساختن رابطه با هدف."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     try:
@@ -216,50 +216,8 @@ def connect_plan_api(request, pk):
     except Exception:
         pass
 
-    path_str = ' ← '.join(s['name'] for s in data['path']) if data['path'] else 'مسیر مستقیمی در گراف نیست'
-    mutuals_str = '، '.join(
-        f"{m['name']} (با من: {m['my_strength']}/5، با هدف: {m['their_strength']}/5)"
-        for m in data['mutuals'][:5]) or 'آشنای مشترکی ثبت نشده'
+    from .grounded_insights import connect_plan
 
-    from .views_smart_features import _ai_client, _model, _extract_json, _rate_limit_msg
-    client, api_key, _prov = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'API key تنظیم نشده'}, status=500)
-
-    prompt = f"""هدف کاربر: ساختن {goal_fa} با «{person['name']}».
-
-## داده‌های گراف اجتماعی:
-- وضعیت فعلی: {'رابطه مستقیم دارند (تقویتش کن)' if data['is_direct'] else 'رابطه مستقیم ندارند (از صفر)'}
-- مسیر معرفی در گراف: {path_str}
-- آشناهای مشترک: {mutuals_str}
-- گروه‌های مشترک: {'، '.join(data['shared_groups']) or '—'}
-- رویدادهای مشترک گذشته: {'، '.join(e['title'] for e in data['shared_events']) or '—'}
-- اطلاعات هدف: {json.dumps(person, ensure_ascii=False)}
-
-یک پلن عملی ۴ تا ۶ قدمی بده. قدم اول باید همین امروز قابل انجام باشه.
-اگه آشنای مشترک قوی هست، از مسیر معرفی استفاده کن. اگه نیست، از بافت مشترک (گروه/رویداد/علاقه).
-اصول روانشناسی که بلدی رو به کار بگیر (مواجهه مکرر، شباهت، عمل متقابل، خودافشایی تدریجی) ولی اسم‌فروشی نکن — عملی بگو.
-
-JSON خالص:
-{{
-  "steps": [
-    {{"n": 1, "title": "...", "how": "دقیقاً چیکار کنه", "why": "چرا جواب می‌ده (کوتاه)", "when": "امروز/این هفته/..."}}
-  ],
-  "opener": "یه پیام/جمله‌ی شروع پیشنهادی به فارسی خودمونی",
-  "warning": "یه اشتباه رایج که نباید بکنه"
-}}"""
-
-    try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'مشاور روابط اجتماعی — عملی، مشخص، بدون کلی‌گویی. فقط JSON خروجی بده.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=1100,
-        )
-        result = _extract_json(resp.choices[0].message.content)
-        cache.set(cache_key, result, timeout=24 * 3600)
-        return JsonResponse({'ok': True, 'result': result})
-    except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+    result = connect_plan(data, goal, person)
+    cache.set(cache_key, result, timeout=24 * 3600)
+    return JsonResponse({'ok': True, 'result': result})

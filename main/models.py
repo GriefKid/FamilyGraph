@@ -485,9 +485,15 @@ class ArtisticWork(models.Model):
     def save(self, *args, **kwargs):
         if not self.analysis:
             self.analysis = {
-                'personality_signals': [],
-                'relationship_signals': [],
-                'summary': 'این اثر برای شناخت سلیقه، ارزش‌ها و جهان ذهنی فرد استفاده می‌شود.',
+                'personality_signals': [
+                    'برای شناخت بهتر، دلیل انتخاب و نظر خودِ فرد دربارهٔ اثر را ثبت کن.',
+                ],
+                'relationship_signals': [
+                    'این انتخاب می‌تواند موضوع گفت‌وگو باشد؛ به‌تنهایی کیفیت رابطه را نشان نمی‌دهد.',
+                ],
+                'summary': 'این اثر یک انتخاب فرهنگی ثبت‌شده است و به‌تنهایی ویژگی شخصیتی را ثابت نمی‌کند.',
+                'generated_by': 'grounded_insights_v1',
+                'grounded': True,
             }
         super().save(*args, **kwargs)
 

@@ -578,7 +578,7 @@
 
 {% if insight_sources %}
 <div class="section">
-  <div class="section-hd"><span class="section-hd-title">🔎 AI این شناخت را از کجا آورده؟</span></div>
+  <div class="section-hd"><span class="section-hd-title">🔎 این شناخت از کدام شواهد آمده؟</span></div>
   <div style="padding:14px 18px;font-size:12px;line-height:1.9"><p style="color:var(--text-muted)">این موارد فقط پیشنهادهای تأییدشدهٔ خودت هستند. برای اصلاح یا بازگردانی وارد مرکز پیشنهادها شو.</p>{% for source in insight_sources %}<div class="ix-item"><span class="chip chip-indigo">{{ source.kind }}</span><span style="flex:1">{{ source.payload.explanation|default:source.payload.snippet }}</span><small>{{ source.source }} #{{ source.source_id }}</small></div>{% endfor %}<a class="btn btn-sm" href="{% url 'extraction_inbox' %}" style="margin-top:10px">مدیریت منابع و تاریخچه</a></div>
 </div>
 {% endif %}
@@ -884,7 +884,7 @@
   </div>
   <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
     می‌خوای با {{ node.display_name }} دوست بشی یا رابطه‌تون رو قوی‌تر/کاری‌تر کنی؟
-    از گرافت مسیر و از AI پلن قدم‌به‌قدم بگیر.
+    مسیر و پلن قدم‌به‌قدم را از داده‌های ثبت‌شدهٔ گراف بگیر.
   </div>
   <div class="cn-btns">
     <button class="cn-btn" onclick="cnLoad()">🗺 تحلیل مسیر گراف</button>
@@ -995,10 +995,10 @@
 </div>
 {% endif %}
 
-<!-- ══ AI SUMMARY ══ -->
+<!-- ══ GROUNDED SUMMARY ══ -->
 <div class="ai-card">
   <div class="ai-head">
-    <span class="ai-head-title">✦ تحلیل هوشمند</span>
+    <span class="ai-head-title">✦ تحلیل شواهدمحور</span>
     <span style="display:flex;gap:8px;">
       {% if not is_root_node %}
       <button class="btn-ai" id="relBtn" onclick="analyzeRelation()">💠 تحلیل رابطه</button>
@@ -1008,7 +1008,7 @@
   </div>
   <div class="ai-body" id="aiBody">
     <span style="color:var(--text-muted);font-style:italic;font-size:13px;">
-      «💠 تحلیل رابطه» = نمره و شناخت‌نامه از روی داده‌های ثبت‌شده · «✦ تولید خلاصه» = روایت کامل
+      «💠 تحلیل رابطه» = نمره و شناخت‌نامه از روی داده‌های ثبت‌شده · «✦ تولید خلاصه» = جمع‌بندی همان شواهد
     </span>
   </div>
 </div>
@@ -1517,7 +1517,7 @@ async function cnLoad(){
           `<span class="cn-node ${s.me?'me':''}">${s.me?'⭐ من':escCn(s.name)}${s.via_rel?`<span style="font-size:10px;color:var(--text-muted);"> · ${escCn(s.via_rel)}</span>`:''}</span>`
         ).join('') + `</div>`;
     } else {
-      html += `<div style="font-size:12.5px;color:#fbbf24;margin-top:12px;">🏝 مسیری در گراف نیست — باید از بافت مشترک (گروه، رویداد، علاقه) وارد بشی. پلن AI رو بگیر ↑</div>`;
+      html += `<div style="font-size:12.5px;color:#fbbf24;margin-top:12px;">🏝 مسیری در گراف نیست — اگر بافت مشترک واقعی داری از همان شروع کن؛ وگرنه شفاف و مستقیم معرفی شو.</div>`;
     }
     if(d.mutuals && d.mutuals.length){
       html += `<div style="font-size:11.5px;color:var(--text-muted);margin-top:8px;">🤝 آشناهای مشترک (بهترین معرف‌ها):</div><div>` +
@@ -1534,7 +1534,7 @@ async function cnLoad(){
 async function cnPlan(goal){
   const box = document.getElementById('cnPlanBox');
   const msg = document.getElementById('cnMsg');
-  msg.style.color='var(--text-muted)'; msg.textContent='✦ AI داره پلن می‌چینه…';
+  msg.style.color='var(--text-muted)'; msg.textContent='✦ در حال ساخت پلن از شواهد گراف…';
   try{
     const r = await fetch('/api/connect/{{ node.id }}/plan/', {
       method:'POST',

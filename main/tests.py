@@ -1691,7 +1691,7 @@ class OccasionGreetingTests(TestCase):
         return (client, 'key', 'groq')
 
     def test_greeting_is_personalised_and_owner_scoped(self):
-        with mock.patch('main.views_smart_features._ai_client', return_value=self._fake_ai()):
+        with mock.patch('main.views_smart_features._ai_client', side_effect=AssertionError('provider called')):
             response = self.client.post(
                 '/api/alerts/greeting/',
                 data=json.dumps({'node_id': self.node.id, 'alert_type': 'birthday', 'title': 'تولد مینا'}),
@@ -1702,7 +1702,7 @@ class OccasionGreetingTests(TestCase):
 
         other = get_user_model().objects.create_user(username='greet-other', password='SecurePass1')
         self.client.force_login(other)
-        with mock.patch('main.views_smart_features._ai_client', return_value=self._fake_ai()):
+        with mock.patch('main.views_smart_features._ai_client', side_effect=AssertionError('provider called')):
             denied = self.client.post(
                 '/api/alerts/greeting/',
                 data=json.dumps({'node_id': self.node.id, 'alert_type': 'birthday', 'title': 'x'}),
@@ -1713,17 +1713,16 @@ class OccasionGreetingTests(TestCase):
     def test_greeting_requires_post(self):
         self.assertEqual(self.client.get('/api/alerts/greeting/').status_code, 405)
 
-    def test_second_call_is_served_from_cache_without_a_new_ai_call(self):
+    def test_second_call_is_served_from_cache_without_provider(self):
         cache.clear()
-        fake = self._fake_ai()
-        with mock.patch('main.views_smart_features._ai_client', return_value=fake):
+        with mock.patch('main.views_smart_features._ai_client', side_effect=AssertionError('provider called')):
             self.client.post('/api/alerts/greeting/', data=json.dumps(
                 {'node_id': self.node.id, 'alert_type': 'birthday', 'title': 't'}),
                 content_type='application/json')
-            self.client.post('/api/alerts/greeting/', data=json.dumps(
+            second = self.client.post('/api/alerts/greeting/', data=json.dumps(
                 {'node_id': self.node.id, 'alert_type': 'birthday', 'title': 't'}),
                 content_type='application/json')
-        self.assertEqual(fake[0].chat.completions.create.call_count, 1)
+        self.assertTrue(second.json()['from_cache'])
 
 
 class ChatRetrievalTests(TestCase):
@@ -1911,6 +1910,21 @@ class JournalImageOCRTests(TestCase):
         body = json.loads(r.content)
         self.assertTrue(body['ok'])
         self.assertTrue(body['empty'])
+
+    def test_unavailable_vision_provider_returns_service_unavailable(self):
+        with mock.patch(
+            'main.views._get_ai_client_and_model',
+            side_effect=RuntimeError('not configured'),
+        ):
+            response = self.client.post(
+                '/api/journal/image-ocr/',
+                data=json.dumps({'image_id': self.img.id}),
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['code'], 'vision_provider_unavailable')
+        self.assertNotIn('not configured', response.json()['error'])
 
 
 class DirectoryAppUserTests(TestCase):

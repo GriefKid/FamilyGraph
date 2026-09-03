@@ -193,12 +193,12 @@
   </div>
   {% endif %}
 
-  <!-- نکته عمیق AI -->
+  <!-- پیشنهادهای محلی مبتنی بر داده -->
   <div class="db-card">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <div>
         <div class="db-title">✦ نکته‌های عمیق امروز</div>
-        <div class="db-sub" style="margin-bottom:0;">AI با توجه به روز، مناسبت‌ها و وضعیت شبکه‌ات پیشنهاد می‌ده — روزی یک بار تازه می‌شه</div>
+        <div class="db-sub" style="margin-bottom:0;">از روی روز، مناسبت‌ها و وضعیت ثبت‌شدهٔ شبکه پیشنهاد می‌دهد — سریع و بدون ارسال داده به سرویس بیرونی</div>
       </div>
       <button class="db-ai-btn" id="tipsBtn" onclick="loadTips()">✦ بگو ببینم</button>
     </div>
@@ -235,7 +235,7 @@ async function missionAct(btn, action){
   }catch(e){ btn.disabled = false; alert('خطا در ارتباط با سرور'); }
 }
 
-// ── نکته‌های AI ──
+// ── پیشنهادهای مبتنی بر داده ──
 function escT(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 async function loadTips(){
   const btn = document.getElementById('tipsBtn');
