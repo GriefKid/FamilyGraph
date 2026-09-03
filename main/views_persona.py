@@ -9,13 +9,17 @@ views_persona.py — موتور «شناخت» (V11)
 بدون ذکر اینکه از کجا فهمیدیم.
 """
 import json
+import threading
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
+from django.db import close_old_connections
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .models import Node, Relationship
 
@@ -522,37 +526,61 @@ def persona_get_api(request, pk):
         return JsonResponse({'ok': True, 'persona': None})
 
 
-@login_required
-def persona_synthesize_api(request, pk):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
-    node = get_object_or_404(Node, pk=pk, owner=request.user)
-
-    signals = gather_person_signals(request.user, node)
+def run_person_synthesis(user, node):
+    """Synthesise one person's knowledge. Returns 'ok' | 'skipped' (no data).
+    Raises on AI failure so callers can decide how to report it."""
+    from .models import PersonaProfile
+    signals = gather_person_signals(user, node)
     if len(signals) < 2:
-        return JsonResponse({'error': 'هنوز داده‌ی کافی درباره‌ش ثبت نشده — '
-                                      'تعامل، ژورنال یا تحلیل اضافه کن'}, status=400)
+        return 'skipped'
+    statements, summary = _synthesize(f'شخصِ «{node.display_name()}»', signals)
+    existing = PersonaProfile.objects.filter(node=node, owner=user).first()
+    PersonaProfile.objects.update_or_create(
+        node=node,
+        defaults={
+            'statements': statements, 'summary': summary, 'owner': user,
+            'previous_statements': list(existing.statements or []) if existing else [],
+            'previous_synth_at': existing.updated_at if existing else None,
+        },
+    )
+    return 'ok'
+
+
+def run_rel_synthesis(user, rel):
+    """Synthesise one relationship's knowledge. Returns 'ok' | 'skipped'."""
+    from .models import RelationshipProfile
+    signals = gather_rel_signals(user, rel)
+    if len(signals) < 2:
+        return 'skipped'
+    label = f'رابطه‌ی «{rel.source.display_name()} و {rel.target.display_name()}»'
+    statements, summary = _synthesize(label, signals)
+    existing = RelationshipProfile.objects.filter(relationship=rel, owner=user).first()
+    RelationshipProfile.objects.update_or_create(
+        relationship=rel,
+        defaults={
+            'statements': statements, 'summary': summary, 'owner': user,
+            'previous_statements': list(existing.statements or []) if existing else [],
+            'previous_synth_at': existing.updated_at if existing else None,
+        },
+    )
+    return 'ok'
+
+
+@login_required
+@require_POST
+def persona_synthesize_api(request, pk):
+    node = get_object_or_404(Node, pk=pk, owner=request.user)
     try:
-        statements, summary = _synthesize(f'شخصِ «{node.display_name()}»', signals)
+        status = run_person_synthesis(request.user, node)
     except Exception as e:
         from .views_smart_features import _rate_limit_msg
         return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
-
-    try:
-        from .models import PersonaProfile
-        existing = PersonaProfile.objects.filter(node=node, owner=request.user).first()
-        prev_statements = list(existing.statements or []) if existing else []
-        prev_at = existing.updated_at if existing else None
-        p, _ = PersonaProfile.objects.update_or_create(
-            node=node, defaults={'statements': statements, 'summary': summary,
-                                 'owner': request.user,
-                                 'previous_statements': prev_statements,
-                                 'previous_synth_at': prev_at})
-        return JsonResponse({'ok': True, 'persona': _payload(p)})
-    except Exception:
-        return JsonResponse({'ok': True, 'persona': {
-            'statements': statements, 'summary': summary, 'updated_at': None},
-            'warning': 'جدول شناخت هنوز migrate نشده — ذخیره نشد'})
+    if status == 'skipped':
+        return JsonResponse({'error': 'هنوز داده‌ی کافی درباره‌ش ثبت نشده — '
+                                      'تعامل، ژورنال یا تحلیل اضافه کن'}, status=400)
+    from .models import PersonaProfile
+    p = PersonaProfile.objects.filter(node=node, owner=request.user).first()
+    return JsonResponse({'ok': True, 'persona': _payload(p)})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -577,39 +605,117 @@ def rel_persona_get_api(request, pk):
 
 
 @login_required
+@require_POST
 def rel_persona_synthesize_api(request, pk):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     rel = get_object_or_404(
-        Relationship,
-        pk=pk,
-        owner=request.user,
-        source__owner=request.user,
-        target__owner=request.user,
+        Relationship, pk=pk, owner=request.user,
+        source__owner=request.user, target__owner=request.user,
     )
-
-    signals = gather_rel_signals(request.user, rel)
-    if len(signals) < 2:
-        return JsonResponse({'error': 'داده‌ی کافی درباره این رابطه نیست'}, status=400)
     try:
-        statements, summary = _synthesize(
-            f'رابطه‌ی «{rel.source.display_name()} و {rel.target.display_name()}»', signals)
+        status = run_rel_synthesis(request.user, rel)
     except Exception as e:
         from .views_smart_features import _rate_limit_msg
         return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+    if status == 'skipped':
+        return JsonResponse({'error': 'داده‌ی کافی درباره این رابطه نیست'}, status=400)
+    from .models import RelationshipProfile
+    p = RelationshipProfile.objects.filter(relationship=rel, owner=request.user).first()
+    return JsonResponse({'ok': True, 'persona': _payload(p)})
+
+
+# ═══════════════════════════════════════════════════════════════
+#  API — روانکاوی همهٔ افراد و روابط (batch)
+# ═══════════════════════════════════════════════════════════════
+
+def _batch_key(user_id):
+    return f'persona-batch:{user_id}'
+
+
+def synthesize_everything(user, progress=None):
+    """Synthesise a knowledge profile for every person and every relationship
+    the user owns that has enough data. `progress` is an optional callable
+    receiving a dict after each item."""
+    people = list(
+        Node.objects.filter(owner=user, merged_into__isnull=True)
+        .exclude(pk=user.root_node_id)
+    )
+    rels = list(
+        Relationship.objects.filter(
+            owner=user, source__owner=user, target__owner=user,
+            source__merged_into__isnull=True, target__merged_into__isnull=True,
+        ).select_related('source', 'target')
+    )
+    state = {
+        'running': True, 'total': len(people) + len(rels), 'done': 0,
+        'people_ok': 0, 'rel_ok': 0, 'skipped': 0, 'failed': 0,
+        'started_at': timezone.now().isoformat(), 'error': '',
+    }
+    if progress:
+        progress(dict(state))
+
+    def _step(kind, obj):
+        try:
+            result = run_person_synthesis(user, obj) if kind == 'person' \
+                else run_rel_synthesis(user, obj)
+            if result == 'ok':
+                state['people_ok' if kind == 'person' else 'rel_ok'] += 1
+            else:
+                state['skipped'] += 1
+        except Exception as exc:  # keep going; one bad item shouldn't stop all
+            state['failed'] += 1
+            if not state['error']:
+                from .views_smart_features import _rate_limit_msg
+                state['error'] = _rate_limit_msg(exc)
+        state['done'] += 1
+        if progress:
+            progress(dict(state))
+
+    for node in people:
+        _step('person', node)
+    for rel in rels:
+        _step('rel', rel)
+
+    state['running'] = False
+    state['finished_at'] = timezone.now().isoformat()
+    if progress:
+        progress(dict(state))
+    return state
+
+
+@login_required
+@require_POST
+def persona_synthesize_all_api(request):
+    """Kick off a background pass over every person and relationship."""
+    key = _batch_key(request.user.id)
+    current = cache.get(key)
+    if current and current.get('running'):
+        return JsonResponse({'ok': True, 'already_running': True, 'progress': current})
+    if not cache.add(f'{key}:lock', '1', 60 * 30):
+        return JsonResponse({'ok': True, 'already_running': True,
+                             'progress': cache.get(key) or {'running': True}})
+
+    user_id = request.user.id
+    seed = {'running': True, 'total': 0, 'done': 0}
+    cache.set(key, seed, 60 * 60)
+
+    def _worker():
+        try:
+            user = User.objects.get(pk=user_id)
+            synthesize_everything(user, progress=lambda s: cache.set(key, s, 60 * 60))
+        except Exception:
+            cache.set(key, {'running': False, 'error': 'اجرای دسته‌ای ناموفق بود'}, 60 * 60)
+        finally:
+            cache.delete(f'{key}:lock')
+            close_old_connections()
 
     try:
-        from .models import RelationshipProfile
-        existing = RelationshipProfile.objects.filter(relationship=rel, owner=request.user).first()
-        prev_statements = list(existing.statements or []) if existing else []
-        prev_at = existing.updated_at if existing else None
-        p, _ = RelationshipProfile.objects.update_or_create(
-            relationship=rel, defaults={'statements': statements, 'summary': summary,
-                                        'owner': request.user,
-                                        'previous_statements': prev_statements,
-                                        'previous_synth_at': prev_at})
-        return JsonResponse({'ok': True, 'persona': _payload(p)})
+        threading.Thread(target=_worker, name=f'persona-batch-{user_id}', daemon=True).start()
     except Exception:
-        return JsonResponse({'ok': True, 'persona': {
-            'statements': statements, 'summary': summary, 'updated_at': None},
-            'warning': 'جدول شناخت هنوز migrate نشده — ذخیره نشد'})
+        cache.delete(f'{key}:lock')
+        return JsonResponse({'error': 'نتوانستم اجرای دسته‌ای را شروع کنم'}, status=500)
+    return JsonResponse({'ok': True, 'started': True})
+
+
+@login_required
+def persona_batch_status_api(request):
+    return JsonResponse({'ok': True, 'progress': cache.get(_batch_key(request.user.id)) or None})

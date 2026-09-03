@@ -860,6 +860,28 @@
 
 </div><!-- /row 4 -->
 
+<!-- ══ روانکاوی همهٔ افراد و روابط ══════════════════════════════ -->
+<div class="psych-section-title">شناختِ همهٔ افراد و روابط</div>
+<div class="ai-card" id="batchCard">
+  <div class="ai-card-head">
+    <span style="font-size:24px">🧠</span>
+    <div>
+      <div class="ai-card-title">با یک کلیک، شناختِ همه را بساز یا تازه کن</div>
+      <div style="font-size:11px;color:var(--text-muted)">برای هر فردی که دادهٔ کافی دارد (تعامل، ژورنال، چت، تحلیل) و برای هر رابطه، یک شناخت‌نامه ساخته می‌شود. نسخهٔ قبلی حفظ می‌ماند.</div>
+    </div>
+  </div>
+  <div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <button class="btn btn-primary" id="batchBtn" onclick="runBatchPersona()">✦ روانکاوی همه</button>
+    <span id="batchMsg" style="font-size:12px;color:var(--text-muted)"></span>
+  </div>
+  <div id="batchBar" style="display:none;margin-top:12px">
+    <div style="height:8px;background:var(--surface);border-radius:5px;overflow:hidden">
+      <i id="batchFill" style="display:block;height:100%;width:0;background:linear-gradient(90deg,#10b981,#6366f1);transition:width .3s"></i>
+    </div>
+    <div id="batchStats" style="font-size:11px;color:var(--text-muted);margin-top:6px"></div>
+  </div>
+</div>
+
 <!-- ══ AI PANEL ═══════════════════════════════════════════════ -->
 <div class="psych-section-title">تحلیل هوش مصنوعی</div>
 <div class="ai-card" id="aiCard" style="display:none">
@@ -1281,6 +1303,42 @@ function renderPsychologyError(container,message){
 function getCsrf(){
   return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
 }
+
+// ── روانکاوی همهٔ افراد و روابط ──
+let _batchPoll=null;
+function _renderBatch(p){
+  const btn=document.getElementById('batchBtn'),bar=document.getElementById('batchBar'),
+        fill=document.getElementById('batchFill'),stats=document.getElementById('batchStats'),
+        msg=document.getElementById('batchMsg');
+  if(!p){return}
+  bar.style.display='block';
+  const total=p.total||0,done=p.done||0;
+  fill.style.width=(total?Math.round(done/total*100):0)+'%';
+  stats.textContent=`${done} از ${total} · افراد ${p.people_ok||0} · روابط ${p.rel_ok||0} · دادهٔ کم ${p.skipped||0}`+((p.failed)?` · خطا ${p.failed}`:'');
+  if(p.running){ btn.disabled=true; msg.textContent='در حال ساخت شناخت‌ها…'; }
+  else {
+    btn.disabled=false; clearInterval(_batchPoll); _batchPoll=null;
+    msg.textContent = p.error ? ('متوقف شد: '+p.error) : '✓ تمام شد — از صفحهٔ هر فرد کارت «شناخت» را ببین.';
+  }
+}
+async function _pollBatch(){
+  try{
+    const r=await fetch('/api/persona/batch-status/');const d=await r.json();
+    _renderBatch(d.progress);
+  }catch(e){}
+}
+async function runBatchPersona(){
+  const btn=document.getElementById('batchBtn');
+  btn.disabled=true; document.getElementById('batchMsg').textContent='در حال شروع…';
+  try{
+    const r=await fetch('/api/persona/synthesize-all/',{method:'POST',headers:{'X-CSRFToken':getCsrf()}});
+    const d=await r.json();
+    if(!r.ok){ btn.disabled=false; document.getElementById('batchMsg').textContent=d.error||'خطا'; return; }
+  }catch(e){ btn.disabled=false; document.getElementById('batchMsg').textContent='خطا در ارتباط با سرور'; return; }
+  _pollBatch();
+  if(!_batchPoll) _batchPoll=setInterval(_pollBatch,2500);
+}
+_pollBatch();  // reflect an in-progress run on page load
 
 function escPsych(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function escapeAIValue(value){if(typeof value==='string')return escPsych(value);if(Array.isArray(value))return value.map(escapeAIValue);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,escapeAIValue(item)]));return value}

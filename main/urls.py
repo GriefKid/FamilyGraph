@@ -56,6 +56,8 @@ from .views_persona import (
     persona_synthesize_api,
     rel_persona_get_api,
     rel_persona_synthesize_api,
+    persona_synthesize_all_api,
+    persona_batch_status_api,
 )
 from .views_psychology import relationship_pulse_create_api, extraction_inbox, extraction_suggestions_api, extraction_suggestion_decide_api
 from .views_memory import (memory_hub, memory_timeline_view, knowledge_graph_view, memory_fact_api, memory_search_api,
@@ -289,6 +291,8 @@ urlpatterns = [
     path('api/persona/node/<int:pk>/synthesize/', persona_synthesize_api,     name='persona_synthesize'),
     path('api/persona/rel/<int:pk>/',             rel_persona_get_api,        name='rel_persona_get'),
     path('api/persona/rel/<int:pk>/synthesize/',  rel_persona_synthesize_api, name='rel_persona_synthesize'),
+    path('api/persona/synthesize-all/',           persona_synthesize_all_api, name='persona_synthesize_all'),
+    path('api/persona/batch-status/',             persona_batch_status_api,   name='persona_batch_status'),
     path('weekly/',                      weekly_view,             name='weekly'),
     path('monthly/',                     monthly_recap_view,      name='monthly_recap'),
     path('api/life-events/create/',      life_event_create_api,   name='life_event_create'),

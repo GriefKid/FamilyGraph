@@ -1503,6 +1503,57 @@ class AIPanelRenderingTests(TestCase):
         self.assertNotIn("${s.action||''}", source)
 
 
+class PersonaBatchTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='batch', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='batch-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.a = Node.objects.create(owner=self.user, username='batch-a', name='الف')
+        self.b = Node.objects.create(owner=self.user, username='batch-b', name='ب')
+        Relationship.objects.create(owner=self.user, source=self.root, target=self.a, strength=3)
+        for i in range(3):
+            Interaction.objects.create(owner=self.user, node=self.a, kind='call',
+                                       date=date(2025, 1, i + 1))
+        self.client.force_login(self.user)
+
+    def test_synthesize_everything_covers_people_and_relationships(self):
+        from main.views_persona import synthesize_everything
+        with mock.patch('main.views_persona._synthesize',
+                        return_value=([{'text': 'قهوه', 'kind': 'سلیقه'}], 'خلاصه')):
+            state = synthesize_everything(self.user)
+        self.assertFalse(state['running'])
+        self.assertGreaterEqual(state['people_ok'], 1)
+        self.assertGreaterEqual(state['rel_ok'], 1)
+        from main.models import PersonaProfile, RelationshipProfile
+        self.assertTrue(PersonaProfile.objects.filter(owner=self.user, node=self.a).exists())
+        self.assertTrue(RelationshipProfile.objects.filter(owner=self.user).exists())
+
+    def test_one_failure_does_not_stop_the_batch(self):
+        from main.views_persona import synthesize_everything
+        calls = {'n': 0}
+
+        def flaky(label, signals):
+            calls['n'] += 1
+            if calls['n'] == 1:
+                raise RuntimeError('AI hiccup')
+            return ([{'text': 'x', 'kind': ''}], 's')
+
+        with mock.patch('main.views_persona._synthesize', side_effect=flaky):
+            state = synthesize_everything(self.user)
+        self.assertEqual(state['failed'], 1)
+        self.assertGreaterEqual(state['people_ok'] + state['rel_ok'], 1)
+
+    def test_start_endpoint_is_async_and_status_is_owner_scoped(self):
+        with mock.patch('main.views_persona.synthesize_everything'):
+            r1 = self.client.post('/api/persona/synthesize-all/')
+        self.assertEqual(r1.status_code, 200)
+        self.assertTrue(r1.json().get('started') or r1.json().get('already_running'))
+        other = get_user_model().objects.create_user(username='batch-other', password='SecurePass1')
+        self.client.force_login(other)
+        self.assertIsNone(self.client.get('/api/persona/batch-status/').json()['progress'])
+
+
 class PersonaVersioningTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='persona-v', password='SecurePass1')
