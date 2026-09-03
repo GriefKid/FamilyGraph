@@ -1700,6 +1700,22 @@ def chat_api(request):
                 'style': chat_style,
             })
 
+    # Answer common questions about the user's own network straight from the
+    # data — instant, offline, no model. Free-form talk still goes to the LLM.
+    try:
+        from .grounded_insights import grounded_chat_reply
+        grounded = grounded_chat_reply(request.user, user_message)
+    except Exception:
+        grounded = None
+    if grounded:
+        try:
+            from .models import ChatMessage
+            ChatMessage.objects.create(owner=request.user, role='user', content=user_message[:2000])
+            ChatMessage.objects.create(owner=request.user, role='assistant', content=grounded[:2000])
+        except Exception:
+            pass
+        return JsonResponse({'reply': grounded, 'style': chat_style, 'grounded': True})
+
     # ── V5: تاریخچه گفتگو — چت دوطرفه و پیوسته ──
     history = []
     for m in raw_history[-8:]:

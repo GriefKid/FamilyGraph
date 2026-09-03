@@ -580,3 +580,195 @@ def journal_result(suggestions, text, root_username):
         'grounded': True,
         'source_preview': str(text or '')[:180],
     }
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Grounded chat: answer common questions about the owner's own network
+#  from stored observations, with no LLM. Returns a string, or None when
+#  the question is out of scope (caller may then fall back to a provider).
+# ─────────────────────────────────────────────────────────────────────
+
+def _norm_fa(text):
+    return (str(text or '')
+            .replace('ي', 'ی').replace('ك', 'ک').replace('‌', ' ')
+            .strip().casefold())
+
+
+def _match_person(user, message):
+    """Return the Node whose name (full or a single name-word) is in the message."""
+    m = f' {_norm_fa(message)} '
+    best, best_len = None, 0
+    for node in Node.objects.filter(owner=user, merged_into__isnull=True).only(
+            'id', 'username', 'name', 'first_name', 'last_name', 'nickname'):
+        candidates = set()
+        for raw in (node.nickname, node.name, node.username,
+                    f'{node.first_name} {node.last_name}'):
+            token = _norm_fa(raw)
+            if len(token) >= 2:
+                candidates.add(token)
+                for word in token.split():
+                    if len(word) >= 2:
+                        candidates.add(word)
+        for token in candidates:
+            if f' {token} ' in m and len(token) > best_len:
+                best, best_len = node, len(token)
+    return best
+
+
+def _last_contact(user, node):
+    from .models import Event, JournalEntry
+    today = timezone.localdate()
+    dates = []
+    last = (Interaction.objects.filter(owner=user, node=node)
+            .order_by('-date').values_list('date', flat=True).first())
+    if last:
+        dates.append((last, f'تعامل ({last})'))
+    ev = (Event.objects.filter(owner=user, participants=node, date__lte=today)
+          .order_by('-date').values_list('date', 'title').first())
+    if ev:
+        dates.append((ev[0], f'رویداد «{ev[1]}» ({ev[0]})'))
+    je = (JournalEntry.objects.filter(owner=user, mentioned_nodes=node)
+          .order_by('-entry_date').values_list('entry_date', flat=True).first())
+    if je:
+        dates.append((je, f'ذکر در خاطره ({je})'))
+    if not dates:
+        return None
+    dates.sort(key=lambda x: x[0] or today, reverse=True)
+    d, label = dates[0]
+    days = (today - d).days if d else None
+    span = f' — {days} روز پیش' if days is not None else ''
+    return f'آخرین‌بار: {label}{span}.'
+
+
+def grounded_chat_reply(user, message):
+    """Deterministic answer for common 'ask همدم about my network' questions."""
+    import datetime as _dt
+    from .models import Event, FollowUp, JournalEntry
+    try:
+        from .models import Debt
+    except Exception:
+        Debt = None
+
+    m = _norm_fa(message)
+    today = timezone.localdate()
+    person = _match_person(user, message)
+
+    if person and any(k in m for k in (
+            'آخرین بار', 'کی دیدم', 'کی دیدمش', 'آخرین تماس', 'آخرین دیدار',
+            'کی با', 'چند وقته', 'چقدر شده')):
+        line = _last_contact(user, person)
+        if line:
+            return f'{person.display_name()} — {line}'
+        return f'برای {person.display_name()} هنوز تعامل، رویداد یا خاطره‌ای ثبت نکرده‌ای.'
+
+    if any(k in m for k in (
+            'نیاز به توجه', 'نیازمند توجه', 'کیا رو ندیدم', 'سرد شده', 'غافل شدم',
+            'ازشون بی خبر', 'کی رو باید ببینم')):
+        try:
+            from .health import compute_health, attention_priority
+            health = compute_health(user)
+            ranked = sorted(attention_priority(user, health).items(),
+                            key=lambda kv: -kv[1]['score'])
+            names = dict(Node.objects.filter(
+                owner=user, id__in=[nid for nid, _ in ranked[:5]]
+            ).values_list('id', 'username'))
+            rows = []
+            for nid, row in ranked[:5]:
+                if row['score'] < 20:
+                    continue
+                why = (row['factors'] or ['مدتی است تعاملی نبوده'])[0]
+                rows.append(f'• {names.get(nid, "یک نفر")} — {why}')
+            if rows:
+                return 'این‌ها بیشتر از همه یک قدم توجه می‌خواهند:\n' + '\n'.join(rows)
+            return 'الان کسی در وضعیت نیازمند توجه نیست. 👌'
+        except Exception:
+            return None
+
+    if any(k in m for k in ('تولد', 'زادروز', 'birthday')):
+        rows = []
+        for node in Node.objects.filter(owner=user, birth_day__isnull=False):
+            try:
+                nxt = node.birth_day.replace(year=today.year)
+            except ValueError:
+                continue
+            if nxt < today:
+                nxt = nxt.replace(year=today.year + 1)
+            delta = (nxt - today).days
+            if delta <= 45:
+                rows.append((delta, f'• {node.display_name()} — {delta} روز دیگر ({nxt})'))
+        if rows:
+            rows.sort()
+            return 'تولدهای نزدیک:\n' + '\n'.join(r[1] for r in rows[:8])
+        return 'تا ۴۵ روز آینده تولدی ثبت نشده.'
+
+    if any(k in m for k in ('پیگیری', 'قول داد', 'قول ها', 'کارهای باز', 'یادم بنداز',
+                            'موضوعات باز')):
+        fus = list(FollowUp.objects.filter(owner=user, node__owner=user, done=False)
+                   .select_related('node').order_by('due_date', '-created_at')[:8])
+        if fus:
+            rows = []
+            for f in fus:
+                due = ''
+                if f.due_date:
+                    od = (f.due_date - today).days
+                    due = ' (عقب‌افتاده)' if od < 0 else f' (تا {od} روز)'
+                rows.append(f'• {f.node.display_name()}: {f.text}{due}')
+            return 'پیگیری‌های باز:\n' + '\n'.join(rows)
+        return 'پیگیری بازی نداری. 🎉'
+
+    if Debt and any(k in m for k in ('بدهکار', 'بدهی', 'طلب', 'قرض', 'حساب باز')):
+        ds = list(Debt.objects.filter(owner=user, node__owner=user, settled=False)
+                  .select_related('node')[:10])
+        if ds:
+            rows = []
+            for d in ds:
+                who = d.node.display_name()
+                direction = ('طرف به من بدهکار'
+                             if getattr(d, 'direction', '') == 'they_owe'
+                             else 'من بدهکارم به')
+                rows.append(f'• {direction} {who}: {d.remaining:,} {d.currency}')
+            return 'حساب‌های باز:\n' + '\n'.join(rows)
+        return 'حساب مالی بازی ثبت نشده.'
+
+    if any(k in m for k in ('چند نفر', 'چند تا آدم', 'چند تا رابطه', 'اندازه شبکه')):
+        people = Node.objects.filter(owner=user, merged_into__isnull=True).exclude(
+            pk=user.root_node_id).count()
+        rels = Relationship.objects.filter(owner=user).count()
+        return f'در شبکه‌ات {people} نفر و {rels} رابطه ثبت شده.'
+
+    if person and any(k in m for k in ('کیه', 'کیست', 'بگو از', 'درباره', 'چی می دونی',
+                                       'چی میدونی', 'بشناسم')):
+        try:
+            from .models import PersonaProfile
+            p = PersonaProfile.objects.filter(node=person, owner=user).first()
+            if p and p.statements:
+                lines = [str(s.get('text', s)) for s in p.statements[:8] if s]
+                head = p.summary or f'شناختِ ثبت‌شده از {person.display_name()}:'
+                return head + '\n' + '\n'.join(f'• {x}' for x in lines)
+        except Exception:
+            pass
+        bits = []
+        if person.career:
+            bits.append(f'شغل: {person.career}')
+        rc = Relationship.objects.filter(Q(source=person) | Q(target=person), owner=user).count()
+        bits.append(f'{rc} ارتباط مستقیم در گراف')
+        lc = _last_contact(user, person)
+        if lc:
+            bits.append(lc)
+        return (f'{person.display_name()} — ' + ' · '.join(bits)
+                + '\n(برای شناخت عمیق‌تر، از صفحهٔ او دکمهٔ «✦ بگو چی می‌دونی» را بزن.)')
+
+    if any(k in m for k in ('این هفته', 'اخیرا', 'چه خبر', 'تازگی', 'روزهای اخیر')):
+        since = today - _dt.timedelta(days=7)
+        ic = Interaction.objects.filter(owner=user, date__gte=since).count()
+        jc = JournalEntry.objects.filter(owner=user, entry_date__gte=since).count()
+        ec = Event.objects.filter(owner=user, date__gte=since, date__lte=today).count()
+        recent = list(Interaction.objects.filter(owner=user, date__gte=since)
+                      .values_list('node__username', flat=True)[:8])
+        line = f'هفتهٔ اخیر: {ic} تعامل، {jc} خاطره، {ec} رویداد.'
+        names = list(dict.fromkeys(p for p in recent if p))
+        if names:
+            line += ' با: ' + '، '.join(names[:6])
+        return line
+
+    return None

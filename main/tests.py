@@ -1756,6 +1756,52 @@ class ChatRetrievalTests(TestCase):
         self.assertEqual(_retrieve_context(other, 'سارا کافه شمال'), '')
 
 
+class GroundedChatReplyTests(TestCase):
+    def setUp(self):
+        U = get_user_model()
+        self.user = U.objects.create_user(username='gchat', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='gchat-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.ali = Node.objects.create(owner=self.user, username='ali', name='علی رضایی',
+                                       birth_day=date(1990, 1, 1))
+        Relationship.objects.create(owner=self.user, source=self.root, target=self.ali, strength=3)
+        Interaction.objects.create(owner=self.user, node=self.ali, kind='call',
+                                   date=timezone.localdate() - timedelta(days=5))
+        FollowUp.objects.create(owner=self.user, node=self.ali, text='کتابش را برگردانم')
+        self.client.force_login(self.user)
+
+    def _ask(self, q):
+        from main.grounded_insights import grounded_chat_reply
+        return grounded_chat_reply(self.user, q)
+
+    def test_network_counts(self):
+        r = self._ask('چند نفر توی شبکه‌ام دارم؟')
+        self.assertIn('1 نفر', r)
+        self.assertIn('1 رابطه', r)
+
+    def test_last_contact_for_a_named_person(self):
+        r = self._ask('آخرین بار کی علی رو دیدم؟')
+        self.assertIn('علی رضایی', r)
+        self.assertIn('5 روز پیش', r)
+
+    def test_open_followups(self):
+        self.assertIn('کتابش را برگردانم', self._ask('پیگیری‌های بازم چیه؟'))
+
+    def test_out_of_scope_returns_none_so_llm_can_take_over(self):
+        self.assertIsNone(self._ask('نظرت دربارهٔ زندگی چیه؟'))
+
+    def test_chat_api_answers_instantly_without_any_ai_provider(self):
+        with mock.patch('main.views._get_ai_client_and_model',
+                        side_effect=AssertionError('must not call the model')):
+            resp = self.client.post('/api/chat/', data=json.dumps(
+                {'message': 'چند نفر توی شبکه‌ام دارم؟'}), content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.content)
+        self.assertTrue(body.get('grounded'))
+        self.assertIn('نفر', body['reply'])
+
+
 class GraphTimelapseTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='tl', password='SecurePass1')
