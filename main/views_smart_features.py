@@ -5,7 +5,7 @@ import json
 import os
 import time
 from types import SimpleNamespace
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from datetime import date, timedelta
 from django.shortcuts import render
@@ -191,14 +191,35 @@ class _OllamaChatCompletions:
         if isinstance(response_format, dict) and response_format.get('type') == 'json_object':
             payload['format'] = 'json'
 
-        request = Request(
-            f'{self.base_url}/api/chat',
-            data=json.dumps(payload).encode('utf-8'),
-            headers={'Content-Type': 'application/json'},
-        )
+        def _request(current_payload):
+            request = Request(
+                f'{self.base_url}/api/chat',
+                data=json.dumps(current_payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'},
+            )
+            with urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode('utf-8'))
+
         timeout = max(1.0, float(os.environ.get('OLLAMA_REQUEST_TIMEOUT', '240')))
-        with urlopen(request, timeout=timeout) as response:
-            result = json.loads(response.read().decode('utf-8'))
+        try:
+            result = _request(payload)
+        except HTTPError as exc:
+            if exc.code < 500:
+                raise
+            # Runner startup can briefly fail under memory pressure. Retry once
+            # without keep-alive and with a shorter generation budget.
+            retry_payload = dict(payload)
+            retry_payload.pop('keep_alive', None)
+            retry_options = dict(payload.get('options') or {})
+            retry_options['num_predict'] = min(int(retry_options.get('num_predict', 96)), 96)
+            retry_payload['options'] = retry_options
+            try:
+                result = _request(retry_payload)
+            except HTTPError as retry_exc:
+                detail = retry_exc.read().decode('utf-8', 'replace').strip()
+                raise RuntimeError(
+                    f'Ollama HTTP {retry_exc.code}: {detail[:300] or "model runner failed"}'
+                ) from retry_exc
         content = result.get('message', {}).get('content', '')
         return SimpleNamespace(
             model=result.get('model', model),
