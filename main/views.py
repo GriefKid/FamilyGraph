@@ -1887,19 +1887,66 @@ def chat_api(request):
         + persian_policy
     )
 
+    # Local models spend a noticeable amount of time reading instructions.
+    # Keep the same evidence, but use a compact policy/context envelope.
+    cloud_keys = ('OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'MISTRAL_API_KEY', 'GROQ_API_KEY')
+    local_mode = (
+        os.environ.get('OLLAMA_ENABLED', '1').strip().lower() in {'1', 'true', 'yes', 'on'}
+        and os.environ.get('AI_PROVIDER', '').strip().lower() in {'', 'ollama'}
+        and not any(os.environ.get(key, '').strip() for key in cloud_keys)
+    )
+    if local_mode:
+        local_policy = (
+            "به فارسی محاوره‌ای و کوتاه جواب بده. بر اساس شواهد پاسخ بده و حدس را حقیقت نگو. "
+            "اگر دادهٔ کافی نداری، صادقانه بگو.\n"
+            + persian_policy[:700] + "\n"
+            + f"نمونهٔ لحن: {PERSIAN_FEW_SHOTS[0]['content']}\n"
+            + f"پاسخ نمونه: {PERSIAN_FEW_SHOTS[1]['content']}"
+        )
+        system_prompt = (
+            date_context + "\n" + local_policy + "\n\n"
+            f"کاربر و شناخت خودش:\n{who_am_i[:400]}\n\n"
+            f"روابط:\n{rels_text[:650]}\n\n"
+            f"افراد:\n{nodes_text[:550]}\n\n"
+            f"پروفایل‌ها و حافظه:\n{info_text[:950]}\n\n"
+            f"دادهٔ مرتبط با سؤال:\n{retrieved_context[:1450]}\n\n"
+            f"خاطرات اخیر:\n{journal_text[:350]}\n"
+            f"تعهدها و اقدام‌ها:\n{actions_text[:350]}\n"
+            f"حساب‌ها:\n{ledger_text[:350]}"
+        )[:5200]
+
     try:
         client, ai_model = _get_ai_client_and_model()
-        response = client.chat.completions.create(
-            model=ai_model,
-            messages=(
-                [{"role": "system", "content": system_prompt}]
-                + PERSIAN_FEW_SHOTS
-                + history
-                + [{"role": "user", "content": user_message}]
-            ),
-            max_tokens=160,
-            temperature=0.6,
-        )
+        try:
+            response = client.chat.completions.create(
+                model=ai_model,
+                messages=(
+                    [{"role": "system", "content": system_prompt}]
+                    + ([] if local_mode else PERSIAN_FEW_SHOTS)
+                    + history
+                    + [{"role": "user", "content": user_message}]
+                ),
+                max_tokens=64 if local_mode else 160,
+                temperature=0.6,
+            )
+        except Exception:
+            if not local_mode:
+                raise
+            # A large personal graph can exceed a small local runner's context.
+            # Retry with the authoritative date and the user question only.
+            fallback_prompt = (
+                date_context + "\n" + local_policy + "\n"
+                "کوتاه، دقیق جواب بده."
+            )
+            response = client.chat.completions.create(
+                model=ai_model,
+                messages=[
+                    {"role": "system", "content": fallback_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                max_tokens=64,
+                temperature=0.6,
+            )
         from .views_smart_features import _strip_reasoning
         reply = normalize_persian_reply(_strip_reasoning(response.choices[0].message.content))
 
