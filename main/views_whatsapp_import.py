@@ -66,7 +66,7 @@ def _parse_date(value):
 
 
 def parse_whatsapp_export(text):
-    contacts = defaultdict(lambda: {'messages': 0, 'dates': set()})
+    contacts = defaultdict(lambda: {'messages': 0, 'dates': set(), 'samples': []})
     for line in text.splitlines():
         match = next((match for pattern in LINE_PATTERNS
                       if (match := pattern.match(line.strip()))), None)
@@ -79,6 +79,9 @@ def parse_whatsapp_export(text):
         row = contacts[name]
         row['messages'] += 1
         row['dates'].add(day.isoformat())
+        message_text = (match.group('text') or '').strip()
+        if message_text and len(row['samples']) < 120:
+            row['samples'].append(message_text[:220])
     return contacts
 
 
@@ -115,6 +118,7 @@ def whatsapp_scan_api(request):
         suggested = lookup.get(_normalize(name))
         cache_payload[name] = {
             'messages': info['messages'], 'dates': sorted(info['dates']),
+            'sample': '\n'.join(info.get('samples', [])[-80:])[-7000:],
         }
         contacts.append({
             'name': name, 'messages': info['messages'], 'active_days': len(info['dates']),
@@ -140,7 +144,8 @@ def whatsapp_apply_api(request):
         return JsonResponse({'error': 'پیش‌نمایش منقضی شده؛ فایل را دوباره اسکن کن'}, status=410)
 
     root = request.user.root_node
-    stats = {'contacts': 0, 'nodes_created': 0, 'interactions': 0, 'skipped': 0}
+    stats = {'contacts': 0, 'nodes_created': 0, 'interactions': 0,
+             'suggestions': 0, 'skipped': 0}
     with transaction.atomic():
         mapping = body.get('mapping')
         for choice in mapping if isinstance(mapping, list) else []:
@@ -180,6 +185,17 @@ def whatsapp_apply_api(request):
                 stats['interactions'] += len(rows)
             except (ImportError, ValueError):
                 pass
+            if info.get('sample') and body.get('analyze_memory', True):
+                try:
+                    from .memory_pipeline import capture_text
+                    suggestions = capture_text(
+                        request.user,
+                        f'گفتگو با {name}:\n{info["sample"]}',
+                        'whatsapp', node.id,
+                    )
+                    stats['suggestions'] += len(suggestions)
+                except Exception:
+                    pass
             if body.get('make_edges', True) and root:
                 already = Relationship.objects.filter(owner=request.user).filter(
                     Q(source=root, target=node) | Q(source=node, target=root)

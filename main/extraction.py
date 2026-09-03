@@ -147,7 +147,7 @@ def extract_text(owner, text, source, source_id=None):
     if not owner or not owner.ai_extraction_enabled:
         return []
     source_flags = {'journal': owner.ai_journal_enabled, 'checkin': owner.ai_checkin_enabled,
-                    'chat': owner.ai_chat_enabled}
+                    'chat': owner.ai_chat_enabled, 'social_chat': owner.ai_chat_enabled}
     if source in source_flags and not source_flags[source]:
         return []
     started = time.monotonic()

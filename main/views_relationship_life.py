@@ -13,7 +13,6 @@ from django.views.decorators.http import require_POST
 from django.conf import settings
 from pathlib import Path
 
-from .extraction import extract_text
 from .models import (Commitment, Debt, Event, GiftIdea, Information, Interaction,
                      JournalEntry, MeetingReflection, MemoryFact, Node, NodeSafetySetting,
                      Relationship, ShareLink)
@@ -184,7 +183,8 @@ def quick_capture_api(request):
         entry = JournalEntry.objects.create(owner=request.user, text=text, entry_date=timezone.localdate(),
                                             occurred_at=timezone.now(), entry_kind='moment')
         if node: entry.mentioned_nodes.add(node)
-        suggestions = extract_text(request.user, text, 'journal', entry.id)
+        from .memory_pipeline import capture_text
+        suggestions = capture_text(request.user, text, 'journal', entry.id, node=node)
         return JsonResponse({'ok': True, 'id': entry.id, 'suggestions': len(suggestions)})
     if kind == 'interaction':
         obj = Interaction.objects.create(owner=request.user, node=node, kind=data.get('interaction_kind', 'other'),
@@ -198,7 +198,9 @@ def quick_capture_api(request):
                                       occasion=str(data.get('occasion', ''))[:100], budget=data.get('budget') or None)
     else:
         return JsonResponse({'error': 'نوع ثبت نامعتبر است.'}, status=400)
-    return JsonResponse({'ok': True, 'id': obj.id})
+    from .memory_pipeline import capture_node_note
+    suggestions = capture_node_note(request.user, node, text, kind, obj.id)
+    return JsonResponse({'ok': True, 'id': obj.id, 'suggestions': len(suggestions)})
 
 
 @login_required
@@ -217,7 +219,8 @@ def meeting_reflection_api(request):
     entry = JournalEntry.objects.create(owner=request.user, text=summary, entry_date=timezone.localdate(),
                                         occurred_at=timezone.now(), entry_kind='moment', tags=['ملاقات'])
     entry.mentioned_nodes.add(node)
-    suggestions = extract_text(request.user, summary, 'journal', entry.id)
+    from .memory_pipeline import capture_text
+    suggestions = capture_text(request.user, summary, 'journal', entry.id, node=node)
     return JsonResponse({'ok': True, 'id': reflection.id, 'suggestions': len(suggestions)})
 
 

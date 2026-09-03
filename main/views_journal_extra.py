@@ -127,8 +127,8 @@ def journal_save_api(request):
         ).update(entry=entry)
 
     _extract_profile_media_from_journal(entry)
-    from .extraction import extract_text
-    suggestions = extract_text(request.user, entry.text, 'journal', entry.id)
+    from .memory_pipeline import capture_text
+    suggestions = capture_text(request.user, entry.text, 'journal', entry.id)
 
     return JsonResponse({'id': entry.id, 'message': 'ذخیره شد', 'suggestions_created': len(suggestions), 'occurred_at': entry.occurred_at.isoformat()})
 

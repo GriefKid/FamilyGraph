@@ -1456,8 +1456,8 @@ def chat_to_journal_api(request):
         owner=request.user,
     )
     try:
-        from .extraction import extract_text
-        extract_text(request.user, entry.text, 'chat', entry.id)
+        from .memory_pipeline import capture_text
+        capture_text(request.user, entry.text, 'chat', entry.id)
     except Exception:
         pass
     return JsonResponse({'ok': True, 'entry_id': entry.id,
@@ -1485,7 +1485,9 @@ def _retrieve_context(user, query, limit=8):
     about things that are older than the 'recent' windows already in the
     prompt (e.g. 'آخرین بار کی سارا را دیدم؟').
     """
-    from .models import Interaction, MemoryFact
+    from .models import (Commitment, Event, GiftIdea, Interaction, KnowledgeTriple,
+                         LifeEvent, MeetingReflection, MemoryFact, PersonaProfile,
+                         RelationshipGoal, RelationshipProfile)
     qn = _fa_norm(query)
     terms = {t for t in qn.replace('؟', ' ').replace('?', ' ').split()
              if len(t) >= 2 and t not in _FA_STOPWORDS}
@@ -1545,6 +1547,85 @@ def _retrieve_context(user, query, limit=8):
         for mf in mq.order_by('-confidence')[:limit]:
             if named_ids or _score(mf.value) > 0:
                 lines.append(f"- دربارهٔ {mf.node.display_name()}: {mf.value}")
+    except Exception:
+        pass
+
+    # Search structured relationship records too, not only free text.
+    try:
+        event_q = Q()
+        for term in terms:
+            event_q |= Q(title__icontains=term) | Q(description__icontains=term)
+        if named_ids:
+            event_q |= Q(participants__id__in=named_ids)
+        for event in Event.objects.filter(owner=user).filter(event_q).distinct().prefetch_related('participants')[:limit]:
+            people = ', '.join(p.display_name() for p in event.participants.all()[:4])
+            lines.append(f"- رویداد {event.date}: {event.title}"
+                         + (f" (شرکت‌کننده: {people})" if people else '')
+                         + (f" — {event.description[:140]}" if event.description else ''))
+    except Exception:
+        pass
+
+    try:
+        def _field_query(field):
+            query = Q()
+            for term in terms:
+                query |= Q(**{f'{field}__icontains': term})
+            return query
+
+        node_filter = {'node_id__in': named_ids} if named_ids else {}
+        for item in Commitment.objects.filter(owner=user).filter(_field_query('text'), **node_filter)[:limit]:
+            lines.append(f"- تعهد با {item.node.display_name()}: {item.text} ({item.status})")
+        gift_query = _field_query('title') | _field_query('notes')
+        for item in GiftIdea.objects.filter(owner=user).filter(gift_query, **node_filter)[:limit]:
+            lines.append(f"- ایدهٔ هدیه برای {item.node.display_name()}: {item.title}")
+        for item in MeetingReflection.objects.filter(owner=user).filter(_field_query('summary'), **node_filter)[:limit]:
+            lines.append(f"- بازتاب ملاقات با {item.node.display_name()}: {item.summary[:220]}")
+        for item in LifeEvent.objects.filter(owner=user).filter(_field_query('title'), **node_filter)[:limit]:
+            lines.append(f"- رویداد زندگی {item.node.display_name()}: {item.title or item.get_kind_display()}")
+        for item in RelationshipGoal.objects.filter(owner=user, status='active').filter(_field_query('text'), **node_filter)[:limit]:
+            lines.append(f"- هدف رابطه با {item.node.display_name()}: {item.text}")
+    except Exception:
+        pass
+
+    try:
+        triple_q = Q()
+        for term in terms:
+            triple_q |= Q(predicate__icontains=term) | Q(object_text__icontains=term)
+        if named_ids:
+            triple_q |= Q(subject_id__in=named_ids) | Q(object_node_id__in=named_ids)
+        for triple in KnowledgeTriple.objects.filter(owner=user, active=True).filter(
+                triple_q).select_related('subject', 'object_node')[:limit]:
+            subject = triple.subject.display_name()
+            obj = triple.object_node.display_name() if triple.object_node_id else triple.object_text
+            lines.append(f"- دانش رابطه‌ای: {subject} — {triple.predicate} — {obj}")
+    except Exception:
+        pass
+
+    try:
+        for profile in PersonaProfile.objects.filter(owner=user).select_related('node')[:80]:
+            if named_ids and profile.node_id not in named_ids:
+                continue
+            if not named_ids and _score(profile.summary) <= 0:
+                continue
+            statements = profile.statements if isinstance(profile.statements, list) else []
+            details = ' | '.join(
+                str(item.get('text', item))[:140] if isinstance(item, dict) else str(item)[:140]
+                for item in statements[:4]
+            )
+            value = profile.summary[:240] if profile.summary else details
+            if value:
+                lines.append(f"- پروفایل شناختی {profile.node.display_name()}: {value}")
+        for profile in RelationshipProfile.objects.filter(owner=user).select_related(
+                'relationship__source', 'relationship__target')[:80]:
+            rel = profile.relationship
+            participant_ids = {rel.source_id, rel.target_id}
+            if named_ids and not participant_ids.intersection(named_ids):
+                continue
+            if not named_ids and _score(profile.summary) <= 0:
+                continue
+            value = profile.summary[:260] if profile.summary else ''
+            if value:
+                lines.append(f"- پروفایل رابطه {rel.source.display_name()} / {rel.target.display_name()}: {value}")
     except Exception:
         pass
 
@@ -1858,10 +1939,12 @@ def chat_api(request):
         if not data.get('ephemeral'):
             try:
                 from .models import ChatMessage
-                ChatMessage.objects.create(role='user', content=user_message[:4000],
-                                           owner=request.user)
+                user_chat = ChatMessage.objects.create(role='user', content=user_message[:4000],
+                                                       owner=request.user)
                 ChatMessage.objects.create(role='assistant', content=(reply or '')[:4000],
                                            owner=request.user)
+                from .memory_pipeline import capture_text
+                capture_text(request.user, user_message, 'chat', user_chat.id)
             except Exception:
                 pass   # جدول migrate نشده — چت بدون حافظه هم کار کنه
 
@@ -2335,8 +2418,8 @@ def journal_analyze_api(request):
             )
         result['_entry_id'] = entry.id
         try:
-            from .extraction import extract_text
-            result['_suggestions_created'] = len(extract_text(request.user, entry.text, 'journal', entry.id))
+            from .memory_pipeline import capture_text
+            result['_suggestions_created'] = len(capture_text(request.user, entry.text, 'journal', entry.id))
         except Exception:
             result['_suggestions_created'] = 0
 

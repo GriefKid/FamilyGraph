@@ -700,6 +700,15 @@ def message_send_api(request, user_id):
     _schedule_chat_analysis(request.user, friend)
     _schedule_chat_analysis(friend, request.user)
 
+    # Feed the conversation into the owner's private relationship memory.
+    try:
+        from .memory_pipeline import capture_text
+        observation = f'{request.user.username}: {msg.content}'
+        capture_text(request.user, observation, 'social_chat', msg.id)
+        capture_text(friend, observation, 'social_chat', msg.id)
+    except Exception:
+        pass
+
     _notify_social(friend, f'{request.user.username} پیام جدید فرستاد.', '/social/chat/')
     return JsonResponse({'ok': True, 'message': {
         'id': msg.id,

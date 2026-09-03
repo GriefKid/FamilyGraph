@@ -65,7 +65,13 @@ def life_event_create_api(request):
     except (OperationalError, ProgrammingError):
         return JsonResponse({'error': MIGRATION_MSG}, status=503)
 
-    return JsonResponse({'ok': True, 'id': ev.id,
+    suggestions = []
+    try:
+        from .memory_pipeline import capture_node_note
+        suggestions = capture_node_note(request.user, node, title or ev.get_kind_display(), 'life_event', ev.id)
+    except Exception:
+        pass
+    return JsonResponse({'ok': True, 'id': ev.id, 'suggestions': len(suggestions),
                          'kind_label': ev.get_kind_display(),
                          'date_fa': jalali_str(ev.date)})
 
@@ -120,7 +126,14 @@ def goal_create_api(request):
     except (OperationalError, ProgrammingError):
         return JsonResponse({'error': MIGRATION_MSG}, status=503)
 
-    return JsonResponse({'ok': True, 'id': g.id, 'baseline': baseline})
+    suggestions = []
+    try:
+        from .memory_pipeline import capture_node_note
+        suggestions = capture_node_note(request.user, node, text, 'relationship_goal', g.id)
+    except Exception:
+        pass
+    return JsonResponse({'ok': True, 'id': g.id, 'baseline': baseline,
+                         'suggestions': len(suggestions)})
 
 
 @login_required

@@ -42,7 +42,14 @@ def relationship_pulse_create_api(request):
         if not node:
             return JsonResponse({'error': 'شخص انتخاب‌شده پیدا نشد.'}, status=404)
     pulse = RelationshipPulse.objects.create(owner=request.user, node=node, note=str(data.get('note', ''))[:280], **ratings)
-    return JsonResponse({'ok': True, 'id': pulse.id})
+    suggestions = []
+    if node and pulse.note:
+        try:
+            from .memory_pipeline import capture_node_note
+            suggestions = capture_node_note(request.user, node, pulse.note, 'pulse', pulse.id)
+        except Exception:
+            pass
+    return JsonResponse({'ok': True, 'id': pulse.id, 'suggestions': len(suggestions)})
 
 
 @login_required

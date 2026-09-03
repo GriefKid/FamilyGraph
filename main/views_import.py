@@ -201,7 +201,8 @@ def telegram_apply_api(request):
             owner=user, source=root).values_list('target_id', flat=True)) | set(
             Relationship.objects.filter(owner=user, target=root).values_list('source_id', flat=True))
 
-    stats = {'contacts': 0, 'nodes_created': 0, 'interactions': 0, 'edges': 0, 'skipped': 0}
+    stats = {'contacts': 0, 'nodes_created': 0, 'interactions': 0,
+             'edges': 0, 'suggestions': 0, 'skipped': 0}
     report = []
     name_to_node = {}   # برای مرحله‌ی تحلیل
 
@@ -250,6 +251,18 @@ def telegram_apply_api(request):
                 stats['interactions'] += made
         except Exception:
             pass
+
+        if info.get('sample') and body.get('analyze_memory', True):
+            try:
+                from .memory_pipeline import capture_text
+                suggestions = capture_text(
+                    user,
+                    f'گفتگو با {name}:\n{info["sample"]}',
+                    'telegram', node.id,
+                )
+                stats['suggestions'] += len(suggestions)
+            except Exception:
+                pass
 
         # ── یال به root ──
         edge_made = False

@@ -203,8 +203,8 @@ def checkin_submit_api(request):
     for n in valid_nodes.values():
         entry.mentioned_nodes.add(n)
     try:
-        from .extraction import extract_text
-        extract_text(user, entry.text, 'checkin', entry.id)
+        from .memory_pipeline import capture_text
+        capture_text(user, entry.text, 'checkin', entry.id)
     except Exception:
         pass
 
