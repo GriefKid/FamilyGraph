@@ -254,6 +254,14 @@ def _forced_provider():
             return None
         client, _m = available
         return client, 'ollama', 'ollama'
+    # Any OpenAI-compatible endpoint (e.g. an in-country proxy that is not
+    # geo-blocked): AI_PROVIDER=custom + AI_BASE_URL + AI_API_KEY (+ AI_MODEL).
+    if name == 'custom' or os.environ.get('AI_BASE_URL', '').strip():
+        base = os.environ.get('AI_BASE_URL', '').strip()
+        if not base:
+            return None
+        key = os.environ.get('AI_API_KEY', '').strip() or 'not-needed'
+        return OpenAI(base_url=base, api_key=key), key, 'custom'
     if name in _PROVIDER_BASE_URLS:
         key = os.environ.get(_PROVIDER_KEY_ENV[name], '')
         if not key:
@@ -335,6 +343,9 @@ def _model():
         return configured_model
     if forced == 'ollama':
         return _ollama_model()
+    if forced == 'custom' or os.environ.get('AI_BASE_URL', '').strip():
+        # most in-country proxies front OpenAI; override with AI_MODEL.
+        return 'gpt-4o-mini'
     if (
         forced in _PROVIDER_DEFAULT_MODEL
         and os.environ.get(_PROVIDER_KEY_ENV[forced])

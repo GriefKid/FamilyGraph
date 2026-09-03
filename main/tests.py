@@ -1997,6 +1997,21 @@ class AIProviderConfigTests(TestCase):
         self.assertEqual(_extract_json('<think>x</think> noise {"v": 3} tail'), {'v': 3})
         self.assertEqual(_extract_json('```json\n{"z": 9}\n```'), {'z': 9})
 
+    def test_custom_openai_compatible_endpoint_is_supported(self):
+        from main.views_smart_features import _ai_client, _model
+        with mock.patch.dict('os.environ', {
+            'AI_PROVIDER': 'custom',
+            'AI_BASE_URL': 'https://api.example-proxy.ir/v1',
+            'AI_API_KEY': 'proxy-key',
+            'AI_MODEL': '', 'GROQ_API_KEY': '', 'OPENROUTER_API_KEY': '',
+            'GEMINI_API_KEY': '', 'MISTRAL_API_KEY': '',
+        }, clear=False):
+            client, key, provider = _ai_client()
+            self.assertEqual(provider, 'custom')
+            self.assertEqual(key, 'proxy-key')
+            self.assertIn('example-proxy.ir', str(client.base_url))
+            self.assertEqual(_model(), 'gpt-4o-mini')
+
     def test_stale_ollama_model_falls_back_to_an_installed_preferred_model(self):
         from main.views_smart_features import _ollama_model
 
