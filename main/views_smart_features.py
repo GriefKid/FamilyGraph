@@ -330,7 +330,11 @@ def _forced_provider():
         key = os.environ.get(_PROVIDER_KEY_ENV[name], '')
         if not key:
             return None  # fall through to auto so the app still works
-        primary = OpenAI(base_url=_PROVIDER_BASE_URLS[name], api_key=key)
+        primary = OpenAI(
+            base_url=_PROVIDER_BASE_URLS[name],
+            api_key=key,
+            max_retries=0 if name == 'openrouter' else 2,
+        )
         fallback = _available_ollama_client() if name == 'openrouter' else None
         if fallback:
             fb, fbm = fallback
@@ -356,6 +360,7 @@ def _ai_client():
         primary = OpenAI(
             base_url='https://openrouter.ai/api/v1',
             api_key=openrouter_key,
+            max_retries=0,
         )
         fallback_config = _available_ollama_client()
         if fallback_config:
@@ -386,7 +391,7 @@ def _ai_client():
 
 
 _PROVIDER_DEFAULT_MODEL = {
-    'openrouter': 'openrouter/free',
+    'openrouter': 'google/gemma-4-26b-a4b-it:free',
     'gemini': 'gemini-2.5-flash',
     'mistral': 'mistral-small-latest',      # رایگان، بدون بلاک ایران
     'groq': 'llama-3.3-70b-versatile',      # 14,400 req/day رایگان، سریع
@@ -416,7 +421,7 @@ def _model():
     ):
         return _PROVIDER_DEFAULT_MODEL[forced]
     if os.environ.get('OPENROUTER_API_KEY'):
-        return 'openrouter/free'
+        return 'google/gemma-4-26b-a4b-it:free'
     if os.environ.get('GEMINI_API_KEY'):
         return "gemini-2.5-flash"
     if os.environ.get('MISTRAL_API_KEY'):

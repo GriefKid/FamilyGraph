@@ -1923,19 +1923,28 @@ def chat_api(request):
         client, ai_model = _get_ai_client_and_model()
         from .views_smart_features import _OllamaClient
         is_local_ollama = isinstance(client, _OllamaClient)
+        forced_provider = os.environ.get('AI_PROVIDER', '').strip().lower()
+        is_openrouter = bool(os.environ.get('OPENROUTER_API_KEY', '').strip()) and (
+            forced_provider in {'', 'openrouter'}
+        )
         local_timeout = False
+        completion_options = {
+            'model': ai_model,
+            'messages': (
+                [{"role": "system", "content": system_prompt}]
+                + ([] if local_mode else PERSIAN_FEW_SHOTS)
+                + history
+                + [{"role": "user", "content": user_message}]
+            ),
+            'max_tokens': 48 if local_mode else 160,
+            'temperature': 0.6,
+        }
+        if is_openrouter:
+            # The free router can select a reasoning model. Reserve the small
+            # output budget for the actual answer so content is not empty.
+            completion_options['reasoning_effort'] = 'none'
         try:
-            response = client.chat.completions.create(
-                model=ai_model,
-                messages=(
-                    [{"role": "system", "content": system_prompt}]
-                    + ([] if local_mode else PERSIAN_FEW_SHOTS)
-                    + history
-                    + [{"role": "user", "content": user_message}]
-                ),
-                max_tokens=48 if local_mode else 160,
-                temperature=0.6,
-            )
+            response = client.chat.completions.create(**completion_options)
         except Exception as exc:
             if not local_mode:
                 raise
@@ -1964,7 +1973,8 @@ def chat_api(request):
             reply = 'مدل محلی دیر پاسخ داد. یک‌بار دیگر کوتاه‌تر بپرس تا سریع جواب بدهم.'
         else:
             from .views_smart_features import _strip_reasoning
-            reply = normalize_persian_reply(_strip_reasoning(response.choices[0].message.content))
+            raw_content = getattr(response.choices[0].message, 'content', None) or ''
+            reply = normalize_persian_reply(_strip_reasoning(raw_content))
 
         # یک فرصت بازنویسی سبک و محدود برای خروجی انگلیسی، رباتیک یا بیش‌ازحد بلند.
         # این مرحله داده‌های خصوصی گراف را دوباره ارسال نمی‌کند.
