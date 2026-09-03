@@ -49,6 +49,23 @@ class _ChatCompletionFailover:
                 raise
             fallback_kwargs = dict(kwargs)
             fallback_kwargs['model'] = self.fallback_model
+            source_messages = kwargs.get('messages') or []
+            user_message = next(
+                (
+                    item.get('content', '')
+                    for item in reversed(source_messages)
+                    if isinstance(item, dict) and item.get('role') == 'user'
+                ),
+                '',
+            )
+            fallback_kwargs['messages'] = [
+                {'role': 'system', 'content': 'به فارسی محاوره‌ای و کوتاه جواب بده.'},
+                {'role': 'user', 'content': str(user_message)[:1200]},
+            ]
+            fallback_kwargs['max_tokens'] = min(
+                int(fallback_kwargs.get('max_tokens') or 48), 48
+            )
+            fallback_kwargs.pop('reasoning_effort', None)
             try:
                 return self.fallback.chat.completions.create(*args, **fallback_kwargs)
             except Exception as fallback_error:

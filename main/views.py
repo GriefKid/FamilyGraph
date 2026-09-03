@@ -26,8 +26,8 @@ from django.views.generic import TemplateView
 def _ai_error_msg(e: Exception) -> str:
     s = str(e)
     if '429' in s or 'rate limit' in s.lower() or 'Rate limit' in s:
-        return ('حد روزانه تموم شده 😔 — فردا دوباره امتحان کن '
-                'یا GROQ_API_KEY رو در .env تنظیم کن (۱۴,۴۰۰ درخواست/روز رایگان).')
+        return ('سهمیهٔ سرویس آنلاین فعلاً تمام شده 😔 — پاسخ‌گویی با مدل محلی ادامه پیدا می‌کند؛ '
+                'برای استفادهٔ آنلاین باید سهمیه بعداً آزاد شود یا key سرویس دیگری تنظیم کنی.')
     return f'خطای AI: {s[:200]}'
 
 def _get_ai_client_and_model():
