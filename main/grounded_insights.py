@@ -120,6 +120,13 @@ def network_analysis(user, summary):
         risks.append(f'{len(unknown)} رابطه دادهٔ تماس کافی ندارد؛ دربارهٔ وضعیت آن‌ها نمی‌شود نتیجه گرفت.')
     if n_edges and weak / n_edges >= .6:
         risks.append('بیش از ۶۰٪ یال‌ها با قدرت ۱ یا ۲ ثبت شده‌اند؛ ممکن است درجهٔ نزدیکی بعضی رابطه‌ها نیاز به بازبینی داشته باشد.')
+    for f in fading_relationships(user):
+        risks.append(f'رو به کم‌رنگ‌شدن: {f["name"]} — {f["reason"]}.')
+    for b in network_break_points(user, limit=2):
+        risks.append(
+            f'اتصالِ شبکه به {b["name"]} وابسته است؛ بدون او {b["count"]} نفر '
+            f'({"، ".join(b["isolates"][:3])}…) از گرافت جدا می‌شوند.'
+        )
     if not risks:
         risks.append('از داده‌های فعلی هشدار ساختاری مشخصی دیده نشد؛ این به معنی نبود مشکل در دنیای واقعی نیست.')
 
@@ -580,6 +587,95 @@ def journal_result(suggestions, text, root_username):
         'grounded': True,
         'source_preview': str(text or '')[:180],
     }
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  Structural signals (deterministic, no interpretation)
+# ─────────────────────────────────────────────────────────────────────
+
+def fading_relationships(user, limit=5):
+    """روابطی که هم قدرتِ ثبت‌شده‌شان نزولی بوده و هم فاصلهٔ تماس از انتظار
+    گذشته — یعنی با روند فعلی رو به کم‌رنگ‌شدن‌اند. فقط مشاهده، نه پیش‌گویی قطعی."""
+    from .health import compute_health, root_connected_ids
+    from .models import RelationshipStrengthHistory
+
+    connected, root = root_connected_ids(user)
+    if not root or not connected:
+        return []
+    health = compute_health(user)
+    rels = Relationship.objects.filter(owner=user).filter(
+        Q(source=root) | Q(target=root)
+    ).select_related('source', 'target')
+
+    hist = {}
+    for row in (RelationshipStrengthHistory.objects
+                .filter(owner=user, relationship__in=rels)
+                .order_by('relationship_id', 'changed_at')
+                .values_list('relationship_id', 'strength')):
+        hist.setdefault(row[0], []).append(row[1])
+
+    out = []
+    for r in rels:
+        other = r.target if r.source_id == root.id else r.source
+        series = hist.get(r.id, [])
+        declining = len(series) >= 2 and series[-1] < series[0]
+        h = health.get(other.id) or {}
+        cold = h.get('status') in ('red', 'yellow')
+        if declining and cold:
+            drop = series[0] - series[-1]
+            days = h.get('days_since')
+            out.append({
+                'name': other.display_name(),
+                'reason': (f'قدرت ثبت‌شده {drop} پله افت کرده'
+                           + (f' و {days} روز است تعاملی نبوده' if days else '')),
+            })
+    return out[:limit]
+
+
+def network_break_points(user, limit=4):
+    """نقاطی که اگر حذف شوند، بخشی از شبکه از «من» جدا می‌شود
+    (articulation points نسبت به root)."""
+    from .health import root_connected_ids
+
+    connected, root = root_connected_ids(user)
+    if not root:
+        return []
+    adj = {}
+    names = {}
+    for r in (Relationship.objects.filter(owner=user)
+              .select_related('source', 'target')):
+        adj.setdefault(r.source_id, set()).add(r.target_id)
+        adj.setdefault(r.target_id, set()).add(r.source_id)
+        names[r.source_id] = r.source.display_name()
+        names[r.target_id] = r.target.display_name()
+    if root.id not in adj:
+        return []
+
+    def reachable(blocked):
+        seen = {root.id}
+        stack = [root.id]
+        while stack:
+            cur = stack.pop()
+            for nb in adj.get(cur, ()):
+                if nb != blocked and nb not in seen:
+                    seen.add(nb)
+                    stack.append(nb)
+        return seen
+
+    full = reachable(None)
+    out = []
+    for nid in list(full):
+        if nid == root.id:
+            continue
+        lost = full - reachable(nid) - {nid}
+        if lost:
+            out.append({
+                'name': names.get(nid, '؟'),
+                'isolates': [names.get(x, '؟') for x in list(lost)[:6]],
+                'count': len(lost),
+            })
+    out.sort(key=lambda x: -x['count'])
+    return out[:limit]
 
 
 # ─────────────────────────────────────────────────────────────────────

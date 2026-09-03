@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -325,3 +326,44 @@ class GroundedSourcePipelineTests(TestCase):
         self.assertTrue(result['grounded'])
         self.assertIn('به‌تنهایی', result['summary'])
         self.assertIn('ثابت نمی‌کند', result['summary'])
+
+
+class StructuralSignalTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='struct', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='s-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+
+    def test_break_point_names_the_bridge_and_who_is_cut_off(self):
+        from .grounded_insights import network_break_points
+        bridge = Node.objects.create(owner=self.user, username='bridge')
+        far = Node.objects.create(owner=self.user, username='far')
+        Relationship.objects.create(owner=self.user, source=self.root, target=bridge, strength=3)
+        Relationship.objects.create(owner=self.user, source=bridge, target=far, strength=3)
+        points = network_break_points(self.user)
+        self.assertEqual(points[0]['name'], bridge.display_name())
+        self.assertIn(far.display_name(), points[0]['isolates'])
+
+    def test_no_break_points_when_the_graph_is_well_connected(self):
+        from .grounded_insights import network_break_points
+        a = Node.objects.create(owner=self.user, username='a')
+        b = Node.objects.create(owner=self.user, username='b')
+        for x, y in [(self.root, a), (self.root, b), (a, b)]:
+            Relationship.objects.create(owner=self.user, source=x, target=y, strength=3)
+        self.assertEqual(network_break_points(self.user), [])
+
+    def test_fading_needs_both_a_strength_drop_and_a_cold_gap(self):
+        from .grounded_insights import fading_relationships
+        from .models import RelationshipStrengthHistory
+        p = Node.objects.create(owner=self.user, username='fade')
+        rel = Relationship.objects.create(owner=self.user, source=self.root, target=p, strength=2)
+        old = RelationshipStrengthHistory.objects.create(owner=self.user, relationship=rel, strength=5)
+        RelationshipStrengthHistory.objects.filter(pk=old.pk).update(
+            changed_at=timezone.now() - timedelta(days=90))
+        RelationshipStrengthHistory.objects.create(owner=self.user, relationship=rel, strength=2)
+        Interaction.objects.create(owner=self.user, node=p, kind='call',
+                                   date=timezone.localdate() - timedelta(days=400))
+        names = [f['name'] for f in fading_relationships(self.user)]
+        self.assertIn(p.display_name(), names)
