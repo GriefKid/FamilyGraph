@@ -22,18 +22,6 @@ def _body(request):
         return None
 
 
-def _search_spellings(value):
-    """Return common Persian/Arabic keyboard spellings for a search term."""
-    normalized = value.replace('ي', 'ی').replace('ك', 'ک')
-    return {
-        value,
-        normalized,
-        normalized.replace('ی', 'ي'),
-        normalized.replace('ک', 'ك'),
-        normalized.replace('ی', 'ي').replace('ک', 'ك'),
-    }
-
-
 def _duplicates(user):
     nodes = list(Node.objects.filter(owner=user, merged_into__isnull=True).exclude(pk=user.root_node_id))
     pairs = []

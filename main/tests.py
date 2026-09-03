@@ -2538,6 +2538,13 @@ class PlatformQualityTests(TestCase):
         timeline = self.client.get('/api/platform/command-palette/?q=خط زمان').json()['results']
         self.assertIn('/memory/timeline/', [row['url'] for row in timeline])
 
+    def test_palette_and_briefing_use_the_safe_dom_renderer(self):
+        from django.template.loader import get_template
+        base = get_template('base.html').template.source
+        # The DOM-only renderer must be loaded so palette results (person
+        # names) are not injected via innerHTML.
+        self.assertIn('js/relationship_life.js', base)
+
     def test_feature_flag_supports_rollout_and_user_override(self):
         flag = FeatureFlag.objects.get(name='hybrid-ai')
         flag.enabled = False

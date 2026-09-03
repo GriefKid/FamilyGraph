@@ -324,10 +324,10 @@
 .node-card.is-contact-only .nc-avatar-ring,
 .node-list-item.is-contact-only .nli-avatar-ring{ filter:grayscale(.55); opacity:.9; }
 .nc-chat,.nli-chat{ display:inline-flex; align-items:center; gap:4px; font:800 10px 'Vazirmatn',sans-serif;
-  padding:4px 10px; border-radius:999px; border:1px solid var(--primary-border);
-  background:rgba(99,102,241,.14); color:var(--primary-light); cursor:pointer; }
-.nc-chat{ position:absolute; bottom:10px; left:10px; right:auto; z-index:2; }
+  padding:5px 12px; border-radius:999px; border:1px solid var(--primary-border);
+  background:rgba(99,102,241,.14); color:var(--primary-light); cursor:pointer; margin-top:6px; }
 .nc-chat:hover,.nli-chat:hover{ background:rgba(99,102,241,.28); }
+.nli-chat{ margin-top:0; flex-shrink:0; }
 .people-tip{ margin:18px 0 4px; padding:10px 13px; border:1px solid var(--border-soft); border-radius:12px; color:var(--text-muted); background:var(--surface); font-size:11px; line-height:1.8; }
 @media(max-width:640px){
   .stats-strip{ margin-bottom:15px !important; }
@@ -393,7 +393,6 @@
      data-search="{{ node.username|lower }} {{ node.first_name|lower }} {{ node.last_name|lower }} {{ node.nickname|lower }} {{ node.career|lower }} {{ node.name|lower }}">
 
     {% if node.is_pinned %}<span class="nc-root-badge" title="پین‌شده" style="right:8px;left:auto">★</span>{% endif %}
-    {% if node.can_chat %}<button type="button" class="nc-chat" onclick="chatWith(event,{{ node.chat_user_id }})">💬 چت</button>{% endif %}
 
     <div class="nc-avatar-wrap">
       <div class="nc-avatar-ring">
@@ -412,14 +411,13 @@
     {% if node.username != node.display_name %}
     <div class="nc-handle">@{{ node.username }}</div>
     {% endif %}
-    {% if node.is_app_user %}
-      <div style="margin-top:5px"><span class="app-badge">🟢 در اپ</span></div>
-    {% else %}
-      <div style="margin-top:5px"><span class="app-badge contact">فقط مخاطب</span></div>
-    {% endif %}
+    <div style="margin-top:5px">
+      {% if node.is_app_user %}<span class="app-badge">🟢 در اپ</span>{% else %}<span class="app-badge contact">فقط مخاطب</span>{% endif %}
+    </div>
     {% if node.career %}
     <div class="nc-career">{{ node.career }}</div>
     {% endif %}
+    {% if node.can_chat %}<button type="button" class="nc-chat" onclick="chatWith(event,{{ node.chat_user_id }})">💬 چت</button>{% endif %}
 
   </a>
   {% empty %}
