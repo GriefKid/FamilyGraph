@@ -24,6 +24,10 @@ from .utils_jalali import (
 )
 
 
+class OllamaRequestTimeout(TimeoutError):
+    """Raised when a local model cannot answer within the chat deadline."""
+
+
 class _ChatCompletionFailover:
     """Retry retryable cloud chat failures against a local Ollama model."""
 
@@ -183,6 +187,10 @@ class _OllamaChatCompletions:
             'think': False,
         }
         keep_alive = os.environ.get('OLLAMA_KEEP_ALIVE', '15m').strip()
+        # Some Ollama versions reject the documented -1 shorthand unless a
+        # duration unit is supplied. Keep the model warm for a day instead.
+        if keep_alive == '-1':
+            keep_alive = '24h'
         if keep_alive:
             payload['keep_alive'] = keep_alive
         if options:
@@ -191,16 +199,41 @@ class _OllamaChatCompletions:
         if isinstance(response_format, dict) and response_format.get('type') == 'json_object':
             payload['format'] = 'json'
 
+        try:
+            configured_timeout = float(os.environ.get('OLLAMA_REQUEST_TIMEOUT', '6'))
+        except (TypeError, ValueError):
+            configured_timeout = 6.0
+        # Keep the local chat contract below the UI's ten-second target even if
+        # an old .env still contains the previous 240-second default. Leave
+        # room for Django's database and serialization work around the model.
+        timeout = min(6.0, max(1.0, configured_timeout))
+        deadline = time.monotonic() + timeout
+
         def _request(current_payload):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise OllamaRequestTimeout(
+                    'مدل محلی در مهلت پاسخ‌گویی نکرد؛ دوباره تلاش کن.'
+                )
             request = Request(
                 f'{self.base_url}/api/chat',
                 data=json.dumps(current_payload).encode('utf-8'),
                 headers={'Content-Type': 'application/json'},
             )
-            with urlopen(request, timeout=timeout) as response:
-                return json.loads(response.read().decode('utf-8'))
+            try:
+                with urlopen(request, timeout=remaining) as response:
+                    return json.loads(response.read().decode('utf-8'))
+            except TimeoutError as exc:
+                raise OllamaRequestTimeout(
+                    'مدل محلی در مهلت پاسخ‌گویی نکرد؛ دوباره تلاش کن.'
+                ) from exc
+            except URLError as exc:
+                if isinstance(exc.reason, TimeoutError):
+                    raise OllamaRequestTimeout(
+                        'مدل محلی در مهلت پاسخ‌گویی نکرد؛ دوباره تلاش کن.'
+                    ) from exc
+                raise
 
-        timeout = max(1.0, float(os.environ.get('OLLAMA_REQUEST_TIMEOUT', '240')))
         try:
             result = _request(payload)
         except HTTPError as exc:

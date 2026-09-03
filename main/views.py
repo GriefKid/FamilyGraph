@@ -1896,6 +1896,10 @@ def chat_api(request):
         and not any(os.environ.get(key, '').strip() for key in cloud_keys)
     )
     if local_mode:
+        history = [
+            {'role': item['role'], 'content': item['content'][:400]}
+            for item in history[-2:]
+        ]
         local_policy = (
             "به فارسی محاوره‌ای و کوتاه جواب بده. بر اساس شواهد پاسخ بده و حدس را حقیقت نگو. "
             "اگر دادهٔ کافی نداری، صادقانه بگو.\n"
@@ -1913,10 +1917,13 @@ def chat_api(request):
             f"خاطرات اخیر:\n{journal_text[:350]}\n"
             f"تعهدها و اقدام‌ها:\n{actions_text[:350]}\n"
             f"حساب‌ها:\n{ledger_text[:350]}"
-        )[:5200]
+        )[:3800]
 
     try:
         client, ai_model = _get_ai_client_and_model()
+        from .views_smart_features import _OllamaClient
+        is_local_ollama = isinstance(client, _OllamaClient)
+        local_timeout = False
         try:
             response = client.chat.completions.create(
                 model=ai_model,
@@ -1926,34 +1933,43 @@ def chat_api(request):
                     + history
                     + [{"role": "user", "content": user_message}]
                 ),
-                max_tokens=64 if local_mode else 160,
+                max_tokens=48 if local_mode else 160,
                 temperature=0.6,
             )
-        except Exception:
+        except Exception as exc:
             if not local_mode:
                 raise
-            # A large personal graph can exceed a small local runner's context.
-            # Retry with the authoritative date and the user question only.
-            fallback_prompt = (
-                date_context + "\n" + local_policy + "\n"
-                "کوتاه، دقیق جواب بده."
-            )
-            response = client.chat.completions.create(
-                model=ai_model,
-                messages=[
-                    {"role": "system", "content": fallback_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                max_tokens=64,
-                temperature=0.6,
-            )
-        from .views_smart_features import _strip_reasoning
-        reply = normalize_persian_reply(_strip_reasoning(response.choices[0].message.content))
+            from .views_smart_features import OllamaRequestTimeout
+            if isinstance(exc, OllamaRequestTimeout):
+                # Do not spend another timeout window on a fallback request.
+                local_timeout = True
+                response = None
+            else:
+                # A large personal graph can exceed a small local runner's context.
+                # Retry with the authoritative date and the user question only.
+                fallback_prompt = (
+                    date_context + "\n" + local_policy + "\n"
+                    "کوتاه، دقیق جواب بده."
+                )
+                response = client.chat.completions.create(
+                    model=ai_model,
+                    messages=[
+                        {"role": "system", "content": fallback_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    max_tokens=48,
+                    temperature=0.6,
+                )
+        if local_timeout:
+            reply = 'مدل محلی دیر پاسخ داد. یک‌بار دیگر کوتاه‌تر بپرس تا سریع جواب بدهم.'
+        else:
+            from .views_smart_features import _strip_reasoning
+            reply = normalize_persian_reply(_strip_reasoning(response.choices[0].message.content))
 
         # یک فرصت بازنویسی سبک و محدود برای خروجی انگلیسی، رباتیک یا بیش‌ازحد بلند.
         # این مرحله داده‌های خصوصی گراف را دوباره ارسال نمی‌کند.
         quality_issues = persian_quality_issues(reply)
-        if quality_issues:
+        if quality_issues and not is_local_ollama and not local_timeout:
             try:
                 rewrite = client.chat.completions.create(
                     model=ai_model,
