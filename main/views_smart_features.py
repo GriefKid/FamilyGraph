@@ -169,6 +169,12 @@ class _OllamaChatCompletions:
         for name in ('temperature', 'top_p'):
             if kwargs.get(name) is not None:
                 options[name] = kwargs[name]
+        try:
+            context_size = int(os.environ.get('OLLAMA_NUM_CTX', '2048'))
+        except (TypeError, ValueError):
+            context_size = 2048
+        if context_size > 0:
+            options['num_ctx'] = context_size
 
         payload = {
             'model': model,
@@ -176,6 +182,9 @@ class _OllamaChatCompletions:
             'stream': False,
             'think': False,
         }
+        keep_alive = os.environ.get('OLLAMA_KEEP_ALIVE', '15m').strip()
+        if keep_alive:
+            payload['keep_alive'] = keep_alive
         if options:
             payload['options'] = options
         response_format = kwargs.get('response_format')

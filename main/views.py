@@ -1589,14 +1589,14 @@ def chat_api(request):
 
     # ── V5: تاریخچه گفتگو — چت دوطرفه و پیوسته ──
     history = []
-    for m in raw_history[-12:]:
+    for m in raw_history[-8:]:
         if not isinstance(m, dict):
             continue
         role = m.get('role')
         content = m.get('content')
         content = content.strip() if isinstance(content, str) else ''
         if role in ('user', 'assistant') and content:
-            history.append({'role': role, 'content': content[:2000]})
+            history.append({'role': role, 'content': content[:800]})
 
     # ── V8: حافظه‌ی بین‌جلسه‌ای — اگه صفحه تازه باز شده، از DB ادامه بده ──
     if not history:
@@ -1604,7 +1604,7 @@ def chat_api(request):
             from .models import ChatMessage
             recent = list(ChatMessage.objects.filter(owner=request.user)
                           .order_by('-created_at')[:12])[::-1]
-            history = [{'role': m.role, 'content': m.content[:2000]} for m in recent]
+            history = [{'role': m.role, 'content': m.content[:800]} for m in recent[-8:]]
         except Exception:
             pass
 
@@ -1730,6 +1730,26 @@ def chat_api(request):
     except Exception:
         pass
 
+    # Keep greetings and date questions fast: they do not need the whole graph.
+    light_markers = ('سلام', 'درود', 'خوبی', 'ممنون', 'مرسی', 'امروز', 'چند شنبه', 'ساعت')
+    is_light_chat = len(user_message) <= 80 and any(
+        marker in user_message.casefold() for marker in light_markers
+    )
+    if is_light_chat:
+        history = history[-4:]
+        who_am_i = 'کاربر اصلی شبکه'
+        rels_text = nodes_text = info_text = journal_text = actions_text = ledger_text = ''
+        retrieved_context = ''
+    else:
+        retrieved_context = _retrieve_context(request.user, user_message)
+        # Bound dynamic context so local models spend time answering, not reading.
+        rels_text = rels_text[:3000]
+        nodes_text = nodes_text[:3000]
+        info_text = info_text[:4000]
+        journal_text = journal_text[:1800]
+        actions_text = actions_text[:1800]
+        ledger_text = ledger_text[:1800]
+
     persian_policy = language_policy(chat_style)
     # Date questions must use the application clock, not the model's memory.
     # The product timezone is Asia/Tehran, so inject an authoritative date and
@@ -1756,7 +1776,7 @@ def chat_api(request):
         f"## روابطش:\n{rels_text}\n\n"
         f"## افراد شبکه‌اش:\n{nodes_text}\n\n"
         f"## شناخت‌نامه افراد (تحلیل‌های ذخیره‌شده — نمره دوستی، شخصیت، هشدارها):\n{info_text}\n\n"
-        f"{_retrieve_context(request.user, user_message)}"
+        f"{retrieved_context}"
         f"## یادداشت‌های اخیرش:\n{journal_text}\n\n"
         f"## اقدامات اخیرش:\n{actions_text}\n\n"
         f"## قرض و طلب‌های باز:\n{ledger_text}\n\n"
@@ -1780,7 +1800,7 @@ def chat_api(request):
                 + history
                 + [{"role": "user", "content": user_message}]
             ),
-            max_tokens=256,
+            max_tokens=160,
             temperature=0.6,
         )
         from .views_smart_features import _strip_reasoning
@@ -1803,7 +1823,7 @@ def chat_api(request):
                             ),
                         },
                     ],
-                    max_tokens=700,
+                    max_tokens=320,
                     temperature=0.35,
                 )
                 rewritten = normalize_persian_reply(rewrite.choices[0].message.content)
