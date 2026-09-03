@@ -826,11 +826,28 @@ def grounded_chat_reply(user, message):
             return 'حساب‌های باز:\n' + '\n'.join(rows)
         return 'حساب مالی بازی ثبت نشده.'
 
-    if any(k in m for k in ('چند نفر', 'چند تا آدم', 'چند تا رابطه', 'اندازه شبکه')):
+    if any(k in m for k in ('چند نفر', 'چند تا آدم', 'چند تا رابطه', 'اندازه شبکه',
+                            'خلاصه شبکه', 'خلاصه ای از شبکه', 'شبکه من', 'شبکه ام',
+                            'وضعیت شبکه', 'گراف من')):
         people = Node.objects.filter(owner=user, merged_into__isnull=True).exclude(
             pk=user.root_node_id).count()
         rels = Relationship.objects.filter(owner=user).count()
-        return f'در شبکه‌ات {people} نفر و {rels} رابطه ثبت شده.'
+        lines = [f'در شبکه‌ات {people} نفر و {rels} رابطه ثبت شده.']
+        try:
+            from .health import compute_health, health_summary
+            c = health_summary(compute_health(user))
+            if c['red'] or c['yellow']:
+                lines.append(f'{c["red"]} رابطه سرد شده، {c["yellow"]} نیازمند توجه، {c["green"]} سالم.')
+        except Exception:
+            pass
+        try:
+            from .models import FollowUp
+            openc = FollowUp.objects.filter(owner=user, node__owner=user, done=False).count()
+            if openc:
+                lines.append(f'{openc} پیگیری باز داری.')
+        except Exception:
+            pass
+        return '\n'.join(lines)
 
     if person and any(k in m for k in ('کیه', 'کیست', 'بگو از', 'درباره', 'چی می دونی',
                                        'چی میدونی', 'بشناسم')):

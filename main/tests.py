@@ -1826,6 +1826,11 @@ class GroundedChatReplyTests(TestCase):
         self.assertIn('1 نفر', r)
         self.assertIn('1 رابطه', r)
 
+    def test_welcome_chip_phrasings_reach_the_grounded_path(self):
+        for chip in ('خلاصه‌ای از شبکه من بده', 'این هفته چه خبر بوده؟',
+                     'تولد کی نزدیکه؟', 'پیگیری‌های بازم چیه؟'):
+            self.assertIsNotNone(self._ask(chip), chip)
+
     def test_last_contact_for_a_named_person(self):
         r = self._ask('آخرین بار کی علی رو دیدم؟')
         self.assertIn('علی رضایی', r)
