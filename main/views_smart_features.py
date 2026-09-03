@@ -42,7 +42,8 @@ class _ChatCompletionFailover:
         except Exception as primary_error:
             message = str(primary_error).lower()
             retryable = (
-                '429', 'rate limit', 'timeout', 'timed out', 'connection',
+                '401', '403', '404', '429', 'unauthorized', 'forbidden',
+                'not found', 'no endpoints', 'rate limit', 'timeout', 'timed out', 'connection',
                 '500', '502', '503', '504', 'service unavailable',
             )
             if not any(marker in message for marker in retryable):
@@ -58,8 +59,24 @@ class _ChatCompletionFailover:
                 ),
                 '',
             )
+            system_messages = [
+                str(item.get('content', ''))
+                for item in source_messages
+                if isinstance(item, dict) and item.get('role') == 'system'
+                and item.get('content')
+            ]
+            # chat_api appends a small evidence-only system message last.  Keep
+            # that message for the local fallback instead of forwarding the
+            # full graph prompt, which is both slower and less relevant.
+            evidence_context = system_messages[-1][:2600] if len(system_messages) > 1 else ''
+            fallback_system = (
+                'به فارسی محاوره‌ای و کوتاه جواب بده. فقط بر اساس شواهد داده‌شده '
+                'حرف بزن؛ اگر داده کافی نیست صریح بگو.'
+            )
+            if evidence_context:
+                fallback_system += '\n\n' + evidence_context
             fallback_kwargs['messages'] = [
-                {'role': 'system', 'content': 'به فارسی محاوره‌ای و کوتاه جواب بده.'},
+                {'role': 'system', 'content': fallback_system},
                 {'role': 'user', 'content': str(user_message)[:1200]},
             ]
             fallback_kwargs['max_tokens'] = min(
@@ -324,6 +341,13 @@ _PROVIDER_KEY_ENV = {
 }
 
 
+def _openrouter_timeout():
+    try:
+        return min(5.0, max(1.0, float(os.environ.get('OPENROUTER_TIMEOUT', '2.5'))))
+    except (TypeError, ValueError):
+        return 2.5
+
+
 def _forced_provider():
     """AI_PROVIDER in the environment pins the provider and skips auto-priority."""
     name = os.environ.get('AI_PROVIDER', '').strip().lower()
@@ -351,6 +375,7 @@ def _forced_provider():
             base_url=_PROVIDER_BASE_URLS[name],
             api_key=key,
             max_retries=0 if name == 'openrouter' else 2,
+            **({'timeout': _openrouter_timeout()} if name == 'openrouter' else {}),
         )
         fallback = _available_ollama_client() if name == 'openrouter' else None
         if fallback:
@@ -378,6 +403,7 @@ def _ai_client():
             base_url='https://openrouter.ai/api/v1',
             api_key=openrouter_key,
             max_retries=0,
+            timeout=_openrouter_timeout(),
         )
         fallback_config = _available_ollama_client()
         if fallback_config:
@@ -408,7 +434,7 @@ def _ai_client():
 
 
 _PROVIDER_DEFAULT_MODEL = {
-    'openrouter': 'google/gemma-4-26b-a4b-it:free',
+    'openrouter': 'openrouter/free',
     'gemini': 'gemini-2.5-flash',
     'mistral': 'mistral-small-latest',      # رایگان، بدون بلاک ایران
     'groq': 'llama-3.3-70b-versatile',      # 14,400 req/day رایگان، سریع
@@ -438,7 +464,7 @@ def _model():
     ):
         return _PROVIDER_DEFAULT_MODEL[forced]
     if os.environ.get('OPENROUTER_API_KEY'):
-        return 'google/gemma-4-26b-a4b-it:free'
+        return 'openrouter/free'
     if os.environ.get('GEMINI_API_KEY'):
         return "gemini-2.5-flash"
     if os.environ.get('MISTRAL_API_KEY'):
@@ -1037,8 +1063,9 @@ def alert_recommendation_api(request):
             node = Node.objects.get(pk=node_id, owner=request.user)
             person_data['name'] = node.display_name()
             person_data['career'] = node.career or ''
-            info_obj = node.informations.first()
-            if info_obj and info_obj.data:
+            from .relationship_intelligence import grounded_information
+            info_obj = grounded_information(node)
+            if info_obj:
                 d = info_obj.data
                 person_data['personality'] = d.get('personality', '')
                 person_data['interests'] = d.get('interests', [])
@@ -1122,8 +1149,9 @@ def alert_greeting_api(request):
         name = node.display_name()
         if node.career:
             person_bits.append(f'شغل: {node.career}')
-        info_obj = node.informations.first()
-        if info_obj and isinstance(info_obj.data, dict):
+        from .relationship_intelligence import grounded_information
+        info_obj = grounded_information(node)
+        if info_obj:
             d = info_obj.data
             if d.get('interests'):
                 person_bits.append('علایق: ' + '، '.join(map(str, d['interests'][:4])))

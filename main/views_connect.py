@@ -207,8 +207,9 @@ def connect_plan_api(request, pk):
     # اطلاعات شخصیتی هدف (اگه ثبت شده)
     person = {'name': data['target_name'], 'career': data['target_career']}
     try:
-        info = target.informations.first()
-        if info and isinstance(info.data, dict):
+        from .relationship_intelligence import grounded_information
+        info = grounded_information(target)
+        if info:
             for k in ('personality', 'interests', 'values', 'preferences'):
                 if info.data.get(k):
                     person[k] = info.data[k]

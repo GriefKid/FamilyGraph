@@ -1972,6 +1972,16 @@ class AIProviderConfigTests(TestCase):
         'GROQ_API_KEY': '',
     }
 
+    def test_openrouter_uses_the_official_free_router_by_default(self):
+        from main.views_smart_features import _model
+        with mock.patch.dict('os.environ', {
+            **self.CLOUD_ENV,
+            'AI_PROVIDER': 'openrouter',
+            'OPENROUTER_API_KEY': 'key',
+            'AI_MODEL': '',
+        }, clear=False):
+            self.assertEqual(_model(), 'openrouter/free')
+
     def test_ai_provider_env_pins_the_backend(self):
         from main.views_smart_features import _ai_client, _model
         with mock.patch.dict('os.environ', {
@@ -2076,6 +2086,26 @@ class AIProviderConfigTests(TestCase):
         self.assertNotIsInstance(client, _AIClientFailover)
         self.assertEqual(configured, 'key')
         self.assertEqual(provider, 'openrouter')
+
+    def test_cloud_model_not_found_uses_the_local_fallback(self):
+        from main.views_smart_features import _ChatCompletionFailover
+
+        primary = mock.MagicMock()
+        primary.chat.completions.create.side_effect = RuntimeError('HTTP 404 model not found')
+        fallback = mock.MagicMock()
+        fallback.chat.completions.create.return_value = mock.MagicMock()
+        completions = _ChatCompletionFailover(primary, fallback, 'qwen2.5:3b')
+
+        result = completions.create(
+            model='missing:free',
+            messages=[{'role': 'user', 'content': 'سلام'}],
+            max_tokens=80,
+        )
+
+        self.assertIs(result, fallback.chat.completions.create.return_value)
+        kwargs = fallback.chat.completions.create.call_args.kwargs
+        self.assertEqual(kwargs['model'], 'qwen2.5:3b')
+        self.assertLessEqual(kwargs['max_tokens'], 48)
 
     def test_native_ollama_adapter_disables_thinking_and_maps_the_response(self):
         from main.views_smart_features import _OllamaChatCompletions

@@ -234,12 +234,13 @@ def borrow_suggest_api(request):
 
     names = {n.id: n.display_name() for n in Node.objects.filter(owner=user)}
 
-    # V9: نمره دوستی از شناخت‌نامه
+    # سلامت رابطه از تحلیل شواهدمحور ذخیره‌شده
     fscores = {}
     try:
         from .models import Information
+        from .relationship_intelligence import is_grounded_profile
         for nid_, d_ in Information.objects.filter(node__owner=user).values_list('node_id', 'data'):
-            if isinstance(d_, dict) and d_.get('friendship_score') is not None:
+            if is_grounded_profile(d_) and d_.get('friendship_score') is not None:
                 fscores[nid_] = int(d_['friendship_score'])
     except Exception:
         pass
@@ -261,12 +262,12 @@ def borrow_suggest_api(request):
         if fs is not None:
             if fs >= 70:
                 score += 3
-                reasons.append(f'💠 نمره دوستی {fs}/100')
+                reasons.append(f'💠 سلامت رابطه {fs}/100')
             elif fs < 40:
                 score -= 3
-                reasons.append(f'💠 نمره دوستی پایین ({fs})')
+                reasons.append(f'💠 سلامت رابطه پایین ({fs})')
             else:
-                reasons.append(f'💠 نمره دوستی {fs}')
+                reasons.append(f'💠 سلامت رابطه {fs}')
         if lent_before.get(nid):
             score += 3
             reasons.append(f'{lent_before[nid]} بار قبلاً قرض داده و خوش‌حساب بودی')
@@ -322,12 +323,13 @@ def ledger_view(request):
             p['next_due'] = d.due_date
 
     persons = sorted(per_person.values(), key=lambda p: p['net'])
-    # V9: نمره دوستی کنار حساب هر نفر
+    # سلامت رابطه کنار حساب هر نفر
     fscores = {}
     try:
         from .models import Information
+        from .relationship_intelligence import is_grounded_profile
         for nid_, d_ in Information.objects.filter(node__owner=user).values_list('node_id', 'data'):
-            if isinstance(d_, dict) and d_.get('friendship_score') is not None:
+            if is_grounded_profile(d_) and d_.get('friendship_score') is not None:
                 fscores[nid_] = int(d_['friendship_score'])
     except Exception:
         pass

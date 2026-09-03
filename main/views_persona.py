@@ -5,10 +5,11 @@ views_persona.py — موتور «شناخت» (V11)
 آثار فرهنگی و نمره‌هاش، شناخت‌نامه، ژورنال، چت‌ها، تعامل‌ها و حس‌ها،
 قرض‌ها، قول‌ها، رویدادهای زندگی، سلامت رابطه، اهداف…
 
-خروجی سنتز: جملات کلی و انسانی («قرمز دوست داره»، «شب‌ها سرحال‌تره»)
-بدون ذکر اینکه از کجا فهمیدیم.
+خروجی سنتز: جملات مستند با منبع و اطمینان. مدل زبانی فقط در صورت فعال‌سازی
+اختیاری متن را غنی‌تر می‌کند و اجازه ساخت ادعای بدون شاهد ندارد.
 """
 import json
+import os
 import threading
 
 from django.contrib.auth import get_user_model
@@ -76,7 +77,8 @@ def gather_person_signals(user, node):
 
     # ── شناخت‌نامه (Information) ──
     def _insight():
-        info = node.informations.first()
+        from .relationship_intelligence import grounded_information
+        info = grounded_information(node)
         d = info.data if (info and isinstance(info.data, dict)) else {}
         out = []
         for k, label in (('personality', 'شخصیت'), ('communication_style', 'سبک ارتباط'),
@@ -90,7 +92,7 @@ def gather_person_signals(user, node):
             if d.get(k):
                 out.append(f'{label}: ' + '، '.join(str(x) for x in list(d[k])[:5]))
         if d.get('friendship_score') is not None:
-            out.append(f'نمره دوستی: {d["friendship_score"]}/100')
+            out.append(f'سلامت رابطه: {d["friendship_score"]}/100')
         return out
     S += _safe(_insight, [])
 
@@ -443,49 +445,99 @@ def gather_rel_signals(user, rel):
 # ═══════════════════════════════════════════════════════════════
 
 def _synthesize(kind_label, signals):
-    """signals → jملات شناخت کلی. خروجی: (statements, summary) یا raise."""
+    """Build a grounded synthesis, with optional provider-based enrichment.
+
+    The default path is local and deterministic.  Set ``AI_ANALYSIS_ENRICH=1``
+    later (for example after enabling a paid model) to let an LLM rephrase the
+    same evidence.  Provider failure never removes the local result.
+    """
+    from .relationship_intelligence import evidence_statements
+
+    evidence = []
+    for index, signal in enumerate(signals[:90], start=1):
+        if isinstance(signal, dict) and signal.get('text'):
+            item = dict(signal)
+            item.setdefault('id', f'E{index}')
+            item.setdefault('source', 'legacy')
+            item.setdefault('source_label', item.get('source', 'شاهد'))
+            item.setdefault('confidence', 70)
+            item.setdefault('basis', 'observed')
+            evidence.append(item)
+        elif str(signal or '').strip():
+            evidence.append({
+                'id': f'E{index}',
+                'text': str(signal).strip()[:500],
+                'source': 'legacy',
+                'source_label': 'داده ثبت‌شده',
+                'confidence': 60,
+                'basis': 'observed',
+                'kind': 'other',
+            })
+
+    local_statements, local_summary = evidence_statements(evidence)
+    enrich = os.environ.get('AI_ANALYSIS_ENRICH', '0').strip().lower() in {
+        '1', 'true', 'yes', 'on',
+    }
+    if not enrich or not local_statements:
+        return local_statements, local_summary
+
     from .views_smart_features import _ai_client, _model, _extract_json
     client, api_key, _prov = _ai_client()
     if not api_key:
-        raise RuntimeError('کلید AI تنظیم نشده')
+        return local_statements, local_summary
 
-    data = '\n'.join(f'- {s}' for s in signals[:90])
-    prompt = f"""تو حافظه‌ی جمعی اپ FamilyGraph هستی. این‌ها همه‌ی چیزهاییه که اپ درباره‌ی {kind_label} می‌دونه:
+    allowed_ids = {item['id'] for item in evidence}
+    data = '\n'.join(
+        f'[{item["id"]}] ({item["confidence"]}/100، {item["source_label"]}) {item["text"]}'
+        for item in evidence[:40]
+    )
+    prompt = f"""درباره {kind_label} فقط بر اساس شواهد شماره‌دار زیر جمع‌بندی کن:
 
 {data}
 
-حالا «شناخت کلی» بده — مثل حرف زدن یه دوست قدیمی، نه گزارش داده:
-- جملات ساده و کلی («قرمز دوست داره»، «شب‌ها سرحال‌تره»، «به قولش عمل می‌کنه»)
-- هرگز نگو از کجا فهمیدی؛ منبع و عدد و آمار نیار مگه ضروری باشه
-- استنتاج سطح‌بالا مجازه اما جایی که مطمئن نیستی، با «احتمالاً/به نظر می‌رسه» بگو
-- حداکثر ۱۸ جمله، مرتب از مطمئن‌ترین به حدسی‌ترین
-- اگه «شناخت قبلی» توی داده‌ها هست، جمله‌های هنوز-درستش رو نگه دار و با یافته‌های جدید ترکیب کن
-- ⚠️ قانون تناقض: اگه دو نشانه با هم نمی‌خونن (مثلاً «از کارش ناراضیه» و «استعفا داده»)،
-  نشانه‌ی جدیدتر (تاریخ جلوتر) واقعیتِ الانه — جمله‌ی قدیمیِ باطل‌شده رو کلاً حذف کن،
-  یا اگه ارزش داره به شکل روایت بگو («از کارش ناراضی بود و آخرش استعفا داد»)
-- خروجی نباید هیچ دو جمله‌ی متناقضی داشته باشه — قبل از جواب، خودت چک کن
+قواعد قطعی:
+- تشخیص بالینی، ذهن‌خوانی، انگیزه پنهان و ادعای بدون شاهد ممنوع است.
+- هر جمله باید evidence_ids معتبر و confidence بین صفر تا صد داشته باشد.
+- مشاهده را از برداشت احتمالی با basis=observed/inferred جدا کن.
+- اگر داده کافی نیست همان را صریح بگو. حداکثر ۸ جمله کوتاه.
 
 JSON خالص:
-{{"statements": [{{"text": "...", "kind": "شخصیت/سلیقه/عادت/ارزش/رابطه"}}],
-  "summary": "جمع‌بندی ۲-۳ جمله‌ای"}}"""
-
-    resp = client.chat.completions.create(
-        model=_model(),
-        messages=[
-            {'role': 'system', 'content': 'حافظه‌ی جمعی و شناخت‌ساز. فقط JSON خالص.'},
-            {'role': 'user', 'content': prompt},
-        ],
-        max_tokens=1100,
-    )
-    result = _extract_json(resp.choices[0].message.content)
-    stmts = result.get('statements') or []
-    clean = []
-    for s in stmts[:18]:
-        if isinstance(s, dict) and s.get('text'):
-            clean.append({'text': str(s['text'])[:300], 'kind': str(s.get('kind', ''))[:30]})
-        elif isinstance(s, str) and s.strip():
-            clean.append({'text': s.strip()[:300], 'kind': ''})
-    return clean, str(result.get('summary', ''))[:600]
+{{"statements":[{{"text":"...","kind":"...","confidence":0,
+"evidence_ids":["E1"],"basis":"observed"}}],"summary":"حداکثر دو جمله"}}"""
+    try:
+        resp = client.chat.completions.create(
+            model=_model(),
+            messages=[
+                {'role': 'system', 'content': 'تحلیلگر شواهد رابطه. فقط JSON معتبر.'},
+                {'role': 'user', 'content': prompt},
+            ],
+            max_tokens=650,
+            temperature=0.15,
+        )
+        result = _extract_json(resp.choices[0].message.content)
+        clean = []
+        for statement in (result.get('statements') or [])[:8]:
+            if not isinstance(statement, dict) or not statement.get('text'):
+                continue
+            ids = [eid for eid in statement.get('evidence_ids', []) if eid in allowed_ids]
+            if not ids:
+                continue
+            try:
+                confidence = max(0, min(100, int(statement.get('confidence', 50))))
+            except (TypeError, ValueError):
+                confidence = 50
+            clean.append({
+                'text': str(statement['text'])[:300],
+                'kind': str(statement.get('kind', ''))[:30],
+                'confidence': confidence,
+                'evidence_ids': ids[:5],
+                'basis': 'inferred' if statement.get('basis') == 'inferred' else 'observed',
+            })
+        if clean:
+            return clean, str(result.get('summary') or local_summary)[:600]
+    except Exception:
+        pass
+    return local_statements, local_summary
 
 
 def _statement_text(s):
@@ -498,6 +550,23 @@ def _payload(p):
     prev_texts = {_statement_text(s) for s in (getattr(p, 'previous_statements', None) or [])}
     statements = p.statements or []
     fresh = [_statement_text(s) for s in statements if _statement_text(s) not in prev_texts]
+    confidence_values = []
+    evidence_ids = set()
+    source_labels = set()
+    for statement in statements:
+        if not isinstance(statement, dict):
+            continue
+        try:
+            confidence_values.append(max(0, min(100, int(statement.get('confidence')))))
+        except (TypeError, ValueError):
+            pass
+        evidence_ids.update(str(eid) for eid in (statement.get('evidence_ids') or []))
+        if statement.get('source_label'):
+            source_labels.add(str(statement['source_label']))
+    confidence = (
+        round(sum(confidence_values) / len(confidence_values)) if confidence_values else 0
+    )
+    from .relationship_intelligence import confidence_label
     return {
         'statements': statements,
         'summary': p.summary or '',
@@ -508,6 +577,10 @@ def _payload(p):
             if getattr(p, 'previous_synth_at', None) else None
         ),
         'updated_at': p.updated_at.strftime('%Y-%m-%d %H:%M') if p.updated_at else None,
+        'confidence': confidence,
+        'confidence_label': confidence_label(confidence),
+        'evidence_count': len(evidence_ids) or len(statements),
+        'source_labels': sorted(source_labels),
     }
 
 
@@ -530,9 +603,12 @@ def run_person_synthesis(user, node):
     """Synthesise one person's knowledge. Returns 'ok' | 'skipped' (no data).
     Raises on AI failure so callers can decide how to report it."""
     from .models import PersonaProfile
-    signals = gather_person_signals(user, node)
-    if len(signals) < 2:
+    legacy_signals = gather_person_signals(user, node)
+    if len(legacy_signals) < 2:
         return 'skipped'
+    from .relationship_intelligence import build_person_evidence
+    evidence = build_person_evidence(user, node)
+    signals = evidence if len([item for item in evidence if item.get('source') != 'profile']) else legacy_signals
     statements, summary = _synthesize(f'شخصِ «{node.display_name()}»', signals)
     existing = PersonaProfile.objects.filter(node=node, owner=user).first()
     PersonaProfile.objects.update_or_create(
@@ -549,8 +625,11 @@ def run_person_synthesis(user, node):
 def run_rel_synthesis(user, rel):
     """Synthesise one relationship's knowledge. Returns 'ok' | 'skipped'."""
     from .models import RelationshipProfile
-    signals = gather_rel_signals(user, rel)
-    if len(signals) < 2:
+    legacy_signals = gather_rel_signals(user, rel)
+    from .relationship_intelligence import build_relationship_evidence
+    evidence = build_relationship_evidence(user, rel)
+    signals = evidence or legacy_signals
+    if not signals:
         return 'skipped'
     label = f'رابطه‌ی «{rel.source.display_name()} و {rel.target.display_name()}»'
     statements, summary = _synthesize(label, signals)

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from datetime import date, timedelta
 from django.db.models import Q, ProtectedError, Prefetch
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
@@ -574,8 +575,9 @@ def node_detail(request, pk):
     # V9: شناخت‌نامه — تحلیل ذخیره‌شده
     node_insight = None
     try:
-        _info0 = informations.first() if hasattr(informations, 'first') else (informations[0] if informations else None)
-        if _info0 and isinstance(_info0.data, dict) and (
+        from .relationship_intelligence import grounded_information
+        _info0 = grounded_information(node)
+        if _info0 and (
                 _info0.data.get('friendship_score') is not None or _info0.data.get('personality')):
             node_insight = _info0.data
     except Exception:
@@ -1470,6 +1472,55 @@ def _fa_norm(text):
             .lower())
 
 
+def _named_nodes_for_query(user, query, limit=3):
+    """Resolve explicitly mentioned people without fuzzy cross-tenant search."""
+    qn = _fa_norm(query)
+    if not qn:
+        return []
+    matches = []
+    nodes = Node.objects.filter(owner=user).only(
+        'id', 'username', 'name', 'first_name', 'last_name', 'nickname', 'owner_id'
+    )
+    aliases_by_node = {}
+    try:
+        from .models import NodeAlias
+        for node_id, alias in NodeAlias.objects.filter(owner=user).values_list('node_id', 'alias'):
+            aliases_by_node.setdefault(node_id, []).append(alias)
+    except Exception:
+        pass
+    for node in nodes:
+        full_name = f'{node.first_name} {node.last_name}'.strip()
+        candidates = {
+            _fa_norm(value).strip()
+            for value in (
+                node.display_name(), node.username, node.name, node.nickname,
+                node.first_name, full_name, *aliases_by_node.get(node.id, []),
+            )
+            if value
+        }
+        candidates = {value for value in candidates if len(value) >= 2 and value not in _FA_STOPWORDS}
+        matched = [value for value in candidates if value in qn]
+        if matched:
+            matches.append((max(len(value) for value in matched), node))
+    matches.sort(key=lambda item: (-item[0], item[1].id))
+    return [node for _, node in matches[:limit]]
+
+
+def _persist_chat_exchange(user, user_message, reply, *, ephemeral=False):
+    if ephemeral:
+        return
+    try:
+        from .models import ChatMessage
+        user_chat = ChatMessage.objects.create(
+            role='user', content=user_message[:4000], owner=user,
+        )
+        ChatMessage.objects.create(role='assistant', content=(reply or '')[:4000], owner=user)
+        from .memory_pipeline import capture_text
+        capture_text(user, user_message, 'chat', user_chat.id)
+    except Exception:
+        pass
+
+
 _FA_STOPWORDS = {
     'من', 'تو', 'او', 'ما', 'شما', 'با', 'به', 'از', 'که', 'را', 'رو', 'در',
     'این', 'اون', 'آن', 'یه', 'یک', 'و', 'یا', 'کی', 'چی', 'چه', 'کجا', 'کِی',
@@ -1495,18 +1546,8 @@ def _retrieve_context(user, query, limit=8):
         return ''
 
     # People named in the question
-    named_ids, named_names = [], []
-    for node in Node.objects.filter(owner=user).only(
-            'id', 'username', 'name', 'first_name', 'last_name', 'nickname'):
-        blob = _fa_norm(' '.join(filter(None, [
-            node.username, node.name, node.first_name, node.last_name, node.nickname,
-        ])))
-        if blob and any(t in blob or blob_word in qn
-                        for t in terms
-                        for blob_word in blob.split()):
-            if any(w and w in qn for w in blob.split()):
-                named_ids.append(node.id)
-                named_names.append(node.display_name())
+    named_nodes = _named_nodes_for_query(user, query)
+    named_ids = [node.id for node in named_nodes]
 
     def _score(text):
         tn = _fa_norm(text)
@@ -1514,18 +1555,19 @@ def _retrieve_context(user, query, limit=8):
 
     lines = []
 
-    jq = JournalEntry.objects.filter(owner=user)
-    if named_ids:
-        jq = jq.filter(Q(mentioned_nodes__id__in=named_ids) | Q(text__icontains=query[:60]))
-    scored = sorted(
-        ((_score(j.text), j) for j in jq.order_by('-entry_date')[:400]),
-        key=lambda p: -p[0],
-    )
-    for s, j in scored[:limit]:
-        if s <= 0:
-            break
-        lines.append(f"- یادداشت {j.entry_date}: {j.text[:280]}"
-                     + (f" [حال: {j.mood}]" if j.mood else ""))
+    if getattr(user, 'ai_journal_enabled', True):
+        jq = JournalEntry.objects.filter(owner=user)
+        if named_ids:
+            jq = jq.filter(Q(mentioned_nodes__id__in=named_ids) | Q(text__icontains=query[:60]))
+        scored = sorted(
+            ((_score(j.text), j) for j in jq.order_by('-entry_date')[:400]),
+            key=lambda p: -p[0],
+        )
+        for s, j in scored[:limit]:
+            if s <= 0:
+                break
+            lines.append(f"- یادداشت {j.entry_date}: {j.text[:280]}"
+                         + (f" [حال: {j.mood}]" if j.mood else ""))
 
     try:
         iq = Interaction.objects.filter(owner=user).select_related('node')
@@ -1608,6 +1650,10 @@ def _retrieve_context(user, query, limit=8):
             if not named_ids and _score(profile.summary) <= 0:
                 continue
             statements = profile.statements if isinstance(profile.statements, list) else []
+            statements = [item for item in statements if isinstance(item, dict)
+                          and item.get('evidence_ids')]
+            if not statements:
+                continue
             details = ' | '.join(
                 str(item.get('text', item))[:140] if isinstance(item, dict) else str(item)[:140]
                 for item in statements[:4]
@@ -1622,6 +1668,9 @@ def _retrieve_context(user, query, limit=8):
             if named_ids and not participant_ids.intersection(named_ids):
                 continue
             if not named_ids and _score(profile.summary) <= 0:
+                continue
+            statements = profile.statements if isinstance(profile.statements, list) else []
+            if not any(isinstance(item, dict) and item.get('evidence_ids') for item in statements):
                 continue
             value = profile.summary[:260] if profile.summary else ''
             if value:
@@ -1761,14 +1810,17 @@ def chat_api(request):
 
     # V9: شناخت‌نامه — تحلیل‌های ذخیره‌شده هر شخص، خوانا برای AI
     info_lines = []
+    from .relationship_intelligence import is_grounded_profile
     for i in all_info:
         if root_node and i.node_id == root_node.id:
             continue
         d = i.data if isinstance(i.data, dict) else {}
+        if not is_grounded_profile(d):
+            continue
         nm = i.node.display_name()
         bits = []
         if d.get('friendship_score') is not None:
-            bits.append(f"نمره دوستی: {d['friendship_score']}/100")
+            bits.append(f"سلامت رابطه: {d['friendship_score']}/100")
         if d.get('personality'):
             bits.append(f"شخصیت: {str(d['personality'])[:140]}")
         if d.get('values'):
@@ -1786,7 +1838,10 @@ def chat_api(request):
     info_text = "\n".join(info_lines) or "موردی ثبت نشده"
 
     # یادداشت‌های اخیر
-    recent_journals = JournalEntry.objects.filter(owner=request.user).order_by('-entry_date')[:5]
+    recent_journals = (
+        JournalEntry.objects.filter(owner=request.user).order_by('-entry_date')[:5]
+        if getattr(request.user, 'ai_journal_enabled', True) else []
+    )
     journal_text = "\n".join(
         f"- {j.entry_date}: {j.text[:120]}{'...' if len(j.text) > 120 else ''}"
         + (f" [حال: {j.mood}]" if j.mood else "")
@@ -1837,8 +1892,19 @@ def chat_api(request):
         who_am_i = 'کاربر اصلی شبکه'
         rels_text = nodes_text = info_text = journal_text = actions_text = ledger_text = ''
         retrieved_context = ''
+        relationship_context = ''
     else:
         retrieved_context = _retrieve_context(request.user, user_message)
+        named_nodes = _named_nodes_for_query(request.user, user_message)
+        relationship_context = ''
+        if named_nodes:
+            try:
+                from .relationship_intelligence import chat_relationship_context
+                relationship_context = '\n\n'.join(
+                    chat_relationship_context(request.user, node) for node in named_nodes[:2]
+                )[:3600]
+            except Exception:
+                relationship_context = ''
         # Bound dynamic context so local models spend time answering, not reading.
         rels_text = rels_text[:3000]
         nodes_text = nodes_text[:3000]
@@ -1846,6 +1912,38 @@ def chat_api(request):
         journal_text = journal_text[:1800]
         actions_text = actions_text[:1800]
         ledger_text = ledger_text[:1800]
+
+        # Direct analysis questions do not need a generative model.  Returning
+        # the evidence engine's result keeps latency predictable and prevents
+        # confident hallucinations when a free provider is unavailable.
+        analysis_markers = (
+            'تحلیل', 'رابطه ام', 'رابطه‌ام', 'رابطه من', 'چی میدونی', 'چی می‌دونی',
+            'چقدر صمیم', 'سلامت رابطه', 'نمره رابطه', 'شناختت از',
+        )
+        if len(named_nodes) == 1 and any(marker in _fa_norm(user_message)
+                                         for marker in analysis_markers):
+            try:
+                from .relationship_intelligence import analyze_person_relationship
+                result = analyze_person_relationship(request.user, named_nodes[0])
+                parts = [result['relationship_quality'], result['personality']]
+                if result.get('red_flags'):
+                    parts.append('نکات نیازمند توجه: ' + '؛ '.join(result['red_flags'][:2]) + '.')
+                parts.append(result['tip'])
+                reply = ' '.join(part for part in parts if part)
+                _persist_chat_exchange(
+                    request.user, user_message, reply, ephemeral=bool(data.get('ephemeral')),
+                )
+                return JsonResponse({
+                    'reply': reply,
+                    'style': chat_style,
+                    'analysis': {
+                        'confidence': result['confidence'],
+                        'confidence_label': result['confidence_label'],
+                        'evidence_count': result['data_coverage']['evidence_count'],
+                    },
+                })
+            except Exception:
+                pass
 
     persian_policy = language_policy(chat_style)
     # Date questions must use the application clock, not the model's memory.
@@ -1872,15 +1970,15 @@ def chat_api(request):
         f"## کاربر کیست:\n{who_am_i}\n\n"
         f"## روابطش:\n{rels_text}\n\n"
         f"## افراد شبکه‌اش:\n{nodes_text}\n\n"
-        f"## شناخت‌نامه افراد (تحلیل‌های ذخیره‌شده — نمره دوستی، شخصیت، هشدارها):\n{info_text}\n\n"
+        f"## شناخت‌نامه افراد (فقط تحلیل شواهدمحور، همراه اطمینان):\n{info_text}\n\n"
         f"{retrieved_context}"
         f"## یادداشت‌های اخیرش:\n{journal_text}\n\n"
         f"## اقدامات اخیرش:\n{actions_text}\n\n"
         f"## قرض و طلب‌های باز:\n{ledger_text}\n\n"
         "قواعد: وقتی می‌گه «من» منظورش شخص اصلی بالاست. داده‌های شبکه رو فقط وقتی وسط بکش که "
         "به حرفش مربوطه — وسط درد دل آمار نریز. "
-        "وقتی درباره‌ی یه شخص خاص سوال می‌کنه یا تحلیل رابطه می‌خواد، حتماً از شناخت‌نامه‌ش "
-        "(نمره دوستی، شخصیت، ارزش‌ها، هشدارها) استفاده کن و تحلیلت رو مستند بده. "
+        "وقتی درباره‌ی یه شخص خاص سوال می‌کنه یا تحلیل رابطه می‌خواد، فقط از شواهد و شناخت‌نامه "
+        "معتبر استفاده کن؛ اطمینان پایین و کمبود داده را صریح بگو و شخصیت یا هشدار نساز. "
         "پاسخ‌ها کوتاه (۲ تا ۵ جمله) مگه تحلیل مفصل بخواد. "
         "به فارسی محاوره‌ای و صمیمی. اگه نشانه‌ی ناراحتی عمیق یا مداوم دیدی، با مهربونی پیشنهاد کن "
         "با یه آدم مورد اعتماد یا مشاور هم حرف بزنه — بدون بزرگ‌نمایی.\n\n"
@@ -1921,6 +2019,7 @@ def chat_api(request):
 
     try:
         client, ai_model = _get_ai_client_and_model()
+        generation_started = time.monotonic()
         from .views_smart_features import _OllamaClient
         is_local_ollama = isinstance(client, _OllamaClient)
         forced_provider = os.environ.get('AI_PROVIDER', '').strip().lower()
@@ -1934,9 +2033,13 @@ def chat_api(request):
                 [{"role": "system", "content": system_prompt}]
                 + ([] if local_mode else PERSIAN_FEW_SHOTS)
                 + history
+                + ([{
+                    'role': 'system',
+                    'content': '## شواهد مرتبط و قابل اتکا\n' + relationship_context,
+                }] if relationship_context else [])
                 + [{"role": "user", "content": user_message}]
             ),
-            'max_tokens': 48 if local_mode else 160,
+            'max_tokens': 48 if local_mode else 112,
             'temperature': 0.6,
         }
         if is_openrouter:
@@ -1979,7 +2082,8 @@ def chat_api(request):
         # یک فرصت بازنویسی سبک و محدود برای خروجی انگلیسی، رباتیک یا بیش‌ازحد بلند.
         # این مرحله داده‌های خصوصی گراف را دوباره ارسال نمی‌کند.
         quality_issues = persian_quality_issues(reply)
-        if quality_issues and not is_local_ollama and not local_timeout:
+        if (quality_issues and not is_local_ollama and not local_timeout
+                and time.monotonic() - generation_started < 2.5):
             try:
                 rewrite = client.chat.completions.create(
                     model=ai_model,
@@ -1993,7 +2097,7 @@ def chat_api(request):
                             ),
                         },
                     ],
-                    max_tokens=320,
+                    max_tokens=120,
                     temperature=0.35,
                 )
                 rewritten = normalize_persian_reply(rewrite.choices[0].message.content)
@@ -2009,17 +2113,9 @@ def chat_api(request):
         # ── V8: ذخیره‌ی دوطرفه — درد دل‌ها دیگه گم نمی‌شن ──
         # BUGFIX: صفحه insights هم از همین API استفاده می‌کنه؛ با فلگ ephemeral
         # سوال‌های اون صفحه دیگه حافظه‌ی همدم رو آلوده نمی‌کنن.
-        if not data.get('ephemeral'):
-            try:
-                from .models import ChatMessage
-                user_chat = ChatMessage.objects.create(role='user', content=user_message[:4000],
-                                                       owner=request.user)
-                ChatMessage.objects.create(role='assistant', content=(reply or '')[:4000],
-                                           owner=request.user)
-                from .memory_pipeline import capture_text
-                capture_text(request.user, user_message, 'chat', user_chat.id)
-            except Exception:
-                pass   # جدول migrate نشده — چت بدون حافظه هم کار کنه
+        _persist_chat_exchange(
+            request.user, user_message, reply, ephemeral=bool(data.get('ephemeral')),
+        )
 
         return JsonResponse({'reply': reply, 'style': chat_style})
     except Exception as e:
@@ -2078,12 +2174,13 @@ def graph_all_api(request):
     for i, g in enumerate(all_groups_sorted):
         group_color_map[g] = db_groups.get(g) or COMMUNITY_PALETTE[i % len(COMMUNITY_PALETTE)]
 
-    # V9: نمره دوستی از شناخت‌نامه
+    # سلامت رابطه از شناخت‌نامه شواهدمحور
     fscore_map = {}
     try:
+        from .relationship_intelligence import is_grounded_profile
         for nid_, d_ in Information.objects.filter(
                 node__owner=request.user).values_list('node_id', 'data'):
-            if isinstance(d_, dict) and d_.get('friendship_score') is not None:
+            if is_grounded_profile(d_) and d_.get('friendship_score') is not None:
                 fscore_map[nid_] = d_['friendship_score']
     except Exception:
         pass

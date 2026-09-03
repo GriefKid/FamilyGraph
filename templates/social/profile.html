@@ -170,10 +170,12 @@ function personaRender(p){
   if(!p || !(p.statements||[]).length){ box.textContent = 'هنوز شناختی ساخته نشده — دکمه بالا رو بزن.'; return; }
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   let html = '';
+  html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">اطمینان شواهد: <b>${esc(p.confidence??0)}/۱۰۰ (${esc(p.confidence_label||'کم')})</b> · ${esc(p.evidence_count||0)} شاهد${(p.source_labels||[]).length?' · '+p.source_labels.map(esc).join('، '):''}</div>`;
   if(p.summary) html += `<div style="padding:11px 14px;border-radius:12px;background:rgba(99,102,241,.08);border:1px dashed rgba(99,102,241,.35);font-size:13px;line-height:1.9;margin-bottom:10px;">${esc(p.summary)}</div>`;
   html += (p.statements||[]).map(s => `
     <div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px dashed rgba(255,255,255,.07);font-size:13px;align-items:baseline;">
       <span>✦</span><span style="flex:1;line-height:1.9;">${esc(s.text)}</span>
+      ${s.confidence!=null?`<span style="font-size:10px;color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:1px 7px;flex-shrink:0;">${esc(s.confidence)}٪</span>`:''}
       ${s.kind?`<span style="font-size:10px;color:var(--text-muted);border:1px solid var(--border);border-radius:999px;padding:1px 9px;flex-shrink:0;">${esc(s.kind)}</span>`:''}
     </div>`).join('');
   if(p.updated_at) html += `<div style="font-size:10px;color:var(--text-muted);margin-top:8px;">آخرین به‌روزرسانی: ${esc(p.updated_at)}</div>`;

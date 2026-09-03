@@ -253,12 +253,13 @@ def extra_theories(user):
                'کیفیت زندگی بزرگسالی بیشتر با روابطِ «انتخابی» (دوستی‌ها) همبسته است تا اجباری.',
     })
 
-    # ═══ 9. نمره‌های دوستی — از تحلیل‌های AI ذخیره‌شده ═══
+    # ═══ 9. سلامت رابطه‌ها — از تحلیل‌های شواهدمحور ذخیره‌شده ═══
     def _fscores():
         from .models import Information
+        from .relationship_intelligence import is_grounded_profile
         out = []
         for nid, d in Information.objects.filter(node__owner=user).values_list('node_id', 'data'):
-            if isinstance(d, dict) and d.get('friendship_score') is not None:
+            if is_grounded_profile(d) and d.get('friendship_score') is not None:
                 out.append((node_names.get(nid, '؟'), int(d['friendship_score'])))
         return out
     fs = _safe(_fscores, [])
@@ -273,10 +274,10 @@ def extra_theories(user):
         value = '—'; color = '#64748b'
         note = 'هنوز رابطه‌ای تحلیل نشده — توی پروفایل هر شخص «💠 تحلیل رابطه» رو بزن'
     cards.append({
-        'icon': '💠', 'name': 'نمره‌های دوستی',
-        'theory': 'Relationship Quality Index — FamilyGraph AI',
+        'icon': '💠', 'name': 'سلامت رابطه‌ها',
+        'theory': 'Evidence-based Relationship Health — FamilyGraph',
         'value': value, 'value_color': color, 'label': 'کیفیت‌سنجی روابط', 'note': note,
-        'tip': 'این نمره ترکیبیه از تحلیل AI روی گفتگوها و داده‌های رفتاری (تعامل، حس، وفای به عهد). '
+        'tip': 'این نمره از داده‌های ثبت‌شده مثل تعامل، حس، نبض رابطه و قدرت فعلی ساخته می‌شود و اطمینان جداگانه دارد. '
                'پژوهش‌های کیفیت رابطه (مثل مقیاس Rubin) نشون می‌دن خودآگاهی نسبت به کیفیت روابط، '
                'اولین قدم بهبودشونه — چیزی که اندازه گرفته بشه، مدیریت می‌شه.',
     })

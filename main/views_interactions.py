@@ -200,121 +200,12 @@ def node_relation_analyze_api(request, pk):
     except Node.DoesNotExist:
         return JsonResponse({'error': 'نود پیدا نشد'}, status=404)
 
-    from django.db.models import Q as _Q
-    from .models import Relationship, JournalEntry
-    nm = node.display_name()
-    facts = []
-
-    # رابطه با root
-    root = user.root_node
-    if root:
-        rels = Relationship.objects.filter(
-            _Q(source=root, target=node) | _Q(source=node, target=root), owner=user)
-        for r in rels:
-            facts.append(f"نوع رابطه: {r.rel or 'نامشخص'} | قدرت: {r.strength}/5 | وضعیت: {r.status}"
-                         + (f" | آشنایی از: {r.met_at}" if r.met_at else ""))
-
-    # سلامت
-    h = _node_health(user, node.id)
-    if h and h.get('status') != 'unknown':
-        facts.append(f"سلامت رابطه: {h['label']} | آخرین تعامل: {h['days_since']} روز پیش "
-                     f"| انتظار تماس: هر {h['expected']} روز")
-
-    # تعامل‌ها + حس‌ها
     try:
-        from .models import Interaction
-        inters = list(Interaction.objects.filter(owner=user, node=node)
-                      .order_by('-date')[:120])
-        if inters:
-            kinds = {}
-            feels = [i.feeling for i in inters if i.feeling]
-            for i in inters:
-                kinds[i.get_kind_display()] = kinds.get(i.get_kind_display(), 0) + 1
-            facts.append(f"{len(inters)} تعامل ثبت‌شده: " +
-                         '، '.join(f"{k}×{v}" for k, v in kinds.items()))
-            if feels:
-                avg = sum(feels) / len(feels)
-                facts.append(f"میانگین حس بعد از تعامل: {avg:+.2f} "
-                             f"({'انرژی‌بخش' if avg > 0.3 else ('انرژی‌گیر' if avg < -0.3 else 'خنثی')})")
-    except Exception:
-        pass
-
-    # ژورنال — آخرین ذکرها
-    try:
-        entries = list(node.journal_entries.filter(owner=user).order_by('-created_at')[:5])
-        for e in entries:
-            facts.append(f"یادداشت ({e.entry_date or e.created_at.date()}): {e.text[:180]}")
-    except Exception:
-        pass
-
-    # قرض و فالوآپ
-    try:
-        from .models import Debt
-        open_d = Debt.objects.filter(owner=user, node=node, settled=False).count()
-        done_d = Debt.objects.filter(owner=user, node=node, settled=True).count()
-        if open_d or done_d:
-            facts.append(f"حساب مالی: {open_d} قلم باز، {done_d} تسویه‌شده")
-    except Exception:
-        pass
-    try:
-        from .models import FollowUp
-        fu_o = FollowUp.objects.filter(owner=user, node=node, done=False).count()
-        fu_d = FollowUp.objects.filter(owner=user, node=node, done=True).count()
-        if fu_o or fu_d:
-            facts.append(f"موضوعات باز: {fu_o} باز، {fu_d} انجام‌شده")
-    except Exception:
-        pass
-
-    # شناخت قبلی
-    try:
-        info = node.informations.first()
-        if info and isinstance(info.data, dict) and info.data.get('personality'):
-            facts.append(f"شناخت قبلی: {str(info.data['personality'])[:200]}")
-    except Exception:
-        pass
-
-    if len(facts) < 2:
-        return JsonResponse({'error': 'داده‌ی کافی درباره این رابطه ثبت نشده — '
-                                      'چند تعامل/یادداشت ثبت کن یا از ایمپورت تلگرام بیا'}, status=400)
-
-    from .views_smart_features import _ai_client, _model, _extract_json, _rate_limit_msg
-    client, api_key, _prov = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'کلید AI تنظیم نشده'}, status=500)
-
-    prompt = f"""داده‌های ثبت‌شده درباره رابطه‌ی من و «{nm}» در اپ روابطم:
-
-""" + '\n'.join(f"- {f}" for f in facts) + f"""
-
-به‌عنوان روانشناس روابط، این رابطه رو تحلیل کن. منصف و مستند به همین داده‌ها. فارسی خودمونی.
-
-JSON خالص:
-{{
-  "personality": "برداشتت از {nm} بر اساس داده‌ها، ۲-۳ جمله",
-  "communication_style": "الگوی ارتباطی این رابطه در یک جمله",
-  "values": [], "interests": [],
-  "strengths": ["نقاط قوت این رابطه، حداکثر ۳"],
-  "red_flags": ["نکات هشدار اگه هست، حداکثر ۳"],
-  "relationship_quality": "کیفیت کلی در یک جمله",
-  "friendship_score": 0-100,
-  "score_reasons": ["۲-۳ دلیل کوتاه"],
-  "suggested_rel_type": "...", "suggested_strength": 1-5,
-  "tip": "یه توصیه عملی"
-}}"""
-
-    try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'روانشناس روابط — دقیق و مستند به داده. فقط JSON.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=1000,
-        )
-        result = _extract_json(resp.choices[0].message.content)
+        from .relationship_intelligence import analyze_person_relationship
+        result = analyze_person_relationship(user, node)
         return JsonResponse({'ok': True, 'result': result})
     except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+        return JsonResponse({'error': f'تحلیل داده‌ها انجام نشد: {str(e)[:160]}'}, status=500)
 
 
 # ═══════════════════════════════════════════════════════════════

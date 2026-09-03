@@ -410,7 +410,7 @@ JSON خالص:
 
 @login_required
 def telegram_relation_api(request):
-    """{name} → AI از روی گفتگو: شخصیت، اخلاقیات، نمره‌ی دوستی، پرچم قرمز و…"""
+    """Return a fast evidence-based analysis for an imported contact."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     body = _body(request) or {}
@@ -420,48 +420,34 @@ def telegram_relation_api(request):
     info = scan.get(name)
     if not info or not info.get('sample'):
         return JsonResponse({'error': 'نمونه‌ی متن در دسترس نیست — دوباره اسکن کن'}, status=410)
-
-    from .views_smart_features import _ai_client, _model, _extract_json, _rate_limit_msg
-    client, api_key, _prov = _ai_client()
-    if not api_key:
-        return JsonResponse({'error': 'کلید AI تنظیم نشده'}, status=500)
-
-    prompt = f"""نمونه‌ی گفتگوی من با «{name}» («من» = خودم، «او» = {name}):
-
-{info['sample']}
-
-به‌عنوان روانشناس روابط، این رابطه و شخص «{name}» رو از روی همین گفتگو تحلیل کن.
-منصف باش — از شواهد متن نتیجه بگیر، نه حدس کلی. فارسی خودمونی.
-
-JSON خالص:
-{{
-  "personality": "۲-۳ جمله درباره شخصیت و اخلاقیات {name}",
-  "communication_style": "سبک ارتباطیش در یک جمله",
-  "values": ["ارزش‌هایی که براش مهمه، حداکثر ۴"],
-  "interests": ["علایقش که از چت معلومه، حداکثر ۴"],
-  "strengths": ["نقاط قوت این رابطه، حداکثر ۳"],
-  "red_flags": ["نکات منفی/هشدار اگه هست، حداکثر ۳ — نبود، خالی"],
-  "relationship_quality": "کیفیت کلی رابطه در یک جمله",
-  "friendship_score": 0-100,
-  "score_reasons": ["چرا این نمره، ۲-۳ دلیل کوتاه"],
-  "suggested_rel_type": "دوست صمیمی / دوست / همکار / آشنا / خانواده",
-  "suggested_strength": 1-5,
-  "tip": "یه توصیه عملی برای بهتر شدن این رابطه"
-}}"""
+    try:
+        mapped = cache.get(f'tg_map_{request.user.id}') or {}
+        raw_node_id = body.get('node_id') or mapped.get(name)
+        node = Node.objects.get(pk=int(raw_node_id), owner=request.user)
+    except (TypeError, ValueError, Node.DoesNotExist):
+        return JsonResponse({
+            'error': 'اول مخاطب را روی یک شخص اعمال کن، بعد تحلیل رابطه را بزن.'
+        }, status=400)
 
     try:
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {'role': 'system', 'content': 'روانشناس روابط — دقیق، مستند به متن، بدون کلی‌گویی. فقط JSON.'},
-                {'role': 'user', 'content': prompt},
-            ],
-            max_tokens=1000,
+        from .relationship_intelligence import analyze_person_relationship
+        result = analyze_person_relationship(request.user, node)
+        active_days = len(info.get('days') or [])
+        import_reason = (
+            f'در فایل تلگرام {info.get("msgs", 0)} پیام در {active_days} روز فعال دیده شد'
         )
-        result = _extract_json(resp.choices[0].message.content)
+        result['score_reasons'] = [import_reason, *result.get('score_reasons', [])][:4]
+        result['import_observation'] = {
+            'messages': int(info.get('msgs') or 0),
+            'active_days': active_days,
+            'source': 'telegram_export',
+        }
+        result['pending_memory_note'] = (
+            'ویژگی‌های شخصیتی فقط بعد از تأیید پیشنهادهای حافظه وارد تحلیل می‌شوند.'
+        )
         return JsonResponse({'ok': True, 'result': result})
     except Exception as e:
-        return JsonResponse({'error': _rate_limit_msg(e)}, status=500)
+        return JsonResponse({'error': f'تحلیل داده‌های ایمپورت انجام نشد: {str(e)[:160]}'}, status=500)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -483,19 +469,21 @@ def telegram_save_relation_api(request):
     except Node.DoesNotExist:
         return JsonResponse({'error': 'نود پیدا نشد'}, status=404)
 
-    d = body.get('data') or {}
+    # Recompute on the server.  Never persist client-supplied AI claims as
+    # trusted profile data.
+    from .relationship_intelligence import analyze_person_relationship
+    d = analyze_person_relationship(user, node)
     from .models import Information
-    info = Information.objects.filter(node=node).first()
-    stored = info.data if (info and isinstance(info.data, dict)) else {}
+    from .relationship_intelligence import grounded_information
+    info = grounded_information(node)
+    stored = {}
 
     LIST_KEYS = ('values', 'interests', 'strengths', 'red_flags', 'score_reasons')
     STR_KEYS = ('personality', 'communication_style', 'relationship_quality',
                 'suggested_rel_type', 'tip')
     for k in LIST_KEYS:
         vals = d.get(k) or []
-        if vals:
-            old = stored.get(k) or []
-            stored[k] = list(dict.fromkeys(list(old) + [str(v) for v in vals]))[:12]
+        stored[k] = list(dict.fromkeys(str(v) for v in vals))[:12]
     for k in STR_KEYS:
         if d.get(k):
             stored[k] = str(d[k])[:400]
@@ -504,7 +492,13 @@ def telegram_save_relation_api(request):
             stored['friendship_score'] = max(0, min(100, int(d['friendship_score'])))
         except (TypeError, ValueError):
             pass
-    stored['analyzed_from'] = 'telegram_chat'
+    for key in ('score_label', 'confidence_label', 'generated_by'):
+        if d.get(key):
+            stored[key] = str(d[key])[:120]
+    stored['confidence'] = d.get('confidence', 0)
+    stored['data_coverage'] = d.get('data_coverage', {})
+    stored['evidence'] = d.get('evidence', [])[:24]
+    stored['analyzed_from'] = 'evidence_engine'
 
     if info:
         info.data = stored
@@ -516,7 +510,10 @@ def telegram_save_relation_api(request):
     strength_updated = False
     if body.get('set_strength'):
         try:
-            s = max(1, min(5, int(body.get('strength') or 3)))
+            suggested = d.get('suggested_strength')
+            if suggested is None:
+                raise ValueError('No grounded strength suggestion')
+            s = max(1, min(5, int(suggested)))
             root = user.root_node
             if root:
                 rel = Relationship.objects.filter(

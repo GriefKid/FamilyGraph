@@ -457,45 +457,49 @@ async function tgApplyMentions(ri, nodeId){
   }catch(e){ msg('tgMenMsg'+ri, 'خطای سرور', true); }
 }
 
-// ── تحلیل رابطه (شخصیت + نمره) ──
+// ── تحلیل شواهدمحور رابطه ──
 function scoreColor(s){ return s >= 70 ? 'linear-gradient(135deg,#10b981,#06b6d4)'
   : (s >= 40 ? 'linear-gradient(135deg,#f59e0b,#ec4899)' : 'linear-gradient(135deg,#ef4444,#ec4899)'); }
 async function tgRelation(ri, name, nodeId){
   const box = document.getElementById('tgRel'+ri);
   box.style.display = 'block';
-  box.innerHTML = '<span class="tg-meta">💠 AI داره رابطه رو تحلیل می‌کنه…</span>';
+  box.innerHTML = '<span class="tg-meta">💠 در حال جمع‌بندی شواهد ثبت‌شده…</span>';
   try{
     const r = await fetch('/api/import/telegram/relation/', {
       method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
-      body: JSON.stringify({name}) });
+      body: JSON.stringify({name, node_id:nodeId}) });
     const d = await r.json();
     if(!d.ok){ box.innerHTML = `<span class="tg-meta" style="color:#f87171">${esc(d.error||'خطا')}</span>`; return; }
     const R = d.result || {};
-    const score = parseInt(R.friendship_score) || 0;
+    const parsedScore = Number(R.friendship_score);
+    const hasScore = Number.isFinite(parsedScore);
+    const score = hasScore ? Math.max(0,Math.min(100,Math.round(parsedScore))) : null;
     const chips = (arr, cls) => (arr||[]).map(x => `<span class="tg-chip ${cls||''}">${esc(x)}</span>`).join('');
     box.innerHTML = `
       <div class="tg-score-wrap">
-        <div class="tg-score" style="background:${scoreColor(score)}">
-          <span class="s">${score}</span><span class="t">نمره دوستی</span>
+        <div class="tg-score" style="background:${hasScore?scoreColor(score):'linear-gradient(135deg,#64748b,#475569)'}">
+          <span class="s">${hasScore?score:'—'}</span><span class="t">سلامت رابطه</span>
         </div>
         <div style="flex:1;min-width:200px;">
           <div style="font-size:12.5px;line-height:1.9;">${esc(R.personality||'')}</div>
           <div class="tg-meta" style="margin-top:3px;">🗣 ${esc(R.communication_style||'')}</div>
+          <div class="tg-meta" style="margin-top:3px;">اطمینان: <b>${esc(R.confidence??0)}/۱۰۰ (${esc(R.confidence_label||'کم')})</b> · ${esc(R.data_coverage?.evidence_count||0)} شاهد</div>
         </div>
       </div>
       ${R.score_reasons ? `<div class="tg-meta">چرا این نمره:</div><div class="tg-chips">${chips(R.score_reasons)}</div>` : ''}
       ${(R.values||[]).length ? `<div class="tg-meta">ارزش‌ها:</div><div class="tg-chips">${chips(R.values,'green')}</div>` : ''}
       ${(R.interests||[]).length ? `<div class="tg-meta">علایق:</div><div class="tg-chips">${chips(R.interests)}</div>` : ''}
       ${(R.strengths||[]).length ? `<div class="tg-meta">قوت رابطه:</div><div class="tg-chips">${chips(R.strengths,'green')}</div>` : ''}
-      ${(R.red_flags||[]).length ? `<div class="tg-meta">⚠️ هشدارها:</div><div class="tg-chips">${chips(R.red_flags,'red')}</div>` : ''}
+      ${(R.red_flags||[]).length ? `<div class="tg-meta">⚠️ نکات نیازمند توجه:</div><div class="tg-chips">${chips(R.red_flags,'red')}</div>` : ''}
       <div style="font-size:12px;color:var(--text-soft);margin-top:6px;">💡 ${esc(R.tip||'')}</div>
+      ${R.pending_memory_note?`<div class="tg-meta" style="margin-top:7px;color:#fbbf24;">${esc(R.pending_memory_note)}</div>`:''}
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
         <button class="tg-btn ghost" style="padding:7px 16px;font-size:12px;"
           onclick="tgSaveRelation(${ri}, ${nodeId})">✓ ذخیره در پروفایل</button>
-        <label style="font-size:11.5px;color:var(--text-soft);display:flex;gap:5px;align-items:center;">
+        ${R.suggested_strength?`<label style="font-size:11.5px;color:var(--text-soft);display:flex;gap:5px;align-items:center;">
           <input type="checkbox" id="tgStrChk${ri}" checked style="accent-color:#a855f7">
           قدرت یال هم بشه ${R.suggested_strength||3} (پیشنهاد: ${esc(R.suggested_rel_type||'')})
-        </label>
+        </label>`:''}
         <span class="tg-msg" id="tgRelMsg${ri}"></span>
       </div>`;
     box.dataset.result = JSON.stringify(R);
@@ -509,7 +513,7 @@ async function tgSaveRelation(ri, nodeId){
       method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
       body: JSON.stringify({
         node_id: nodeId, data: R,
-        set_strength: document.getElementById('tgStrChk'+ri).checked,
+        set_strength: document.getElementById('tgStrChk'+ri)?.checked || false,
         strength: R.suggested_strength || 3 })
     });
     const d = await r.json();
