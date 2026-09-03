@@ -64,8 +64,9 @@ class _AIClientFailover:
         )
 
 
-_OLLAMA_DEFAULT_MODEL = 'hamdam-fa:latest'
+_OLLAMA_DEFAULT_MODEL = 'qwen2.5:3b'
 _OLLAMA_MODEL_PREFERENCES = (
+    'qwen2.5:3b',
     'hamdam-fa:latest',
     'hamdam-fa',
     'qwen3:8b',
