@@ -128,6 +128,48 @@ def expected_days_for(tier, rel_strength=None):
     return DEFAULT_EXPECTED_DAYS
 
 
+LEARNED_CADENCE_MIN_INTERACTIONS = 4   # ≥3 gaps
+LEARNED_CADENCE_BOUNDS = (7, 365)
+
+
+def learned_cadence_map(user):
+    """node_id → فاصلهٔ معمولِ واقعیِ تعامل با هر نفر (median فاصله‌ها).
+
+    فقط برای کسانی که تعامل کافی ثبت شده. این باعث می‌شود «سلامت رابطه»
+    الگوی خودِ شما را یاد بگیرد؛ رفیقی که ماهی یک‌بار می‌بینید نباید بعد از
+    ۲۰ روز «سرد شده» علامت بخورد.
+    """
+    def _q():
+        from .models import Interaction
+        rows = list(
+            Interaction.objects.filter(owner=user)
+            .exclude(node__isnull=True)
+            .order_by('node_id', 'date')
+            .values_list('node_id', 'date')
+        )
+        by_node = {}
+        for nid, d in rows:
+            if d is not None:
+                by_node.setdefault(nid, []).append(d)
+        low, high = LEARNED_CADENCE_BOUNDS
+        out = {}
+        for nid, dates in by_node.items():
+            if len(dates) < LEARNED_CADENCE_MIN_INTERACTIONS:
+                continue
+            gaps = sorted(
+                (dates[i + 1] - dates[i]).days
+                for i in range(len(dates) - 1)
+                if (dates[i + 1] - dates[i]).days > 0
+            )
+            if len(gaps) < 3:
+                continue
+            mid = len(gaps) // 2
+            median = gaps[mid] if len(gaps) % 2 else (gaps[mid - 1] + gaps[mid]) / 2
+            out[nid] = int(max(low, min(high, round(median))))
+        return out
+    return _safe(_q, {})
+
+
 def _score(days_since, expected):
     """امتیاز 0..100 + وضعیت."""
     ratio = days_since / expected if expected else 0
@@ -185,16 +227,28 @@ def compute_health(user):
         return {}
 
     tiers = closeness_map(user)
+    learned = learned_cadence_map(user)
 
     result = {}
     for n in nodes:
         closeness = tiers.get(n.id, '')
-        expected = expected_days_for(closeness, strength_map.get(n.id))
+        # An explicit closeness tier is the user's own choice and wins. Otherwise
+        # prefer the cadence learned from real interactions, then rel-strength.
+        if closeness:
+            expected = expected_days_for(closeness)
+            expected_source = 'closeness'
+        elif n.id in learned:
+            expected = learned[n.id]
+            expected_source = 'learned'
+        else:
+            expected = expected_days_for(None, strength_map.get(n.id))
+            expected_source = 'strength' if strength_map.get(n.id) else 'default'
         entry = {
             'node_id':    n.id,
             'name':       n.display_name(),
             'closeness':  closeness,
             'expected':   expected,
+            'expected_source': expected_source,
             'last_date':  None,
             'last_source': None,
             'days_since': None,

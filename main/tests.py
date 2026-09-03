@@ -1602,6 +1602,52 @@ class PersonaVersioningTests(TestCase):
         self.assertEqual([s['text'] for s in p.statements], ['نسخهٔ دوم'])
 
 
+class LearnedCadenceTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='cad', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='cad-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.monthly = Node.objects.create(owner=self.user, username='monthly-friend')
+        Relationship.objects.create(owner=self.user, source=self.root, target=self.monthly, strength=5)
+
+    def test_cadence_is_learned_from_real_interaction_gaps(self):
+        from main.health import learned_cadence_map, compute_health
+        base = timezone.localdate() - timedelta(days=200)
+        for i in range(6):                       # every ~30 days
+            Interaction.objects.create(owner=self.user, node=self.monthly, kind='call',
+                                       date=base + timedelta(days=30 * i))
+        cadence = learned_cadence_map(self.user)
+        self.assertIn(self.monthly.id, cadence)
+        self.assertTrue(26 <= cadence[self.monthly.id] <= 34)
+
+        # Last seen 25 days ago: fixed strength-5 table (14d) would call this
+        # 'red'; the learned ~30d cadence keeps it healthy.
+        Interaction.objects.create(owner=self.user, node=self.monthly, kind='call',
+                                   date=timezone.localdate() - timedelta(days=25))
+        h = compute_health(self.user)[self.monthly.id]
+        self.assertEqual(h['expected_source'], 'learned')
+        self.assertEqual(h['status'], 'green')
+
+    def test_too_few_interactions_fall_back_to_the_fixed_table(self):
+        from main.health import learned_cadence_map
+        for i in range(2):
+            Interaction.objects.create(owner=self.user, node=self.monthly, kind='call',
+                                       date=timezone.localdate() - timedelta(days=10 * i))
+        self.assertNotIn(self.monthly.id, learned_cadence_map(self.user))
+
+    def test_explicit_closeness_tier_still_wins(self):
+        from main.models import NodeCloseness
+        from main.health import compute_health
+        base = timezone.localdate() - timedelta(days=200)
+        for i in range(6):
+            Interaction.objects.create(owner=self.user, node=self.monthly, kind='call',
+                                       date=base + timedelta(days=30 * i))
+        NodeCloseness.objects.create(owner=self.user, node=self.monthly, tier='inner')
+        h = compute_health(self.user)[self.monthly.id]
+        self.assertEqual(h['expected_source'], 'closeness')
+
+
 class AttentionPriorityTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='attn', password='SecurePass1')
