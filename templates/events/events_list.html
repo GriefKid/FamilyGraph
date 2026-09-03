@@ -74,12 +74,22 @@
 .btn-journal:hover{background:rgba(16,185,129,.2);}
 
 .empty-state{text-align:center;padding:60px 20px;color:var(--text-muted);font-size:14px;}
+@media(max-width:640px){
+  .timeline{padding-right:17px;}
+  .tl-item{padding-right:20px;padding-bottom:14px;}
+  .tl-card{padding:13px 12px;border-radius:14px;}
+  .tl-actions{justify-content:stretch;flex-wrap:wrap;}
+  .tl-actions > *{flex:1 1 120px;}
+  .tl-actions form{margin:0;}
+  .tl-actions .btn,.tl-actions .btn-journal{width:100%;justify-content:center;}
+}
 </style>
 {% endblock %}
 
 {% block content %}
 {% load tz %}
-<form method="get" action="{% url 'events_list' %}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
+<div class="events-page">
+<form method="get" action="{% url 'events_list' %}" role="search" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px;">
   <input class="search-input" type="search" name="q" value="{{ current_query }}" placeholder="جست‌وجوی عنوان، توضیح یا شرکت‌کننده" aria-label="جست‌وجوی رویدادها">
   <select class="form-control" name="scope" aria-label="محدوده رویداد">
     <option value="">همه رویدادها</option>
@@ -191,6 +201,8 @@
   {% endwith %}
 
 {% endif %}
+
+</div>
 
 {% if page_obj and page_obj.paginator.num_pages > 1 %}
 <nav aria-label="صفحه‌های رویداد" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:24px 0 8px;flex-wrap:wrap">

@@ -328,6 +328,22 @@
   background:rgba(99,102,241,.14); color:var(--primary-light); cursor:pointer; }
 .nc-chat{ position:absolute; bottom:10px; left:10px; right:auto; z-index:2; }
 .nc-chat:hover,.nli-chat:hover{ background:rgba(99,102,241,.28); }
+.people-tip{ margin:18px 0 4px; padding:10px 13px; border:1px solid var(--border-soft); border-radius:12px; color:var(--text-muted); background:var(--surface); font-size:11px; line-height:1.8; }
+@media(max-width:640px){
+  .stats-strip{ margin-bottom:15px !important; }
+  .toolbar{ align-items:stretch; margin-bottom:16px; }
+  .search-wrap{ min-width:100%; }
+  .toolbar > select{ flex:1; min-width:0; }
+  .view-toggle{ margin-inline-start:auto; }
+  .node-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .node-card{ min-height:172px; padding:17px 9px 14px; }
+  .nc-avatar,.nc-avatar-ph{ width:58px; height:58px; }
+  .nc-avatar-ph{ font-size:20px; }
+  .node-list-item{ padding:11px 10px; gap:9px; }
+  .nli-chat{ display:none; }
+  .nli-meta{ gap:6px; }
+}
+@media(max-width:360px){ .node-grid{ grid-template-columns:1fr; } }
 {% for i in "123456789012345678901234" %}
 .node-card:nth-child({{ forloop.counter }}),.node-list-item:nth-child({{ forloop.counter }}){ animation-delay:{{ forloop.counter0 }}0ms; }
 {% endfor %}
@@ -337,6 +353,7 @@
 
 {% block content %}
 
+<div class="people-page">
 <div class="stats-strip" style="margin-bottom:24px;">
   <div class="stat-pill">
     <div class="stat-pill-num">{% if page_obj %}{{ page_obj.paginator.count }}{% else %}{{ nodes|length }}{% endif %}</div>
@@ -469,6 +486,10 @@
   {% if page_obj.has_next %}<a class="btn btn-sm" href="?page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
 </div>
 {% endif %}
+
+<div class="people-tip" role="note">با جست‌وجو نام، نام کاربری یا شغل را پیدا کن؛ از فیلترها برای رسیدن سریع‌تر به آدم‌های مهم استفاده کن.</div>
+
+</div>
 
 <script>
 // چت با کسی که هم توی لیستم است هم از اپ استفاده می‌کند و کانکشنم است

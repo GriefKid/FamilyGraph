@@ -4,8 +4,9 @@ Smart Features: Alerts, Psychology Analysis, Daily Tips
 import json
 import os
 import time
+from types import SimpleNamespace
 from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 from datetime import date, timedelta
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -63,8 +64,10 @@ class _AIClientFailover:
         )
 
 
-_OLLAMA_DEFAULT_MODEL = 'qwen3:8b'
+_OLLAMA_DEFAULT_MODEL = 'hamdam-fa:latest'
 _OLLAMA_MODEL_PREFERENCES = (
+    'hamdam-fa:latest',
+    'hamdam-fa',
     'qwen3:8b',
     'qwen3:14b',
     'gemma3:12b',
@@ -148,11 +151,65 @@ def _ollama_model(models=None, configured_model=None):
     return models[0]
 
 
+class _OllamaChatCompletions:
+    """Small OpenAI-shaped adapter backed by Ollama's native chat API."""
+
+    def __init__(self, base_url):
+        self.base_url = base_url
+
+    def create(self, *args, **kwargs):
+        if args:
+            raise TypeError('Ollama chat completion only accepts keyword arguments')
+        model = kwargs.pop('model')
+        messages = kwargs.pop('messages')
+        options = {}
+        if kwargs.get('max_tokens') is not None:
+            options['num_predict'] = kwargs['max_tokens']
+        for name in ('temperature', 'top_p'):
+            if kwargs.get(name) is not None:
+                options[name] = kwargs[name]
+
+        payload = {
+            'model': model,
+            'messages': messages,
+            'stream': False,
+            'think': False,
+        }
+        if options:
+            payload['options'] = options
+        response_format = kwargs.get('response_format')
+        if isinstance(response_format, dict) and response_format.get('type') == 'json_object':
+            payload['format'] = 'json'
+
+        request = Request(
+            f'{self.base_url}/api/chat',
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+        )
+        timeout = max(1.0, float(os.environ.get('OLLAMA_REQUEST_TIMEOUT', '240')))
+        with urlopen(request, timeout=timeout) as response:
+            result = json.loads(response.read().decode('utf-8'))
+        content = result.get('message', {}).get('content', '')
+        return SimpleNamespace(
+            model=result.get('model', model),
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(content=content),
+            )],
+        )
+
+
+class _OllamaClient:
+    def __init__(self, base_url):
+        self.chat = SimpleNamespace(
+            completions=_OllamaChatCompletions(base_url)
+        )
+
+
 def _ollama_client(models=None):
     """Return the local Ollama client and a model that is actually installed."""
     models = _ollama_model_names() if models is None else tuple(models)
     model = _ollama_model(models=models)
-    return OpenAI(base_url=f'{_ollama_base_url()}/v1', api_key='ollama'), model
+    return _OllamaClient(_ollama_base_url()), model
 
 
 def _available_ollama_client():

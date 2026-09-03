@@ -1731,8 +1731,19 @@ def chat_api(request):
         pass
 
     persian_policy = language_policy(chat_style)
+    # Date questions must use the application clock, not the model's memory.
+    # The product timezone is Asia/Tehran, so inject an authoritative date and
+    # weekday into every chat request.
+    today = timezone.localdate()
+    from .utils_jalali import jalali_full_str, jalali_day_name
+    date_context = (
+        f"AUTHORITATIVE CURRENT DATE (Asia/Tehran): Gregorian {today.isoformat()}; "
+        f"Persian calendar {jalali_full_str(today)}; weekday {jalali_day_name(today)}. "
+        "For questions about امروز, امروز چند شنبه است, or the current date, "
+        "use this exact context and do not guess."
+    )
     system_prompt = (
-        persian_policy + "\n\n"
+        date_context + "\n\n" + persian_policy + "\n\n"
         "تو «همدم» هستی — همراهِ شخصی صاحب این شبکه روابط. دو نقش داری و بسته به حرف کاربر "
         "روان بین‌شون جابه‌جا می‌شی:\n\n"
         "۱) **همدمِ درد دل** — وقتی کاربر از احساساتش می‌گه (دلخوری، تنهایی، استرس، دعوا، دلتنگی، شادی): "
@@ -1769,7 +1780,7 @@ def chat_api(request):
                 + history
                 + [{"role": "user", "content": user_message}]
             ),
-            max_tokens=1024,
+            max_tokens=256,
             temperature=0.6,
         )
         from .views_smart_features import _strip_reasoning

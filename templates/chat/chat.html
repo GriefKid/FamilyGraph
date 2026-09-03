@@ -13,8 +13,20 @@
 .chat-wrap{
 display:flex;
 flex-direction:column;
-height:calc(100vh - 54px);
+height:calc(100dvh - var(--topbar-h) - 52px);
+min-height:460px;
+max-width:980px;
+margin:0 auto;
+overflow:hidden;
+border:1px solid var(--border);
+border-radius:20px;
+background:linear-gradient(180deg,rgba(99,102,241,.045),rgba(255,255,255,.012));
+box-shadow:0 18px 50px rgba(0,0,0,.18);
 }
+
+.chat-status{display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--border);background:rgba(6,6,20,.5);color:var(--text-soft);font-size:11px;flex-wrap:wrap}
+.chat-status-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 10px rgba(16,185,129,.65)}
+.chat-status-note{margin-right:auto;color:var(--text-muted)}
 
 .chat-messages{
 flex:1;
@@ -98,6 +110,7 @@ animation:dot .9s infinite;
 .typing-dots span:nth-child(2){ animation-delay:.2s; }
 .typing-dots span:nth-child(3){ animation-delay:.4s; }
 @keyframes dot{ 0%,80%,100%{opacity:.3} 40%{opacity:1} }
+.typing-label{font-size:11px;color:var(--text-muted);margin-right:8px}
 
 /* input bar */
 .chat-input-bar{
@@ -124,6 +137,10 @@ cursor:pointer;
 }
 
 @media (max-width:640px){
+  .chat-wrap{height:calc(100dvh - var(--topbar-h) - 104px);min-height:400px;border-radius:16px}
+  .chat-messages{padding:16px 12px;gap:12px}
+  .chat-status{padding:9px 12px}
+  .chat-status-note{width:100%;margin-right:0}
   .chat-input-bar{flex-wrap:wrap;padding:10px 12px}
   .chat-style{order:-1;width:100%}
 }
@@ -227,6 +244,12 @@ color:var(--primary);
 
 {% block content %}
 <div class="chat-wrap">
+
+  <div class="chat-status" role="status" aria-live="polite">
+    <span class="chat-status-dot" aria-hidden="true"></span>
+    <strong>همدم آماده است</strong>
+    <span class="chat-status-note">مدل محلی · اطلاعات شبکه فقط از حساب خودت خوانده می‌شود</span>
+  </div>
 
   <div class="chat-messages" id="msgList">
     {% for m in past_messages %}
@@ -334,7 +357,10 @@ function showTyping(){
   const dots=document.createElement("div")
   dots.className="typing-dots"
   for(let i=0;i<3;i++) dots.appendChild(document.createElement("span"))
-  bubble.appendChild(dots)
+  const label=document.createElement("span")
+  label.className="typing-label"
+  label.textContent="در حال فکر کردن…"
+  bubble.append(dots,label)
 
   div.appendChild(avatar)
   div.appendChild(bubble)
@@ -361,12 +387,15 @@ async function sendMessage(){
 
   appendMsg("user",msg)
   showTyping()
+  const controller=new AbortController()
+  const abortTimer=setTimeout(()=>controller.abort(),90000)
 
   try{
     let res=await fetch("/api/chat/",{
       method:"POST",
       headers:{"Content-Type":"application/json","X-CSRFToken":getCookie("csrftoken")},
-      body:JSON.stringify({message:msg, history:chatHistory, style:chatStyle.value})
+      body:JSON.stringify({message:msg, history:chatHistory, style:chatStyle.value}),
+      signal:controller.signal
     })
     let data=await res.json()
     removeTyping()
@@ -379,8 +408,13 @@ async function sendMessage(){
     else appendMsg("ai","خطا: "+(data.error||"نامشخص"))
   }catch(e){
     removeTyping()
+    if(e.name==="AbortError"){
+      appendMsg("ai","پاسخ‌گویی بیش از حد طول کشید. یک سؤال کوتاه‌تر امتحان کن یا دوباره بفرست.")
+      return
+    }
     appendMsg("ai","خطا در ارتباط با سرور.")
   }finally{
+    clearTimeout(abortTimer)
     sendBtn.disabled=false
     chatInput.focus()
   }

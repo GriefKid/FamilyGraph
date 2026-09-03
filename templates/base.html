@@ -1170,6 +1170,59 @@ input:focus, textarea:focus, select:focus{
   *, *::before, *::after{ animation-duration:.001s !important; transition-duration:.001s !important; }
 }
 
+/* Product UX pass: calm hierarchy, reliable mobile shell, clear states. */
+:root{ --content-max:1440px; --mobile-nav-h:68px; }
+.content{ width:100%; max-width:var(--content-max); margin-inline:auto; }
+button:disabled,.btn:disabled{ opacity:.58; cursor:wait; filter:saturate(.7); }
+.btn,.briefing-btn,.chat-send{ min-height:40px; }
+input,textarea,select{ min-height:42px; }
+textarea{ min-height:96px; }
+input[type="checkbox"],input[type="radio"]{ min-height:0; width:auto; }
+.chat-input{ min-height:46px; }
+.card,.section,.briefing-card{ box-shadow:0 8px 24px rgba(0,0,0,.14); }
+.card:hover,.section:hover,.briefing-card:hover{ box-shadow:0 12px 32px rgba(0,0,0,.22); }
+.nav-item{ min-height:40px; }
+.nav-group + .nav-group{ border-top:1px solid var(--border-soft); margin-top:8px; padding-top:4px; }
+.topbar-right{ min-width:0; }
+.content > *{ min-width:0; }
+.table-wrap{ width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--border); border-radius:14px; }
+.table-wrap table{ width:100%; min-width:620px; border-collapse:collapse; }
+.table-wrap th,.table-wrap td{ padding:11px 13px; border-bottom:1px solid var(--border-soft); text-align:right; vertical-align:middle; }
+.table-wrap th{ color:var(--text-muted); font-size:11px; font-weight:800; background:var(--surface); white-space:nowrap; }
+.table-wrap td{ color:var(--text-soft); font-size:12px; }
+.table-wrap tr:last-child td{ border-bottom:0; }
+.state-card{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-height:170px; padding:28px 20px; border:1px dashed var(--border-strong); border-radius:16px; background:linear-gradient(145deg,var(--card),var(--surface)); color:var(--text-muted); text-align:center; }
+.state-card strong{ color:var(--text); font-size:14px; }
+.state-card p{ max-width:420px; margin:0; font-size:12px; line-height:1.9; }
+.section-heading{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin:24px 0 12px; }
+.section-heading h2,.section-heading h3{ margin:0; font-size:16px; }
+.section-heading p{ margin:3px 0 0; color:var(--text-muted); font-size:11px; }
+.field-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.field-grid > *{ min-width:0; }
+.form-actions{ display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.btn:focus-visible,.nav-item:focus-visible,.mobile-nav-item:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{ outline:2px solid var(--primary-light); outline-offset:2px; }
+.is-loading{ position:relative; pointer-events:none; }
+.is-loading::after{ content:''; width:13px; height:13px; margin-inline-start:7px; display:inline-block; vertical-align:-2px; border:2px solid currentColor; border-left-color:transparent; border-radius:50%; animation:fgSpin .7s linear infinite; }
+@keyframes fgSpin{ to{ transform:rotate(360deg); } }
+.mobile-bottom-nav{ display:none; }
+.mobile-bottom-nav a{ -webkit-tap-highlight-color:transparent; }
+.mobile-nav-add{ display:flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:15px; background:var(--grad-brand); color:#fff !important; font-size:25px; line-height:1; box-shadow:0 8px 22px rgba(99,102,241,.34); transform:translateY(-12px); border:3px solid var(--bg); }
+.mobile-nav-add:active{ transform:translateY(-10px) scale(.95); }
+.mobile-nav-item{ color:var(--text-soft); text-decoration:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-width:0; font-size:10px; font-weight:700; border-radius:12px; padding:5px 3px; }
+.mobile-nav-item .mobile-nav-icon{ font-size:19px; line-height:1.1; }
+.mobile-nav-item.active{ color:var(--primary-light); background:var(--primary-glow); }
+@media (max-width:860px){
+  .content{ padding-bottom:calc(92px + env(safe-area-inset-bottom)); }
+  .section-heading{ align-items:flex-start; flex-direction:column; }
+  .field-grid{ grid-template-columns:1fr; }
+  .form-actions{ justify-content:stretch; }
+  .form-actions > .btn,.form-actions > button,.form-actions > a{ flex:1 1 140px; }
+  .site-footer{ padding-bottom:calc(82px + env(safe-area-inset-bottom)); }
+  .mobile-bottom-nav{ position:fixed; right:10px; left:10px; bottom:calc(8px + env(safe-area-inset-bottom)); height:var(--mobile-nav-h); z-index:80; display:grid; grid-template-columns:repeat(2,1fr) 56px repeat(2,1fr); align-items:center; gap:2px; padding:6px 7px; border:1px solid var(--border-strong); border-radius:21px; background:color-mix(in srgb,var(--bg2) 88%,transparent); box-shadow:0 16px 42px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.06); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+  .light .mobile-bottom-nav{ background:rgba(255,255,255,.9); box-shadow:0 12px 32px rgba(56,54,130,.18); }
+}
+@media (max-width:420px){ .mobile-bottom-nav{ right:6px; left:6px; } .mobile-nav-item{ font-size:9px; } }
+
 {% block extra_css %}{% endblock %}
 
 </style>
@@ -1354,6 +1407,15 @@ input:focus, textarea:focus, select:focus{
   </footer>
 
 </div>
+
+<!-- Mobile primary navigation -->
+<nav class="mobile-bottom-nav" aria-label="ناوبری اصلی موبایل">
+  <a class="mobile-nav-item" data-mobile-nav="home" href="/" aria-label="امروز من"><span class="mobile-nav-icon">⌂</span><span>امروز</span></a>
+  <a class="mobile-nav-item" data-mobile-nav="people" href="/people/" aria-label="آدم‌ها"><span class="mobile-nav-icon">♧</span><span>آدم‌ها</span></a>
+  <a class="mobile-nav-add" href="/relationship-life/?quick=1" aria-label="ثبت سریع">＋</a>
+  <a class="mobile-nav-item" data-mobile-nav="journal" href="/journal/" aria-label="خاطرات و ژورنال"><span class="mobile-nav-icon">✎</span><span>ژورنال</span></a>
+  <a class="mobile-nav-item" data-mobile-nav="chat" href="/chat/" aria-label="همدم"><span class="mobile-nav-icon">✦</span><span>همدم</span></a>
+</nav>
 
 <!-- ══════════ SCRIPTS ══════════ -->
 <script>
@@ -1746,6 +1808,54 @@ async function enableFGNotifications(){
   // Insert before creation shortcuts so related destinations stay together.
   const firstShortcut = more.firstElementChild;
   items.forEach(item => more.insertBefore(item, firstShortcut));
+})();
+</script>
+<script>
+// Shared interaction polish: mobile active state and consistent form feedback.
+(() => {
+  const path = location.pathname.replace(/\/$/, '') || '/';
+  document.querySelectorAll('[data-mobile-nav]').forEach(link => {
+    const target = link.dataset.mobileNav;
+    const active = target === 'home' ? path === '' || path === '/' :
+      target === 'people' ? path.startsWith('/people') || path.startsWith('/nodes') :
+      target === 'journal' ? path.startsWith('/journal') :
+      target === 'chat' ? path.startsWith('/chat') : false;
+    link.classList.toggle('active', active);
+    if(active) link.setAttribute('aria-current', 'page');
+  });
+
+  window.fgSetButtonLoading = (button, loading = true, label = 'در حال انجام…') => {
+    if(!button) return;
+    if(loading){
+      if(!button.dataset.fgOriginalText) button.dataset.fgOriginalText = button.textContent;
+      button.classList.add('is-loading');
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = label;
+    }else{
+      button.classList.remove('is-loading');
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      if(button.dataset.fgOriginalText) button.textContent = button.dataset.fgOriginalText;
+    }
+  };
+
+  if(path.startsWith('/relationship-life')){
+    const quick = document.querySelector('.rl-grid .rl-card');
+    if(quick){
+      quick.id = 'quick-capture';
+      if(new URLSearchParams(location.search).get('quick')){
+        quick.scrollIntoView({behavior:'smooth', block:'start'});
+        quick.querySelector('select, input, textarea')?.focus({preventScroll:true});
+      }
+    }
+  }
+
+  document.querySelectorAll('form').forEach(form => form.addEventListener('submit', event => {
+    if(event.defaultPrevented) return;
+    const button = form.querySelector('button[type="submit"]');
+    if(button && !button.disabled) window.fgSetButtonLoading(button);
+  }));
 })();
 </script>
 </body>

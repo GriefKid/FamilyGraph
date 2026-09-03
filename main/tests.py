@@ -1950,11 +1950,11 @@ class AIProviderConfigTests(TestCase):
         from main.views_smart_features import _ollama_model
 
         selected = _ollama_model(
-            models=('deepseek-r1:14b', 'qwen3:8b'),
+            models=('deepseek-r1:14b', 'qwen3:8b', 'hamdam-fa:latest'),
             configured_model='qwen2.5:3b',
         )
 
-        self.assertEqual(selected, 'qwen3:8b')
+        self.assertEqual(selected, 'hamdam-fa:latest')
 
     def test_local_provider_uses_an_installed_model_instead_of_stale_env(self):
         from main.views_smart_features import _ai_client, _model
@@ -2010,6 +2010,35 @@ class AIProviderConfigTests(TestCase):
         self.assertNotIsInstance(client, _AIClientFailover)
         self.assertEqual(configured, 'key')
         self.assertEqual(provider, 'openrouter')
+
+    def test_native_ollama_adapter_disables_thinking_and_maps_the_response(self):
+        from main.views_smart_features import _OllamaChatCompletions
+
+        raw_response = mock.MagicMock()
+        raw_response.read.return_value = json.dumps({
+            'model': 'hamdam-fa:latest',
+            'message': {'content': 'می‌فهمم؛ دوست داری بیشتر تعریف کنی؟'},
+        }).encode('utf-8')
+        context = mock.MagicMock()
+        context.__enter__.return_value = raw_response
+        with mock.patch(
+            'main.views_smart_features.urlopen', return_value=context
+        ) as opened:
+            result = _OllamaChatCompletions('http://127.0.0.1:11434').create(
+                model='hamdam-fa:latest',
+                messages=[{'role': 'user', 'content': 'حالم خوب نیست'}],
+                max_tokens=300,
+                temperature=0.5,
+            )
+
+        request = opened.call_args.args[0]
+        payload = json.loads(request.data.decode('utf-8'))
+        self.assertIs(payload['think'], False)
+        self.assertEqual(payload['options']['num_predict'], 300)
+        self.assertEqual(
+            result.choices[0].message.content,
+            'می‌فهمم؛ دوست داری بیشتر تعریف کنی؟',
+        )
 
 
 class JournalMomentTests(TestCase):

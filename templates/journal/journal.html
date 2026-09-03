@@ -287,6 +287,19 @@ animation:spin .7s linear infinite;vertical-align:middle;}
 /* ══ Sidebar ══════════════════════════════════════════ */
 .journal-layout{display:grid;grid-template-columns:1fr 280px;gap:20px;}
 @media(max-width:860px){.journal-layout{grid-template-columns:1fr;}}
+.journal-layout{max-width:1180px;margin:0 auto;}
+.journal-layout .toolbar{align-items:center;}
+@media(max-width:640px){
+  .journal-layout{gap:12px;}
+  .tab-nav{position:sticky;top:4px;z-index:5;overflow-x:auto;justify-content:flex-start;scrollbar-width:none;}
+  .tab-nav::-webkit-scrollbar{display:none;}
+  .tab-btn{flex:0 0 auto;white-space:nowrap;}
+  .journal-layout .action-row{align-items:stretch;}
+  .journal-layout .action-row .btn,.journal-layout .action-row a{flex:1 1 145px;justify-content:center;}
+  .journal-layout .toolbar{gap:7px;}
+  .journal-layout .entry-kind{width:100%;}
+  .journal-layout .entry-kind button{flex:1;}
+}
 .history-card{
   background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--border);
   border-radius:14px;overflow:hidden;position:sticky;top:72px;
@@ -364,7 +377,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
 {% endblock %}
 
 {% block content %}
-<div class="journal-layout">
+<div class="journal-layout journal-page">
 
 <!-- ══ MAIN COLUMN ══════════════════════════════════ -->
 <div>
