@@ -388,7 +388,9 @@ async function sendMessage(){
   appendMsg("user",msg)
   showTyping()
   const controller=new AbortController()
-  const abortTimer=setTimeout(()=>controller.abort(),90000)
+  // Local models (Ollama) can be slow on a cold load; match the server's
+  // OLLAMA_REQUEST_TIMEOUT (240s) so the browser doesn't give up first.
+  const abortTimer=setTimeout(()=>controller.abort(),240000)
 
   try{
     let res=await fetch("/api/chat/",{
