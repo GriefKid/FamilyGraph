@@ -186,15 +186,20 @@ def memory_search_api(request):
 
 
 def _assistant_payload(user, node):
+    from .relationship_learning import learning_guidance, recommendation_learning
+
     facts = list(MemoryFact.objects.filter(owner=user, node=node, active=True, ai_usable=True)[:40])
     followups = list(FollowUp.objects.filter(owner=user, node=node, done=False)[:5])
+    learning = recommendation_learning(user, node)
     sensitivities = [f.value for f in facts if f.category in ('boundary', 'sensitivity')]
     interests = [f.value for f in facts if f.category in ('interest', 'preference', 'life_topic')]
     topic = interests[0] if interests else (followups[0].text if followups else 'حال این روزهایش')
     reason = f'بر اساس {len(facts)} واقعیت تأییدشده و {len(followups)} موضوع باز.'
     return {'topic': topic, 'avoid': sensitivities[:3], 'open_topics': [f.text for f in followups],
             'draft': f'سلام {node.display_name()}، یاد {topic} افتادم. این روزها چطوری؟',
-            'reason': reason, 'safety': 'این‌ها پیشنهاد و فرضیه‌اند، نه تشخیص روان‌شناختی.'}
+            'reason': reason, 'learning': learning_guidance(learning),
+            'learning_stats': learning,
+            'safety': 'این‌ها پیشنهاد و فرضیه‌اند، نه تشخیص روان‌شناختی.'}
 
 
 @login_required

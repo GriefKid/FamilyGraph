@@ -2675,6 +2675,30 @@ class MemoryIntelligenceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(RelationshipRecommendation.objects.get().outcome, 'better')
 
+    def test_assistant_learning_is_owner_and_node_scoped(self):
+        from .models import RelationshipRecommendation
+
+        RelationshipRecommendation.objects.create(
+            owner=self.user, node=self.ali, title='قبلی بهتر', suggestion='قدم کوچک',
+            status='completed', outcome='better', helpful=True,
+        )
+        RelationshipRecommendation.objects.create(
+            owner=self.user, node=self.ali, title='قبلی ثابت', suggestion='قدم دیگر',
+            status='completed', outcome='same', helpful=False,
+        )
+        foreign_node = Node.objects.create(owner=self.other, username='foreign-ali', name='علی دیگر')
+        RelationshipRecommendation.objects.create(
+            owner=self.other, node=foreign_node, title='نباید شمرده شود', suggestion='خصوصی',
+            status='completed', outcome='better', helpful=True,
+        )
+
+        data = self.client.get(f'/api/memory/assistant/{self.ali.id}/').json()
+
+        self.assertEqual(data['learning_stats']['total'], 2)
+        self.assertEqual(data['learning_stats']['better'], 1)
+        self.assertEqual(data['learning_stats']['same'], 1)
+        self.assertIn('یکدستی', data['learning'])
+
     def test_merge_preview_apply_and_undo_preserve_existing_primary_links(self):
         duplicate = Node.objects.create(owner=self.user, username='ali2', name='علی رضایی')
         friend = Node.objects.create(owner=self.user, username='friend', name='دوست')
