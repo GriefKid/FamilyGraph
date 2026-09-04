@@ -34,3 +34,5 @@ Thumbs.db
 *.env
 staticfiles/
 ollama/models/
+.coverage
+htmlcov/

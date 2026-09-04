@@ -1,3 +1,6 @@
 -r requirements.txt
-playwright>=1.50,<2
-pytest>=8,<9
+
+# Browser smoke tests (run `playwright install chromium` once after install).
+pytest>=8.3,<9
+pytest-playwright>=0.7,<1
+coverage>=7.6,<8

@@ -49,7 +49,7 @@ def blocked_reason(path: str) -> str | None:
         return "database or personal-data backup"
     if PurePosixPath(lowered).suffix in BLOCKED_SUFFIXES:
         return "secret or encrypted backup file"
-    if name == ".env" or (name.startswith(".env.") and name != ".env.example"):
+    if name == ".env" or (name.startswith(".env.") and not name.endswith(".example")):
         return "environment secrets file"
     return None
 

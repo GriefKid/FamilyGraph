@@ -24,6 +24,8 @@ curl -f https://YOUR_DOMAIN/api/system/health/
 `release_preflight` باید بدون FAIL تمام شود. بعد از deploy تست‌های smoke را روی staging اجرا کن:
 
 ```bash
+pip install -r requirements-dev.txt
+playwright install chromium
 E2E_BASE_URL=https://staging.example.com pytest e2e/test_smoke.py
 ```
 
