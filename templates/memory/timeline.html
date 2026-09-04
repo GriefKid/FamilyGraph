@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block title %}خط زمان خاطره‌ها · FamilyGraph{% endblock %}
 {% block page_title %}خط زمان خاطره‌ها{% endblock %}
+{% block nav_insight_hub %}active{% endblock %}
 {% block extra_css %}<style>@media print{.sidebar,.topbar,.site-footer,.orb,.nav-scrim,form{display:none!important}.main-wrap{margin:0!important}.card{border:0!important;box-shadow:none!important;background:#fff!important;color:#111!important}}</style>{% endblock %}
 {% block content %}
 <main style="max-width:860px;margin:0 auto">
   <section class="card" style="padding:20px">
     <h1 style="margin-top:0;font-size:21px">خاطره‌ها در گذر زمان</h1>
     <p style="color:var(--text-muted)">فقط خاطره‌های خصوصی خودت را می‌بینی.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><a class="btn btn-sm" href="/memory/">مدیریت حافظه</a><a class="btn btn-sm" href="/insight-center/">مرکز شناخت</a></div>
     <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 8px">
       <select name="person" style="padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text)"><option value="">همهٔ افراد</option>{% for node in nodes %}<option value="{{ node.id }}" {% if selected_node == node.id|stringformat:"s" %}selected{% endif %}>{{ node.display_name }}</option>{% endfor %}</select>
       <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" name="images" value="1" {% if images_only %}checked{% endif %}> فقط دارای عکس</label>

@@ -1317,7 +1317,8 @@ input[type="checkbox"],input[type="radio"]{ min-height:0; width:auto; }
           {% endif %}{% endwith %}
         </a>
         <a href="/u/{{ request.user.username }}/" class="nav-item {% block nav_settings %}{% endblock %}"><span class="nav-icon">👤</span><span>پروفایل من</span></a>
-        <a href="/settings/" class="nav-item"><span class="nav-icon">⚙</span><span>تنظیمات</span></a>
+        <a href="/profile/edit/" class="nav-item {% block nav_account_settings %}{% endblock %}"><span class="nav-icon">⚙</span><span>تنظیمات</span></a>
+        <a href="/trust/" class="nav-item {% block nav_trust %}{% endblock %}"><span class="nav-icon">🛡️</span><span>اعتماد و حریم خصوصی</span></a>
         <a href="/platform/tools/" class="nav-item {% block nav_platform_tools %}{% endblock %}"><span class="nav-icon">🧰</span><span>بکاپ و ابزارها</span></a>
       </div>
     </div>

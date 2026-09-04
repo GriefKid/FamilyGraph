@@ -3138,6 +3138,44 @@ class YearbookTests(TestCase):
         self.assertIn(f'year={jt.year}', resp['Location'])
 
 
+class FeatureDiscoveryNavigationTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='feature-nav', password='SecurePass1', is_public=True,
+        )
+        self.root = Node.objects.create(
+            owner=self.user, username='feature-nav-root', name='من',
+        )
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.client.force_login(self.user)
+
+    def test_insight_hub_exposes_time_memory_and_trust_features(self):
+        response = self.client.get('/insight-center/')
+        self.assertEqual(response.status_code, 200)
+        for href in ('/weekly/', '/monthly/', '/monthbook/', '/yearbook/',
+                     '/memory/timeline/', '/trust/'):
+            self.assertContains(response, f'href="{href}"')
+
+    def test_feature_hubs_link_to_previously_orphaned_pages(self):
+        memory = self.client.get('/memory/')
+        self.assertContains(memory, 'href="/memory/timeline/"')
+        self.assertContains(memory, 'href="/memory/knowledge/"')
+
+        social = self.client.get('/social/')
+        self.assertContains(social, 'href="/social/share/"')
+
+        settings = self.client.get('/profile/edit/')
+        self.assertContains(settings, 'href="/trust/"')
+        self.assertContains(settings, 'href="/profile/edit/" class="nav-item active"')
+
+    def test_account_navigation_exposes_trust_center(self):
+        response = self.client.get('/trust/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/trust/"')
+        self.assertContains(response, 'nav-item active')
+
+
 class BackgroundJobRunnerTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='jobs', password='SecurePass1')

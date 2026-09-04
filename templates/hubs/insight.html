@@ -1,13 +1,36 @@
 {% extends "base.html" %}
 {% block title %}شناخت — FamilyGraph{% endblock %}{% block page_title %}🧠 شناخت{% endblock %}{% block nav_insight_hub %}active{% endblock %}
 {% block extra_css %}{% include "hubs/_styles.html" %}{% endblock %}
-{% block content %}<main class="merge-hub"><section class="merge-hero"><div class="merge-kicker">فهم بهتر خودت و رابطه‌هایت</div><h1>شناخت و تحلیل</h1><p>تحلیل‌های روان‌شناسی، حافظهٔ هوشمند و پیشنهادهای استخراج‌شده در یک مرکز آشنا؛ جزئیات هر ابزار همچنان در صفحهٔ خودش باقی مانده است.</p></section><div class="merge-grid">
-<a class="merge-card" href="/psychology/"><span class="merge-icon">🧠</span><h2>روان‌شناسی رابطه‌ها</h2><p>شاخص‌ها، نظریه‌ها و الگوهای رفتاری فرد و رابطه.</p><span class="merge-go">مشاهده تحلیل‌ها ←</span></a>
-<a class="merge-card" href="/daily/"><span class="merge-icon">✨</span><h2>پیشنهادهای امروز</h2><p>جمع‌بندی روزانه و پیشنهادهای کاربردی متناسب با شرایط تو.</p><span class="merge-go">دیدن پیشنهادها ←</span></a>
-<a class="merge-card" href="/extractions/"><span class="merge-icon">📥</span><h2>موارد منتظر تأیید</h2><p>چیزهایی که AI از متن‌ها فهمیده و باید تأیید یا رد کنی.</p><span class="merge-go">بررسی موارد ←</span></a>
-<a class="merge-card" href="/memory/"><span class="merge-icon">🧭</span><h2>حافظهٔ هوشمند</h2><p>شناخت‌های ذخیره‌شده، جستجو، ادغام افراد و سلامت داده.</p><span class="merge-go">مدیریت حافظه ←</span></a>
-<a class="merge-card" href="/memory/knowledge/"><span class="merge-icon">🕸</span><h2>نقشهٔ شناخت</h2><p>ارتباط بین آدم‌ها، علایق، اتفاق‌ها و دانسته‌ها.</p><span class="merge-go">بازکردن نقشه ←</span></a>
-<a class="merge-card" href="/alerts/"><span class="merge-icon">🔔</span><h2>هشدارها و توجه‌ها</h2><p>رابطه‌ها و موضوع‌هایی که بهتر است از قلم نیفتند.</p><span class="merge-go">دیدن هشدارها ←</span></a>
-<a class="merge-card" href="/yearbook/"><span class="merge-icon">📖</span><h2>کتاب سال روابط</h2><p>مرور یک‌جای سالِ رابطه‌هایت از روی داده‌های خودت — قابل چاپ و ذخیره PDF.</p><span class="merge-go">بازکردن کتاب ←</span></a>
-<a class="merge-card" href="/monthbook/"><span class="merge-icon">🗓</span><h2>کتاب ماه روابط</h2><p>همان کتاب، اما فقط برای یک ماه؛ بین ماه‌ها جابه‌جا شو.</p><span class="merge-go">بازکردن کتاب ماه ←</span></a>
-</div></main>{% endblock %}
+{% block content %}<main class="merge-hub">
+<section class="merge-hero"><div class="merge-kicker">فهم بهتر خودت و رابطه‌هایت</div><h1>شناخت و تحلیل</h1><p>گزارش‌ها، مرورهای زمانی، حافظه و تحلیل‌های شواهدمحور در یک مرکز. هر چیزی که از داده‌های رابطه‌هایت ساخته می‌شود از اینجا قابل پیدا کردن است.</p></section>
+
+<section class="merge-section" aria-labelledby="insight-time-title">
+  <h2 class="merge-section-title" id="insight-time-title">🗓 مرور زمان</h2>
+  <div class="merge-grid">
+    <a class="merge-card" href="/weekly/"><span class="merge-tag">۷ روز</span><span class="merge-icon">📊</span><h2>مرور هفتگی</h2><p>داستان این هفته، تعامل‌های ثبت‌شده، موضوع‌های باز و آدم‌هایی که در هفته حضور داشتند.</p><span class="merge-go">دیدن هفته ←</span></a>
+    <a class="merge-card" href="/monthly/"><span class="merge-tag">این ماه</span><span class="merge-icon">📅</span><h2>مرور ماهانه</h2><p>جمع‌بندی فعالیت رابطه‌ها، حافظه‌های شکل‌گرفته و قدم‌های آرام ماه بعد.</p><span class="merge-go">دیدن ماه ←</span></a>
+    <a class="merge-card" href="/monthbook/"><span class="merge-tag">قابل چاپ</span><span class="merge-icon">🗓</span><h2>کتاب ماه روابط</h2><p>نسخهٔ ماندگار و قابل چاپ یک ماه؛ با امکان جابه‌جایی بین ماه‌های شمسی.</p><span class="merge-go">بازکردن کتاب ماه ←</span></a>
+    <a class="merge-card merge-card-featured" href="/yearbook/"><span class="merge-tag">قابل چاپ</span><span class="merge-icon">📖</span><h2>کتاب سال روابط</h2><p>مرور یک‌جای سال رابطه‌هایت از روی داده‌های خودت و آمادهٔ ذخیره به‌صورت PDF.</p><span class="merge-go">بازکردن کتاب سال ←</span></a>
+  </div>
+</section>
+
+<section class="merge-section" aria-labelledby="insight-understand-title">
+  <h2 class="merge-section-title" id="insight-understand-title">🧠 شناخت و حافظه</h2>
+  <div class="merge-grid">
+    <a class="merge-card" href="/psychology/"><span class="merge-icon">🧠</span><h2>روان‌شناسی رابطه‌ها</h2><p>شاخص‌ها، نظریه‌ها و الگوهای قابل مشاهدهٔ فرد و رابطه.</p><span class="merge-go">مشاهده تحلیل‌ها ←</span></a>
+    <a class="merge-card" href="/memory/"><span class="merge-icon">🧭</span><h2>حافظهٔ هوشمند</h2><p>شناخت‌های ذخیره‌شده، جستجو، ادغام افراد و سلامت داده.</p><span class="merge-go">مدیریت حافظه ←</span></a>
+    <a class="merge-card" href="/memory/knowledge/"><span class="merge-icon">🕸</span><h2>نقشهٔ شناخت</h2><p>ارتباط بین آدم‌ها، علایق، اتفاق‌ها و دانسته‌های تأییدشده.</p><span class="merge-go">بازکردن نقشه ←</span></a>
+    <a class="merge-card" href="/memory/timeline/"><span class="merge-icon">🕰</span><h2>خط زمان خاطره‌ها</h2><p>خاطره‌های خصوصی را بر اساس زمان، شخص یا داشتن تصویر مرور و چاپ کن.</p><span class="merge-go">دیدن خط زمان ←</span></a>
+  </div>
+</section>
+
+<section class="merge-section" aria-labelledby="insight-action-title">
+  <h2 class="merge-section-title" id="insight-action-title">✨ پیشنهاد و کنترل</h2>
+  <div class="merge-grid">
+    <a class="merge-card" href="/daily/"><span class="merge-icon">✨</span><h2>پیشنهادهای امروز</h2><p>جمع‌بندی روزانه و پیشنهادهای کاربردی متناسب با داده‌های ثبت‌شده.</p><span class="merge-go">دیدن پیشنهادها ←</span></a>
+    <a class="merge-card" href="/alerts/"><span class="merge-icon">🔔</span><h2>هشدارها و توجه‌ها</h2><p>رابطه‌ها و موضوع‌هایی که بهتر است از قلم نیفتند.</p><span class="merge-go">دیدن هشدارها ←</span></a>
+    <a class="merge-card" href="/extractions/"><span class="merge-icon">📥</span><h2>موارد منتظر تأیید</h2><p>پیشنهادهای استخراج‌شده از متن‌ها را پیش از ورود به حافظه تأیید یا رد کن.</p><span class="merge-go">بررسی موارد ←</span></a>
+    <a class="merge-card" href="/trust/"><span class="merge-icon">🛡️</span><h2>اعتماد و حریم خصوصی</h2><p>ببین چه داده‌ای خصوصی است، AI به چه چیزهایی دسترسی دارد و کدام لینک‌ها فعال‌اند.</p><span class="merge-go">بازکردن مرکز اعتماد ←</span></a>
+  </div>
+</section>
+</main>{% endblock %}
