@@ -1030,6 +1030,25 @@ class AIExtractionTrace(models.Model):
         indexes = [models.Index(fields=['owner', '-created_at'], name='ai_trace_owner_created')]
 
 
+class AIQualityEvaluation(models.Model):
+    """Aggregate result of a synthetic evaluation suite; contains no user text."""
+    suite_version = models.CharField(max_length=80)
+    engine_version = models.CharField(max_length=80)
+    total_cases = models.PositiveIntegerField(default=0)
+    passed_cases = models.PositiveIntegerField(default=0)
+    pass_rate = models.FloatField(default=0)
+    precision = models.FloatField(default=0)
+    recall = models.FloatField(default=0)
+    duration_ms = models.PositiveIntegerField(default=0)
+    report = models.JSONField(default=dict)
+    run_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                               on_delete=models.SET_NULL, related_name='ai_quality_evaluations')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 class KnowledgeTriple(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                               related_name='knowledge_triples')

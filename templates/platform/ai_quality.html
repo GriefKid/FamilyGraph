@@ -1,1 +1,131 @@
-{% extends "base.html" %}{% block title %}کیفیت AI{% endblock %}{% block page_title %}📊 کیفیت موتور هوشمند{% endblock %}{% block content %}<div style="max-width:1000px;margin:auto"><div class="card" style="padding:20px"><h2>خلاصه پردازش</h2><p>{{ trace_count }} اجرا · میانگین {{ avg_ms }} میلی‌ثانیه</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">{% for row in trace_statuses %}<span class="chip">{{ row.status }}: {{ row.total }}</span>{% endfor %}</div></div><div class="card" style="padding:20px;margin-top:12px"><h2>دقت عملی بر اساس تصمیم کاربران</h2>{% for kind,statuses in matrix.items %}<div style="padding:9px;border-bottom:1px solid var(--border)"><b>{{ kind }}</b> · {% for status,total in statuses.items %}{{ status }}: {{ total }} {% endfor %}</div>{% endfor %}</div><div class="card" style="padding:20px;margin-top:12px"><h2>خطاهای اخیر بدون متن حساس</h2>{% for e in errors %}<div style="padding:8px"><code>{{ e.request_id }}</code> · {{ e.area }} · {{ e.code }} · {{ e.path }}</div>{% empty %}خطایی ثبت نشده است.{% endfor %}</div></div>{% endblock %}
+{% extends "base.html" %}
+{% block title %}کیفیت AI{% endblock %}
+{% block page_title %}کیفیت موتور هوشمند{% endblock %}
+{% block content %}
+<style>
+  .quality-shell{max-width:1180px;margin:0 auto;padding:4px 0 32px}
+  .quality-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px;background:linear-gradient(135deg,rgba(124,92,255,.16),rgba(34,211,238,.08));border:1px solid var(--border);border-radius:22px}
+  .quality-hero h2{margin:0 0 7px;font-size:clamp(1.25rem,3vw,1.7rem)}
+  .quality-hero p{margin:0;color:var(--muted);line-height:1.8}
+  .quality-run{border:0;border-radius:12px;padding:12px 18px;background:linear-gradient(135deg,#7657ff,#a94df2);color:#fff;font:inherit;font-weight:800;white-space:nowrap;cursor:pointer;box-shadow:0 8px 24px rgba(118,87,255,.25)}
+  .quality-success{margin-top:12px;padding:11px 14px;border-radius:12px;background:rgba(46,204,113,.12);color:#77e2a5;border:1px solid rgba(46,204,113,.25)}
+  .quality-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+  .quality-stat,.quality-card{background:var(--card-bg,var(--surface));border:1px solid var(--border);border-radius:18px}
+  .quality-stat{padding:18px;min-height:108px}
+  .quality-stat span{display:block;color:var(--muted);font-size:.86rem;margin-bottom:10px}
+  .quality-stat strong{font-size:1.6rem;direction:ltr;display:inline-block}
+  .quality-stat small{display:block;color:var(--muted);margin-top:6px}
+  .quality-panels{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;margin-top:14px}
+  .quality-card{padding:20px;overflow:hidden}
+  .quality-card h3{margin:0 0 4px;font-size:1.03rem}
+  .quality-card>p{color:var(--muted);margin:0 0 16px;font-size:.88rem;line-height:1.7}
+  .quality-table-wrap{overflow:auto;margin:0 -20px -20px}
+  .quality-table{width:100%;border-collapse:collapse;min-width:580px}
+  .quality-table th,.quality-table td{text-align:right;padding:12px 20px;border-top:1px solid var(--border);white-space:nowrap}
+  .quality-table th{font-size:.78rem;color:var(--muted);font-weight:700}
+  .quality-table td{font-size:.9rem}
+  .quality-meter{height:7px;background:rgba(127,127,127,.14);border-radius:20px;overflow:hidden;margin-top:7px;width:110px}
+  .quality-meter i{display:block;height:100%;background:linear-gradient(90deg,#7657ff,#33d3b4);border-radius:inherit}
+  .quality-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+  .quality-row:last-child{border-bottom:0}
+  .quality-row span{color:var(--muted)}
+  .quality-row b{direction:ltr}
+  .quality-statuses{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .quality-chip{padding:7px 10px;border-radius:999px;background:rgba(127,127,127,.1);font-size:.8rem}
+  .quality-errors{list-style:none;margin:0;padding:0}
+  .quality-errors li{padding:11px 0;border-bottom:1px solid var(--border);font-size:.85rem;overflow-wrap:anywhere}
+  .quality-errors li:last-child{border-bottom:0}
+  .quality-errors code{color:var(--muted)}
+  .quality-good{color:#55d995}.quality-warn{color:#ffbd66}
+  @media(max-width:900px){.quality-grid{grid-template-columns:repeat(2,1fr)}.quality-panels{grid-template-columns:1fr}}
+  @media(max-width:560px){.quality-hero{align-items:stretch;flex-direction:column}.quality-run{width:100%}.quality-grid{grid-template-columns:1fr 1fr}.quality-stat{padding:14px}.quality-stat strong{font-size:1.3rem}}
+</style>
+
+<main class="quality-shell">
+  <section class="quality-hero">
+    <div>
+      <h2>آزمایشگاه کیفیت هوش رابطه‌ای</h2>
+      <p>دقت استخراج فارسی، سرعت پاسخ و نتیجه‌ی واقعی پیشنهادها بدون نمایش متن خصوصی کاربران.</p>
+    </div>
+    <form method="post" action="{% url 'ai_quality_run' %}">
+      {% csrf_token %}
+      <input type="hidden" name="redirect" value="1">
+      <button class="quality-run" type="submit">اجرای تست فارسی</button>
+    </form>
+  </section>
+  {% if request.GET.ran %}<div class="quality-success">مجموعه‌تست اجرا و نتیجه‌ی جدید ثبت شد.</div>{% endif %}
+
+  <section class="quality-grid" aria-label="خلاصه سرعت">
+    <article class="quality-stat"><span>اجراهای ثبت‌شده</span><strong>{{ trace_count }}</strong><small>{{ duration_sample_count }} اجرای اخیر در نمونه</small></article>
+    <article class="quality-stat"><span>میانه زمان پاسخ</span><strong>{{ p50_ms }}</strong><small>میلی‌ثانیه (P50)</small></article>
+    <article class="quality-stat"><span>زمان بدترین ۵٪</span><strong>{{ p95_ms }}</strong><small>میلی‌ثانیه (P95)</small></article>
+    <article class="quality-stat"><span>پاسخ زیر ۱۰ ثانیه</span><strong class="{% if under_10s_rate >= 90 %}quality-good{% else %}quality-warn{% endif %}">{{ under_10s_rate }}٪</strong><small>میانگین: {{ avg_ms }} میلی‌ثانیه</small></article>
+  </section>
+
+  <section class="quality-panels">
+    <article class="quality-card">
+      <h3>دقت عملی پیشنهادهای استخراج‌شده</h3>
+      <p>تأیید یا رد کاربران، به تفکیک نوع پیشنهاد.</p>
+      <div class="quality-table-wrap">
+        <table class="quality-table">
+          <thead><tr><th>نوع</th><th>کل</th><th>در انتظار</th><th>تأیید</th><th>رد</th><th>نرخ تأیید</th></tr></thead>
+          <tbody>
+          {% for row in suggestion_rows %}
+            <tr>
+              <td><b>{{ row.kind }}</b></td><td>{{ row.total }}</td><td>{{ row.pending }}</td><td>{{ row.approved }}</td><td>{{ row.dismissed }}</td>
+              <td>{% if row.approval_rate is not None %}{{ row.approval_rate }}٪<div class="quality-meter"><i style="width:{{ row.approval_rate }}%"></i></div>{% else %}—{% endif %}</td>
+            </tr>
+          {% empty %}<tr><td colspan="6">هنوز پیشنهادی ثبت نشده است.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="quality-card">
+      <h3>اثر پیشنهادهای رابطه</h3>
+      <p>بازخوردی که کاربر بعد از انجام پیشنهاد ثبت کرده است.</p>
+      <div class="quality-row"><span>بازخورد ثبت‌شده</span><b>{{ feedback_total }}</b></div>
+      <div class="quality-row"><span>مفید بوده</span><b>{% if helpful_rate is not None %}{{ helpful_rate }}٪{% else %}—{% endif %}</b></div>
+      <div class="quality-row"><span>رابطه بهتر شده</span><b>{{ outcome_counts.better }}</b></div>
+      <div class="quality-row"><span>بدون تغییر</span><b>{{ outcome_counts.same }}</b></div>
+      <div class="quality-row"><span>بدتر شده</span><b>{{ outcome_counts.worse }}</b></div>
+    </article>
+  </section>
+
+  <section class="quality-panels">
+    <article class="quality-card">
+      <h3>ارزیابی استاندارد فارسی</h3>
+      <p>تست محلی و قطعی است؛ هیچ درخواست اینترنتی یا هزینه‌ای ندارد.</p>
+      {% if latest_evaluation %}
+        <div class="quality-row"><span>نسخه مجموعه‌تست</span><b>{{ latest_evaluation.suite_version }}</b></div>
+        <div class="quality-row"><span>سناریوهای موفق</span><b>{{ latest_evaluation.passed_cases }} / {{ latest_evaluation.total_cases }}</b></div>
+        <div class="quality-row"><span>نرخ عبور</span><b>{{ latest_evaluation.pass_rate|floatformat:1 }}٪</b></div>
+        <div class="quality-row"><span>Precision</span><b>{{ latest_evaluation.precision|floatformat:1 }}٪</b></div>
+        <div class="quality-row"><span>Recall</span><b>{{ latest_evaluation.recall|floatformat:1 }}٪</b></div>
+        <div class="quality-row"><span>زمان اجرا</span><b>{{ latest_evaluation.duration_ms }} ms</b></div>
+        {% if latest_evaluation.report.failures %}
+          <div class="quality-statuses">{% for failure in latest_evaluation.report.failures %}<span class="quality-chip">{{ failure.case_id }}</span>{% endfor %}</div>
+        {% endif %}
+      {% else %}<p>برای ساخت خط مبنا، «اجرای تست فارسی» را بزن.</p>{% endif %}
+    </article>
+
+    <article class="quality-card">
+      <h3>وضعیت پردازش‌ها</h3>
+      <p>خطا و زمان هر مسیر پردازش در اجرای واقعی.</p>
+      {% for row in provider_rows %}
+        <div class="quality-row"><span>{{ row.label }} · {{ row.total }} اجرا</span><b>{{ row.error_rate }}٪ خطا · {{ row.avg_ms }} ms</b></div>
+      {% empty %}<p>هنوز اجرای ثبت‌شده‌ای وجود ندارد.</p>{% endfor %}
+      <div class="quality-statuses">{% for row in trace_statuses %}<span class="quality-chip">{{ row.status }}: {{ row.total }}</span>{% endfor %}</div>
+    </article>
+  </section>
+
+  <section class="quality-card" style="margin-top:14px">
+    <h3>خطاهای اخیر بدون متن حساس</h3>
+    <p>فقط شناسه درخواست، بخش و کد خطا نمایش داده می‌شود.</p>
+    <ul class="quality-errors">
+      {% for error in errors %}<li><code>{{ error.request_id }}</code> · {{ error.area }} · {{ error.code }} · {{ error.path }}</li>
+      {% empty %}<li>خطایی ثبت نشده است.</li>{% endfor %}
+    </ul>
+  </section>
+</main>
+{% endblock %}

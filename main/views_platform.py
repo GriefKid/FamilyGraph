@@ -7,15 +7,15 @@ from collections import Counter
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import connection
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, Q
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import (AIExtractionTrace, Commitment, ExtractionSuggestion, FeatureFlag,
+from .models import (AIExtractionTrace, AIQualityEvaluation, Commitment, ExtractionSuggestion, FeatureFlag,
                      Interaction, JournalEntry, KnowledgeTriple, MemoryFact, Node,
-                     ObservabilityEvent, Relationship)
+                     ObservabilityEvent, Relationship, RelationshipRecommendation)
 from .uploads import UploadValidationError, read_limited_upload
 
 
@@ -103,18 +103,77 @@ def onboarding_complete_api(request):
 
 @user_passes_test(lambda user: user.is_superuser)
 def ai_quality_dashboard(request):
-    suggestions = ExtractionSuggestion.objects.values('kind', 'status').annotate(total=Count('id'))
-    matrix = {}
+    from .ai_quality import percentile
+
+    suggestions = ExtractionSuggestion.objects.values('kind').annotate(
+        total=Count('id'),
+        pending=Count('id', filter=Q(status='pending')),
+        approved=Count('id', filter=Q(status='approved')),
+        dismissed=Count('id', filter=Q(status='dismissed')),
+    ).order_by('kind')
+    suggestion_rows = []
     for row in suggestions:
-        matrix.setdefault(row['kind'], {})[row['status']] = row['total']
-    traces = AIExtractionTrace.objects.values('status').annotate(total=Count('id'))
+        decided = row['approved'] + row['dismissed']
+        suggestion_rows.append({
+            **row,
+            'decided': decided,
+            'approval_rate': round(100 * row['approved'] / decided, 1) if decided else None,
+        })
+
+    trace_total = AIExtractionTrace.objects.count()
+    durations = list(AIExtractionTrace.objects.order_by('-created_at').values_list('duration_ms', flat=True)[:1000])
+    trace_statuses = AIExtractionTrace.objects.values('status').annotate(total=Count('id')).order_by('status')
+    provider_rows = list(AIExtractionTrace.objects.values('provider').annotate(
+        total=Count('id'),
+        failed=Count('id', filter=Q(status='ai_failed')),
+        avg_ms=Avg('duration_ms'),
+    ).order_by('provider'))
+    for row in provider_rows:
+        row['label'] = row['provider'] or 'استخراج محلی'
+        row['avg_ms'] = round(row['avg_ms'] or 0)
+        row['error_rate'] = round(100 * row['failed'] / row['total'], 1) if row['total'] else 0
+
+    recommendations = RelationshipRecommendation.objects.all()
+    recommendation_feedback = recommendations.filter(Q(helpful__isnull=False) | ~Q(outcome=''))
+    feedback_total = recommendation_feedback.count()
+    helpful_total = recommendation_feedback.filter(helpful=True).count()
+    outcome_counts = {
+        key: recommendation_feedback.filter(outcome=key).count()
+        for key in ('better', 'same', 'worse')
+    }
     return render(request, 'platform/ai_quality.html', {
-        'matrix': matrix, 'trace_statuses': traces,
-        'trace_count': AIExtractionTrace.objects.count(),
-        'avg_ms': round(sum(AIExtractionTrace.objects.values_list('duration_ms', flat=True)[:1000]) /
-                        max(1, min(1000, AIExtractionTrace.objects.count()))),
+        'suggestion_rows': suggestion_rows,
+        'trace_statuses': trace_statuses,
+        'trace_count': trace_total,
+        'duration_sample_count': len(durations),
+        'avg_ms': round(sum(durations) / len(durations)) if durations else 0,
+        'p50_ms': percentile(durations, 50),
+        'p95_ms': percentile(durations, 95),
+        'under_10s_rate': round(100 * sum(value <= 10000 for value in durations) / len(durations), 1) if durations else 0,
+        'provider_rows': provider_rows,
+        'feedback_total': feedback_total,
+        'helpful_rate': round(100 * helpful_total / feedback_total, 1) if feedback_total else None,
+        'outcome_counts': outcome_counts,
+        'latest_evaluation': AIQualityEvaluation.objects.first(),
         'errors': ObservabilityEvent.objects.filter(level='error')[:30],
     })
+
+
+@user_passes_test(lambda user: user.is_superuser)
+@require_POST
+def ai_quality_run_api(request):
+    from .ai_quality import run_persian_extraction_eval
+
+    report = run_persian_extraction_eval()
+    evaluation = AIQualityEvaluation.objects.create(
+        suite_version=report['suite_version'], engine_version=report['engine_version'],
+        total_cases=report['total_cases'], passed_cases=report['passed_cases'],
+        pass_rate=report['pass_rate'], precision=report['precision'], recall=report['recall'],
+        duration_ms=report['duration_ms'], report=report, run_by=request.user,
+    )
+    if request.POST.get('redirect') == '1':
+        return redirect(f'/platform/ai-quality/?ran={evaluation.id}')
+    return JsonResponse({'ok': True, 'evaluation_id': evaluation.id, **report})
 
 
 @user_passes_test(lambda user: user.is_superuser)

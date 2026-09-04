@@ -3,6 +3,7 @@ from django.contrib.admin import display
 from .models import (
     ArtisticWork,
     AIExtractionTrace,
+    AIQualityEvaluation,
     ChatAnalysis,
     Commitment,
     Debt,
@@ -35,6 +36,7 @@ admin.site.register(MeetingReflection)
 admin.site.register(NodeSafetySetting)
 admin.site.register(FeatureFlag)
 admin.site.register(AIExtractionTrace)
+admin.site.register(AIQualityEvaluation)
 admin.site.register(KnowledgeTriple)
 admin.site.register(ObservabilityEvent)
 

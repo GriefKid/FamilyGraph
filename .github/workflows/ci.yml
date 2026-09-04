@@ -11,6 +11,7 @@ jobs:
       - run: python scripts/check_repository_hygiene.py
       - run: pip install -r requirements.txt
       - run: python manage.py check
+      - run: python manage.py evaluate_ai_quality --fail-under 100
       - run: python manage.py makemigrations main --check --dry-run
       - run: python manage.py test
   browser:

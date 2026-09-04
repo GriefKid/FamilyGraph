@@ -1,0 +1,134 @@
+{
+  "suite_version": "persian-extraction-v1",
+  "cases": [
+    {
+      "id": "debt-they-owe-digits",
+      "text": "سارا ازم ۲۵۰ هزار تومان قرض گرفت.",
+      "known_people": ["سارا"],
+      "expected": [{"kind": "debt", "fields": {"person_raw": "سارا", "amount_value": 250000, "direction": "they_owe"}}]
+    },
+    {
+      "id": "debt-they-owe-words",
+      "text": "به علی دو میلیون تومان قرض دادم.",
+      "known_people": ["علی"],
+      "expected": [{"kind": "debt", "fields": {"person_raw": "علی", "amount_value": 2000000, "direction": "they_owe"}}]
+    },
+    {
+      "id": "debt-i-owe",
+      "text": "از ندا ۵۰٬۰۰۰ تومان قرض گرفتم.",
+      "known_people": ["ندا"],
+      "expected": [{"kind": "debt", "fields": {"person_raw": "ندا", "amount_value": 50000, "direction": "i_owe"}}]
+    },
+    {
+      "id": "debt-creditor-form",
+      "text": "رضا سیصد هزار تومان ازم طلبکاره.",
+      "known_people": ["رضا"],
+      "expected": [{"kind": "debt", "fields": {"person_raw": "رضا", "amount_value": 300000, "direction": "i_owe"}}]
+    },
+    {
+      "id": "event-meeting",
+      "text": "جلسه با مریم فردا ساعت ۱۸ برگزار می‌شود.",
+      "known_people": ["مریم"],
+      "expected": [{"kind": "event", "fields": {}}]
+    },
+    {
+      "id": "event-birthday",
+      "text": "تولد علی پنجشنبه است.",
+      "known_people": ["علی"],
+      "expected": [{"kind": "event", "fields": {}}]
+    },
+    {
+      "id": "relationship-coworker",
+      "text": "سارا همکار جدیدمه.",
+      "known_people": ["سارا"],
+      "expected": [{"kind": "relationship", "fields": {"name_raw": "سارا", "relationship_type": "همکار", "status": "active", "strength": 3}}]
+    },
+    {
+      "id": "relationship-friend",
+      "text": "نیما دوستمه.",
+      "known_people": ["نیما"],
+      "expected": [{"kind": "relationship", "fields": {"name_raw": "نیما", "relationship_type": "دوست", "status": "active"}}]
+    },
+    {
+      "id": "relationship-conflict",
+      "text": "با رضا قهر کردم.",
+      "known_people": ["رضا"],
+      "expected": [{"kind": "relationship", "fields": {"name_raw": "رضا", "status": "distant", "strength": 1}}]
+    },
+    {
+      "id": "relationship-inactive",
+      "text": "دیگه با مریم در ارتباط نیستم.",
+      "known_people": ["مریم"],
+      "expected": [{"kind": "relationship", "fields": {"name_raw": "مریم", "status": "inactive"}}]
+    },
+    {
+      "id": "relationship-improved",
+      "text": "رابطه‌مون با سارا بهتر شده.",
+      "known_people": ["سارا"],
+      "expected": [{"kind": "relationship", "fields": {"name_raw": "سارا", "status": "active", "strength": 4}}]
+    },
+    {
+      "id": "memory-interest",
+      "text": "سارا عاشق موسیقی جاز.",
+      "known_people": ["سارا"],
+      "expected": [{"kind": "memory", "fields": {"name_raw": "سارا", "category": "interest", "value": "موسیقی جاز"}}]
+    },
+    {
+      "id": "memory-sensitivity",
+      "text": "علی از بی‌خبری بدش میاد.",
+      "known_people": ["علی"],
+      "expected": [{"kind": "memory", "fields": {"name_raw": "علی", "category": "sensitivity", "value": "بی‌خبری"}}]
+    },
+    {
+      "id": "memory-value",
+      "text": "برای ندا احترام مهمه.",
+      "known_people": ["ندا"],
+      "expected": [{"kind": "memory", "fields": {"name_raw": "ندا", "category": "value", "value": "احترام"}}]
+    },
+    {
+      "id": "memory-preference",
+      "text": "رضا ترجیح میده قبل از تماس پیام بدم.",
+      "known_people": ["رضا"],
+      "expected": [{"kind": "memory", "fields": {"name_raw": "رضا", "category": "preference", "value": "قبل از تماس پیام بدم"}}]
+    },
+    {
+      "id": "signal-stress",
+      "text": "امروز برای مصاحبه خیلی استرس داشتم.",
+      "expected": [{"kind": "signal", "fields": {"signal": "استرس"}}]
+    },
+    {
+      "id": "signal-support",
+      "text": "حمایت دوستم باعث آرامش من شد.",
+      "expected": [
+        {"kind": "signal", "fields": {"signal": "حمایت"}},
+        {"kind": "signal", "fields": {"signal": "آرامش"}}
+      ]
+    },
+    {
+      "id": "mention-new-person",
+      "text": "لطفاً بعداً به @hamid پیام بده.",
+      "expected": [{"kind": "person", "fields": {"username": "hamid", "name_raw": "hamid"}}]
+    },
+    {
+      "id": "negative-ordinary-text",
+      "text": "امروز هوا خوب بود و کمی پیاده‌روی کردم.",
+      "expected": []
+    },
+    {
+      "id": "negative-no-diagnosis",
+      "text": "به نظرم شاید سارا افسرده است.",
+      "known_people": ["سارا"],
+      "expected": []
+    },
+    {
+      "id": "negative-personal-money",
+      "text": "دو میلیون تومان پس‌انداز کردم.",
+      "expected": []
+    },
+    {
+      "id": "negative-cancelled-plan",
+      "text": "قرار نیست فردا بیرون برویم.",
+      "expected": []
+    }
+  ]
+}

@@ -72,7 +72,7 @@ from .views_relationship_life import (relationship_life_hub, meeting_briefing_ap
     share_link_create_api, share_link_revoke_api, shared_person_card_view)
 from .views_platform import (platform_tools_view, command_palette_api, onboarding_api, onboarding_complete_api,
     onboarding_goal_api,
-    ai_quality_dashboard, ai_debug_private, ai_trace_rerun, feature_flags_view, frontend_error_api,
+    ai_quality_dashboard, ai_quality_run_api, ai_debug_private, ai_trace_rerun, feature_flags_view, frontend_error_api,
     system_health_api, jobs_list_api, job_detail_api, encrypted_backup_download, encrypted_backup_preview,
     encrypted_backup_restore, demo_mode_api)
 from .views_life import (
@@ -165,6 +165,7 @@ urlpatterns = [
     path('api/platform/backup/restore/', encrypted_backup_restore, name='encrypted_backup_restore'),
     path('api/platform/demo/', demo_mode_api, name='demo_mode'),
     path('platform/ai-quality/', ai_quality_dashboard, name='ai_quality_dashboard'),
+    path('api/platform/ai-quality/run/', ai_quality_run_api, name='ai_quality_run'),
     path('platform/ai-debug/', ai_debug_private, name='ai_debug_private'),
     path('api/platform/ai-debug/<int:pk>/rerun/', ai_trace_rerun, name='ai_trace_rerun'),
     path('platform/feature-flags/', feature_flags_view, name='feature_flags'),

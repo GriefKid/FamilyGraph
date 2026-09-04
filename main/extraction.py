@@ -59,10 +59,16 @@ def _candidate_person(owner, raw):
             'candidate_node_ids': [row['id'] for row in candidates]}
 
 
-def _collect(owner, text):
+def _collect(owner, text, candidate_resolver=None):
+    """Collect deterministic suggestions without requiring an AI provider.
+
+    ``candidate_resolver`` keeps production person lookup unchanged while making
+    the extractor independently testable with synthetic people.
+    """
     normalized = _normalise(text)
     found = []
     names = {}
+    resolve_person = candidate_resolver or (lambda raw: _candidate_person(owner, raw))
     amount_token = r'(?:[0-9][0-9,٬]*\s*(?:هزار|میلیون)?|(?:یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|بیست|سی|چهل|پنجاه|صد|دویست|سیصد|چهارصد|پانصد)(?:\s+و\s+(?:ده|بیست|سی|چهل|پنجاه))?\s*(?:هزار|میلیون)?)'
     patterns = [
         (rf'(?P<person>[آ-یA-Za-z][آ-یA-Za-z‌_-]{{1,30}})\s+ازم\s+(?P<amount>{amount_token})\s*(?:تومان|تومن)?\s*(?:قرض\s+گرفت|گرفت)', 'they_owe'),
@@ -72,7 +78,7 @@ def _collect(owner, text):
     ]
     for pattern, direction in patterns:
         for match in re.finditer(pattern, normalized, re.I):
-            person = _candidate_person(owner, match.group('person'))
+            person = resolve_person(match.group('person'))
             value = _amount(match.group('amount'))
             if not person or not value:
                 continue
@@ -85,6 +91,8 @@ def _collect(owner, text):
             }))
 
     for match in re.finditer(r'[^.!؟\n]{0,35}(?:قرار|جلسه|تولد|عروسی|امتحان|سفر|مهمانی)[^.!؟\n]{0,90}', normalized):
+        if re.search(r'(?:قرار\s+نیست|لغو\s+شد|کنسل\s+شد)', match.group(0)):
+            continue
         parsed = parse_persian_datetime(match.group(0))
         found.append(('event', {'snippet': match.group(0), 'title': match.group(0)[:100],
                                 'date': parsed['date'].isoformat() if parsed['date'] else '',
@@ -112,7 +120,7 @@ def _collect(owner, text):
     ]
     for pattern, rel_type, status, strength in relation_patterns:
         for match in re.finditer(pattern, normalized):
-            person = _candidate_person(owner, match.group('person'))
+            person = resolve_person(match.group('person'))
             if not person:
                 continue
             names[person['name_raw']] = person
@@ -129,7 +137,7 @@ def _collect(owner, text):
     ]
     for pattern, category in fact_patterns:
         for match in re.finditer(pattern, normalized):
-            person = _candidate_person(owner, match.group('person'))
+            person = resolve_person(match.group('person'))
             if not person:
                 continue
             names[person['name_raw']] = person
