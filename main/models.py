@@ -1125,6 +1125,13 @@ class Interaction(models.Model):
         (0,  '😐 معمولی'),
         (-1, '😕 ناخوشایند'),
     ]
+    SUPPORT_CHOICES = [
+        ('',          '—'),
+        ('heard',     '👂 شنیده شدم'),
+        ('info',      '💡 اطلاعات / راهنمایی'),
+        ('practical', '🤝 کمک عملی'),
+        ('presence',  '🫂 صرفاً بودن'),
+    ]
 
     node       = models.ForeignKey(Node, on_delete=models.CASCADE,
                                     related_name='interactions', verbose_name='شخص')
@@ -1133,6 +1140,8 @@ class Interaction(models.Model):
     date       = models.DateField(verbose_name='تاریخ')
     feeling    = models.SmallIntegerField(choices=FEELING_CHOICES, default=0,
                                            verbose_name='حس بعدش')
+    support_kind = models.CharField(max_length=10, choices=SUPPORT_CHOICES, blank=True,
+                                    default='', verbose_name='نوع حمایت')
     note       = models.CharField(max_length=300, blank=True, default='',
                                    verbose_name='یادداشت کوتاه')
     created_at = models.DateTimeField(auto_now_add=True)

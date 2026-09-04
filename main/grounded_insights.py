@@ -127,6 +127,9 @@ def network_analysis(user, summary):
             f'اتصالِ شبکه به {b["name"]} وابسته است؛ بدون او {b["count"]} نفر '
             f'({"، ".join(b["isolates"][:3])}…) از گرافت جدا می‌شوند.'
         )
+    support = support_balance(user)
+    for note in support.get('notes', []):
+        risks.append(note)
     if not risks:
         risks.append('از داده‌های فعلی هشدار ساختاری مشخصی دیده نشد؛ این به معنی نبود مشکل در دنیای واقعی نیست.')
 
@@ -729,6 +732,52 @@ def network_break_points(user, limit=4):
             })
     out.sort(key=lambda x: -x['count'])
     return out[:limit]
+
+
+_SUPPORT_LABELS = {
+    'heard': 'شنیده‌شدن', 'info': 'اطلاعات', 'practical': 'کمک عملی', 'presence': 'همراهی',
+}
+
+
+def support_balance(user, days=180):
+    """توزیع «نوع حمایتِ» ثبت‌شده در تعامل‌ها (Cohen & Wills).
+
+    فقط چیزی که خودت ثبت کرده‌ای؛ نبودِ یک نوع حمایت لزوماً یعنی واقعاً
+    نداری‌اش، شاید فقط ثبتش نکرده‌ای.
+    """
+    from datetime import timedelta
+    since = timezone.localdate() - timedelta(days=days)
+    rows = list(
+        Interaction.objects.filter(owner=user, date__gte=since)
+        .exclude(support_kind='')
+        .exclude(node__isnull=True)
+        .values_list('support_kind', 'node__username')
+    )
+    if not rows:
+        return {'total': 0, 'notes': []}
+    by_kind = Counter(k for k, _ in rows)
+    providers = {}
+    for k, who in rows:
+        providers.setdefault(k, Counter())[who] += 1
+
+    notes = []
+    for kind in ('practical', 'heard'):
+        c = providers.get(kind)
+        if c:
+            top, n = c.most_common(1)[0]
+            share = n / sum(c.values())
+            if share >= 0.8 and sum(c.values()) >= 3:
+                notes.append(
+                    f'کل «{_SUPPORT_LABELS[kind]}»ِ ثبت‌شده‌ات از یک نفر ({top}) می‌آید — '
+                    f'شاید ارزش داشته باشد یک مسیر دوم هم داشته باشی.'
+                )
+        elif by_kind:
+            notes.append(f'برای «{_SUPPORT_LABELS[kind]}» هنوز تعاملی ثبت نکرده‌ای.')
+    return {
+        'total': len(rows),
+        'by_kind': {_SUPPORT_LABELS[k]: v for k, v in by_kind.items()},
+        'notes': notes,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────

@@ -377,6 +377,33 @@ class InteractionAPIContractTests(TestCase):
         self.assertEqual(payload['interaction']['note'], 'A short note')
         self.assertIn('health', payload)
 
+    def test_support_kind_is_stored_and_validated(self):
+        from main.models import Interaction
+        ok = self.client.post('/api/interactions/log/', data=json.dumps({
+            'node_id': self.node.id, 'kind': 'meet', 'support_kind': 'practical',
+            'date': str(timezone.localdate()),
+        }), content_type='application/json')
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(Interaction.objects.latest('id').support_kind, 'practical')
+        bad = self.client.post('/api/interactions/log/', data=json.dumps({
+            'node_id': self.node.id, 'kind': 'meet', 'support_kind': 'nonsense',
+            'date': str(timezone.localdate()),
+        }), content_type='application/json')
+        self.assertEqual(bad.status_code, 200)
+        self.assertEqual(Interaction.objects.latest('id').support_kind, '')
+
+    def test_support_balance_flags_single_source_practical_help(self):
+        from main.models import Interaction
+        from main.grounded_insights import support_balance
+        helper = Node.objects.create(owner=self.user, username='the-helper')
+        for i in range(4):
+            Interaction.objects.create(owner=self.user, node=helper, kind='meet',
+                                       support_kind='practical',
+                                       date=timezone.localdate() - timedelta(days=i * 7))
+        notes = support_balance(self.user)['notes']
+        self.assertTrue(any('یک نفر' in n for n in notes))
+        self.assertTrue(any('شنیده‌شدن' in n for n in notes))  # none logged
+
     def test_log_rejects_future_dates_and_foreign_nodes(self):
         future = self.client.post('/api/interactions/log/', data=json.dumps({
             'node_id': self.node.id, 'date': str(timezone.localdate() + timedelta(days=1)),

@@ -97,12 +97,16 @@ def interaction_log_api(request):
         return JsonResponse({'error': 'تاریخ تعامل نمی‌تونه آینده باشه'}, status=400)
 
     note = (body.get('note') or '').strip()[:300]
+    support_kind = (body.get('support_kind') or '').strip()
+    from .models import Interaction as _I
+    if support_kind not in dict(_I.SUPPORT_CHOICES):
+        support_kind = ''
 
     try:
         from .models import Interaction
         inter = Interaction.objects.create(
             node=node, kind=kind, date=date_val,
-            feeling=feeling, note=note, owner=request.user,
+            feeling=feeling, support_kind=support_kind, note=note, owner=request.user,
         )
     except (OperationalError, ProgrammingError):
         return JsonResponse({'error': MIGRATION_MSG}, status=503)

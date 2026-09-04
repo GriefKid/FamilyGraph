@@ -665,6 +665,13 @@
     <button class="ix-feel" data-feel="1">😊</button>
     <button class="ix-feel active" data-feel="0">😐</button>
     <button class="ix-feel" data-feel="-1">😕</button>
+    <select class="ix-note" id="ixSupport" style="max-width:170px" title="چه نوع حمایتی رد و بدل شد؟">
+      <option value="">نوع حمایت…</option>
+      <option value="heard">👂 شنیده شدم</option>
+      <option value="info">💡 اطلاعات</option>
+      <option value="practical">🤝 کمک عملی</option>
+      <option value="presence">🫂 صرفاً بودن</option>
+    </select>
     <input class="ix-note" id="ixNote" placeholder="یادداشت کوتاه (اختیاری)" maxlength="300">
     <input class="ix-date" id="ixDate" type="date">
     <button class="ix-submit" onclick="logInteraction()">ثبت</button>
@@ -1147,6 +1154,7 @@ async function logInteraction(){
         node_id: {{ node.id }},
         kind:    ixKind,
         feeling: ixFeel,
+        support_kind: document.getElementById('ixSupport').value,
         note:    document.getElementById('ixNote').value,
         date:    document.getElementById('ixDate').value,
       })
