@@ -3080,6 +3080,34 @@ class YearbookTests(TestCase):
     def test_bad_year_param_falls_back_to_current(self):
         self.assertEqual(self.client.get('/yearbook/?year=notanumber').status_code, 200)
 
+    def test_month_scope_narrows_the_range_and_labels_the_month(self):
+        import jdatetime
+        jt = jdatetime.date.today()
+        jy, jm = jt.year, jt.month
+        in_month = jdatetime.date(jy, jm, 1).togregorian()
+        other_jm = 1 if jm != 1 else 12
+        other_jy = jy if jm != 1 else jy - 1
+        out_month = jdatetime.date(other_jy, other_jm, 10).togregorian()
+        friend = Node.objects.create(owner=self.user, username='mb-friend', name='همدل')
+        Interaction.objects.create(owner=self.user, node=friend, kind='call', date=in_month)
+        Interaction.objects.create(owner=self.user, node=friend, kind='call', date=out_month)
+
+        resp = self.client.get(f'/yearbook/?year={jy}&month={jm}')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['scope'], 'month')
+        self.assertEqual(resp.context['period_word'], 'ماه')
+        self.assertEqual(resp.context['stats']['interactions'], 1)
+        self.assertEqual(resp.context['period_label'],
+                         f'{jdatetime.date.j_months_fa[jm - 1]} {jy}')
+
+    def test_monthbook_redirects_to_current_jalali_month(self):
+        import jdatetime
+        jt = jdatetime.date.today()
+        resp = self.client.get('/monthbook/')
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(f'month={jt.month}', resp['Location'])
+        self.assertIn(f'year={jt.year}', resp['Location'])
+
 
 class BackgroundJobRunnerTests(TestCase):
     def setUp(self):

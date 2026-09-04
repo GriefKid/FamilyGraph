@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% load jalali_tags %}
-{% block title %}کتابِ سالِ روابط · {{ jy }}{% endblock %}
-{% block page_title %}📖 سالِ روابطِ تو — {{ jy }}{% endblock %}
+{% block title %}کتابِ {{ period_word }} روابط · {{ period_label }}{% endblock %}
+{% block page_title %}📖 {{ period_word }} روابطِ تو — {{ period_label }}{% endblock %}
 {% block topbar_actions %}
-<a class="btn btn-sm" href="?year={{ jy_prev }}">‹ {{ jy_prev }}</a>
-<a class="btn btn-sm" href="?year={{ jy_next }}">{{ jy_next }} ›</a>
+<a class="btn btn-sm" href="{{ nav_prev }}">‹ قبلی</a>
+<a class="btn btn-sm" href="{{ nav_next }}">بعدی ›</a>
 <button class="btn btn-sm btn-primary" onclick="window.print()">🖨 چاپ / ذخیرهٔ PDF</button>
 {% endblock %}
 {% block extra_css %}
@@ -31,10 +31,10 @@
 <main class="yb">
   <section class="yb-card yb-hero">
     <div style="font-size:12px;color:var(--text-muted)">{{ range_fa }}</div>
-    <h1 style="font-size:24px;margin:8px 0">یک سال، در آدم‌ها</h1>
+    <h1 style="font-size:24px;margin:8px 0">یک {{ period_word }}، در آدم‌ها</h1>
     <div class="yb-stats">
       <div class="yb-stat"><div class="yb-num">{{ stats.people_total }}</div><div class="yb-label">نفر در شبکه</div></div>
-      <div class="yb-stat"><div class="yb-num">{{ stats.people_new }}</div><div class="yb-label">آشناییِ تازه امسال</div></div>
+      <div class="yb-stat"><div class="yb-num">{{ stats.people_new }}</div><div class="yb-label">آشناییِ تازه در این {{ period_word }}</div></div>
       <div class="yb-stat"><div class="yb-num">{{ stats.interactions }}</div><div class="yb-label">تعامل ثبت‌شده</div></div>
       <div class="yb-stat"><div class="yb-num">{{ stats.journals }}</div><div class="yb-label">خاطره و لحظه</div></div>
       <div class="yb-stat"><div class="yb-num">{{ stats.events }}</div><div class="yb-label">رویداد</div></div>
@@ -43,16 +43,16 @@
   </section>
 
   <section class="yb-card">
-    <h2 style="font-size:15px;margin-top:0">بیشترین همراهی امسال</h2>
+    <h2 style="font-size:15px;margin-top:0">بیشترین همراهی در این {{ period_word }}</h2>
     {% for p in top_people %}
     <div class="yb-row"><a href="/nodes/{{ p.id }}/">{{ p.name }}</a> — {{ p.n }} تعامل
       <span style="color:var(--text-muted);font-size:11px"> · از {{ p.first_fa }} تا {{ p.last_fa }}</span></div>
-    {% empty %}<div class="yb-row" style="color:var(--text-muted)">امسال تعاملی ثبت نشده است.</div>{% endfor %}
+    {% empty %}<div class="yb-row" style="color:var(--text-muted)">در این {{ period_word }} تعاملی ثبت نشده است.</div>{% endfor %}
   </section>
 
   {% if grew %}
   <section class="yb-card">
-    <h2 style="font-size:15px;margin-top:0">رابطه‌هایی که امسال قوی‌تر شدند</h2>
+    <h2 style="font-size:15px;margin-top:0">رابطه‌هایی که در این {{ period_word }} قوی‌تر شدند</h2>
     {% for g in grew %}<div class="yb-row">{{ g.name }} — از قدرت {{ g.from }} به {{ g.to }}</div>{% endfor %}
   </section>
   {% endif %}
@@ -67,7 +67,7 @@
   {% endif %}
 
   <section class="yb-card">
-    <h2 style="font-size:15px;margin-top:0">قدم‌های آرام برای سال بعد</h2>
+    <h2 style="font-size:15px;margin-top:0">قدم‌های آرام برای {{ period_word }} بعد</h2>
     {% for s in next_steps %}<div class="yb-row"><b>{{ s.name }}</b> — {{ s.why }}</div>
     {% empty %}<div class="yb-row" style="color:var(--text-muted)">رابطه‌ای که نیاز فوری به توجه داشته باشد پیدا نشد.</div>{% endfor %}
   </section>

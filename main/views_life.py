@@ -397,22 +397,52 @@ def monthly_recap_view(request):
 @login_required
 def yearbook_view(request):
     """A printable 'year in relationships' book, built entirely from stored
-    data — no AI. ?year=<Jalali year>, default = current."""
+    data — no AI. ?year=<Jalali year> (default current); add ?month=1..12
+    for a single Jalali month."""
     import jdatetime
     from django.db.models import Q, Max, Min
     from .models import Interaction, Event, FollowUp, Relationship, RelationshipStrengthHistory
     user = request.user
 
     today = timezone.localdate()
+    j_today = jdatetime.date.fromgregorian(date=today)
     try:
-        jy = int(request.GET.get('year') or jdatetime.date.today().year)
+        jy = int(request.GET.get('year') or j_today.year)
     except (TypeError, ValueError):
-        jy = jdatetime.date.today().year
-    start = jdatetime.date(jy, 1, 1).togregorian()
+        jy = j_today.year
     try:
-        end = jdatetime.date(jy, 12, 30).togregorian()
-    except ValueError:
-        end = jdatetime.date(jy, 12, 29).togregorian()
+        jm = int(request.GET.get('month') or 0)
+    except (TypeError, ValueError):
+        jm = 0
+    if jm and 1 <= jm <= 12 and (request.GET.get('year') is None):
+        # a bare ?month= means "this Jalali year"
+        jy = j_today.year
+
+    if jm and 1 <= jm <= 12:
+        scope = 'month'
+        start = jdatetime.date(jy, jm, 1).togregorian()
+        last_day = 31 if jm <= 6 else 30
+        while last_day > 28:
+            try:
+                end = jdatetime.date(jy, jm, last_day).togregorian()
+                break
+            except ValueError:
+                last_day -= 1
+        period_label = f'{jdatetime.date.j_months_fa[jm - 1]} {jy}'
+        prev_jm, prev_jy = (12, jy - 1) if jm == 1 else (jm - 1, jy)
+        next_jm, next_jy = (1, jy + 1) if jm == 12 else (jm + 1, jy)
+        nav_prev = f'?year={prev_jy}&month={prev_jm}'
+        nav_next = f'?year={next_jy}&month={next_jm}'
+    else:
+        scope = 'year'
+        start = jdatetime.date(jy, 1, 1).togregorian()
+        try:
+            end = jdatetime.date(jy, 12, 30).togregorian()
+        except ValueError:
+            end = jdatetime.date(jy, 12, 29).togregorian()
+        period_label = str(jy)
+        nav_prev = f'?year={jy - 1}'
+        nav_next = f'?year={jy + 1}'
     end = min(end, today)
     rng = (start, end)
 
@@ -478,8 +508,11 @@ def yearbook_view(request):
     }
 
     return render(request, 'daily/yearbook.html', {
-        'jy': jy,
-        'jy_prev': jy - 1, 'jy_next': jy + 1,
+        'scope': scope,
+        'period_label': period_label,
+        'period_word': 'ماه' if scope == 'month' else 'سال',
+        'nav_prev': nav_prev,
+        'nav_next': nav_next,
         'range_fa': f'{jalali_str(start)} تا {jalali_str(end)}',
         'stats': stats,
         'top_people': top_people,
@@ -487,3 +520,15 @@ def yearbook_view(request):
         'grew': grew,
         'next_steps': next_steps,
     })
+
+
+@login_required
+def monthbook_view(request):
+    """Convenience entry point: the relationship book for the current Jalali
+    month. Anything explicit in the querystring is passed straight through."""
+    import jdatetime
+    from django.shortcuts import redirect
+    if request.GET.get('month'):
+        return redirect(f"/yearbook/?{request.GET.urlencode()}")
+    jt = jdatetime.date.fromgregorian(date=timezone.localdate())
+    return redirect(f'/yearbook/?year={jt.year}&month={jt.month}')
