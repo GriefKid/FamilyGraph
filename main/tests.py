@@ -2872,3 +2872,45 @@ class PlatformQualityTests(TestCase):
         wrong_file = SimpleUploadedFile('backup.fgb', download.content, 'application/octet-stream')
         wrong = self.client.post('/api/platform/backup/preview/', {'password': 'wrong-pass', 'file': wrong_file})
         self.assertEqual(wrong.status_code, 400)
+
+
+class OverdueDebtFollowupTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='debtfu', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='debtfu-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.friend = Node.objects.create(owner=self.user, username='debtfu-friend', name='رفیق')
+        self.client.force_login(self.user)
+
+    def _debt(self, **kw):
+        from main.models import Debt
+        defaults = dict(owner=self.user, node=self.friend, direction='i_owe',
+                        amount=100000, currency='تومان',
+                        date=date(2025, 1, 1), due_date=timezone.localdate() - timedelta(days=3))
+        defaults.update(kw)
+        return Debt.objects.create(**defaults)
+
+    def test_visiting_the_ledger_opens_a_followup_for_an_overdue_debt(self):
+        d = self._debt()
+        self.assertEqual(self.client.get('/ledger/').status_code, 200)
+        fu = FollowUp.objects.get(owner=self.user, node=self.friend, done=False)
+        self.assertIn(f'[بدهی #{d.id}]', fu.text)
+        # idempotent — a second visit does not duplicate it
+        self.client.get('/ledger/')
+        self.assertEqual(FollowUp.objects.filter(owner=self.user, node=self.friend, done=False).count(), 1)
+
+    def test_no_followup_for_a_future_or_settled_debt(self):
+        self._debt(due_date=timezone.localdate() + timedelta(days=10))
+        self._debt(settled=True, paid=100000)
+        self.client.get('/ledger/')
+        self.assertFalse(FollowUp.objects.filter(owner=self.user, node=self.friend).exists())
+
+    def test_paying_off_the_debt_closes_its_followup(self):
+        d = self._debt()
+        self.client.get('/ledger/')
+        self.client.post(f'/api/debts/{d.id}/pay/', data='{}', content_type='application/json')
+        self.assertFalse(
+            FollowUp.objects.filter(owner=self.user, node=self.friend, done=False,
+                                    text__startswith=f'[بدهی #{d.id}]').exists()
+        )

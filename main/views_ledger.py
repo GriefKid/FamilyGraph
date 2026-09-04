@@ -167,6 +167,14 @@ def debt_pay_api(request, pk):
     if debt.paid >= debt.amount:
         debt.settled = True
         debt.settled_at = timezone.now()
+        try:
+            from .models import FollowUp
+            FollowUp.objects.filter(
+                owner=request.user, node=debt.node, done=False,
+                text__startswith=f'[بدهی #{debt.id}]',
+            ).update(done=True, done_at=timezone.now())
+        except Exception:
+            pass
     debt.save()
     return JsonResponse({'ok': True, 'debt': serialize_debt(debt),
                          'balance': node_balance(request.user, debt.node_id)})
@@ -285,10 +293,41 @@ def borrow_suggest_api(request):
 #  GET /ledger/
 # ═══════════════════════════════════════════════════════════════
 
+def sync_overdue_debt_followups(user):
+    """For each overdue, unsettled debt, make sure there is an open follow-up so
+    it shows up in 'needs attention' and the daily brief. Idempotent."""
+    today = timezone.localdate()
+    try:
+        from .models import Debt, FollowUp
+    except Exception:
+        return 0
+    created = 0
+    overdue = (Debt.objects.filter(owner=user, node__owner=user, settled=False,
+                                   due_date__lt=today)
+               .select_related('node'))
+    for d in overdue:
+        marker = f'[بدهی #{d.id}]'
+        if FollowUp.objects.filter(owner=user, node=d.node, done=False,
+                                   text__startswith=marker).exists():
+            continue
+        who = d.node.display_name()
+        what = ('یادش بینداز' if d.direction == 'they_owe' else 'تسویه کن')
+        FollowUp.objects.create(
+            owner=user, node=d.node, due_date=d.due_date,
+            text=f'{marker} حساب با {who} سررسید شده — {what} ({d.remaining:,} {d.currency}).',
+        )
+        created += 1
+    return created
+
+
 @login_required
 def ledger_view(request):
     user = request.user
     today = timezone.localdate()
+    try:
+        sync_overdue_debt_followups(user)
+    except Exception:
+        pass
 
     debts, table_missing = [], False
     try:
