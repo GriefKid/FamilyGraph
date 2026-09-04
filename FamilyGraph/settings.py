@@ -28,6 +28,9 @@ ALLOWED_HOSTS = (
     _allowed_raw.split(',') if _allowed_raw
     else (['*'] if DEBUG else ['localhost', '127.0.0.1'])
 )
+if not DEBUG and not _allowed_raw:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured('Set ALLOWED_HOSTS when DEBUG=False.')
 
 INSTALLED_APPS = [
     'jazzmin',
@@ -226,3 +229,16 @@ LOGGING = {
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 VAPID_ADMIN_EMAIL = os.environ.get('VAPID_ADMIN_EMAIL', 'admin@example.com')
+
+# Password-reset delivery. Console backend is safe for development; production
+# must provide SMTP settings so reset links can reach the account owner.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend' if DEBUG
+    else 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '1') == '1'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'FamilyGraph <no-reply@example.com>')

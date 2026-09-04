@@ -1,5 +1,6 @@
 import io
 import tempfile
+from django.core import mail
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
@@ -95,3 +96,27 @@ class BrowserSecurityTests(TestCase):
         self.assertContains(response, 'paletteResults.replaceChildren()')
         self.assertContains(response, "link.href=_safeLocalUrl(item.url)")
         self.assertNotContains(response, 'paletteResults.innerHTML=')
+
+
+class PasswordResetTests(TestCase):
+    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    def test_password_reset_sends_a_non_disclosing_email(self):
+        User = get_user_model()
+        User.objects.create_user(
+            username='reset-user', email='reset@example.com', password='SecurePass1',
+        )
+
+        response = self.client.post('/password-reset/', {'email': 'reset@example.com'})
+
+        self.assertRedirects(response, '/password-reset/done/', fetch_redirect_response=False)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('/reset/', mail.outbox[0].body)
+
+        mail.outbox = []
+        self.client.post('/password-reset/', {'email': 'missing@example.com'})
+        self.assertEqual(mail.outbox, [])
+
+    def test_privacy_page_is_public_and_reset_pages_are_not_login_redirected(self):
+        self.assertEqual(self.client.get('/privacy/').status_code, 200)
+        self.assertEqual(self.client.get('/terms/').status_code, 200)
+        self.assertEqual(self.client.get('/password-reset/').status_code, 200)

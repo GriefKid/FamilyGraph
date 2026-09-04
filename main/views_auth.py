@@ -15,6 +15,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 
 from .uploads import UploadValidationError, normalize_image_upload
@@ -311,11 +312,15 @@ def register_view(request):
 
     # ── Step 3: حریم خصوصی ─────────────────────────────────────
     elif request.method == 'POST' and step == 3:
-        is_public = request.POST.get('is_public', 'false') == 'true'
-        reg['is_public'] = is_public
-        request.session['reg_data'] = reg
-        _new_captcha(request)
-        return redirect('/register/?step=4')
+        if request.POST.get('privacy_consent') != 'on':
+            error = 'برای ساخت حساب باید شرایط حریم خصوصی و استفاده از AI را بپذیری.'
+        else:
+            is_public = request.POST.get('is_public', 'false') == 'true'
+            reg['is_public'] = is_public
+            reg['privacy_consent'] = True
+            request.session['reg_data'] = reg
+            _new_captcha(request)
+            return redirect('/register/?step=4')
 
     # ── Step 4: کپچا + ثبت نهایی ────────────────────────────────
     elif request.method == 'POST' and step == 4:
@@ -351,6 +356,7 @@ def register_view(request):
                     country    = reg.get('country', ''),
                     bio        = reg.get('bio', ''),
                     birth_date = bd,
+                    privacy_consent_at = timezone.now(),
                 )
 
                 # ── self-node: نود خود کاربر ──────────────────
@@ -415,6 +421,14 @@ def register_view(request):
 def logout_view(request):
     logout(request)
     return redirect('/login/')
+
+
+def privacy_view(request):
+    return render(request, 'legal/privacy.html')
+
+
+def terms_view(request):
+    return render(request, 'legal/terms.html')
 
 
 @login_required

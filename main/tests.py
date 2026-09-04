@@ -44,7 +44,7 @@ class RegistrationOnboardingTests(TestCase):
         })
         self.assertRedirects(response, '/register/?step=3', fetch_redirect_response=False)
 
-        response = self.client.post('/register/', {'step': '3', 'is_public': 'false'})
+        response = self.client.post('/register/', {'step': '3', 'is_public': 'false', 'privacy_consent': 'on'})
         self.assertRedirects(response, '/register/?step=4', fetch_redirect_response=False)
 
         session = self.client.session
@@ -56,12 +56,24 @@ class RegistrationOnboardingTests(TestCase):
         user = get_user_model().objects.get(username='onboarding_user')
         self.assertEqual(user.country, 'ایران')
         self.assertEqual(user.root_node.birth_day.isoformat(), '1995-05-10')
+        self.assertIsNotNone(user.privacy_consent_at)
 
         profile = Information.objects.get(node=user.root_node)
         self.assertEqual(profile.visibility, 'private')
         self.assertEqual(profile.data['interests'], ['کتاب', 'موسیقی', 'پیاده‌روی'])
         self.assertEqual(profile.data['values'], ['صداقت', 'احترام'])
         self.assertEqual(profile.data['social_energy'], 'balanced')
+
+    def test_registration_requires_privacy_consent(self):
+        response = self.client.post('/register/', {
+            'step': '1', 'username': 'consent-user', 'password': 'SecurePass1',
+            'password2': 'SecurePass1',
+        })
+        self.assertRedirects(response, '/register/?step=2', fetch_redirect_response=False)
+        self.client.post('/register/', {'step': '2'})
+        response = self.client.post('/register/', {'step': '3', 'is_public': 'false'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'باید شرایط حریم خصوصی')
 
 
 

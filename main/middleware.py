@@ -133,6 +133,11 @@ class LoginRequiredMiddleware:
     EXEMPT = (
         '/login/',
         '/register/',
+        '/password-reset/',
+        '/password-reset/done/',
+        '/reset/',
+        '/privacy/',
+        '/terms/',
         '/logout/',
         '/api/captcha/',
         '/static/',

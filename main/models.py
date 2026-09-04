@@ -65,6 +65,11 @@ class User(AbstractUser):
     ai_journal_enabled = models.BooleanField(default=True)
     ai_checkin_enabled = models.BooleanField(default=True)
     ai_chat_enabled = models.BooleanField(default=True)
+    privacy_consent_at = models.DateTimeField(
+        null=True, blank=True,
+        verbose_name='زمان پذیرش حریم خصوصی',
+        help_text='زمانی که کاربر متن حریم خصوصی و استفاده از AI را پذیرفت',
+    )
     onboarding_completed = models.BooleanField(default=False)
     demo_mode = models.BooleanField(default=False)
     feature_overrides = models.JSONField(default=dict, blank=True)

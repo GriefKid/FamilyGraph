@@ -3,8 +3,9 @@ from . import views
 from .undo import undo_action_api
 from .views_auth import (
     login_view, logout_view, register_view, profile_view, captcha_refresh,
-    delete_account_view,
+    delete_account_view, privacy_view, terms_view,
 )
+from django.contrib.auth import views as auth_views
 from .views_notifications import (
     notifications_view, notification_read_api, notifications_read_all_api,
     sync_respond_api, notification_preferences_api, mark_notifications_read_api,
@@ -176,6 +177,24 @@ urlpatterns = [
     path('login/',       login_view,       name='login'),
     path('logout/',      logout_view,      name='logout'),
     path('register/',    register_view,    name='register'),
+    path('password-reset/', auth_views.PasswordResetView.as_view(
+        template_name='registration/password_reset_form.html',
+        email_template_name='registration/password_reset_email.txt',
+        subject_template_name='registration/password_reset_subject.txt',
+        success_url='/password-reset/done/',
+    ), name='password_reset'),
+    path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(
+        template_name='registration/password_reset_done.html',
+    ), name='password_reset_done'),
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name='registration/password_reset_confirm.html',
+        success_url='/reset/complete/',
+    ), name='password_reset_confirm'),
+    path('reset/complete/', auth_views.PasswordResetCompleteView.as_view(
+        template_name='registration/password_reset_complete.html',
+    ), name='password_reset_complete'),
+    path('privacy/', privacy_view, name='privacy'),
+    path('terms/', terms_view, name='terms'),
     path('profile/',     profile_view,     name='profile'),
     path('account/delete/', delete_account_view, name='delete_account'),
     path('people/', people_hub, name='people_hub'),
