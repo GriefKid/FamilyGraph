@@ -2753,6 +2753,43 @@ class MemoryIntelligenceTests(TestCase):
         self.assertEqual(weekly.status_code, 200)
         self.assertContains(weekly, 'داستان این هفته')
 
+    def test_person_timeline_unifies_owned_relationship_records(self):
+        today = timezone.localdate()
+        journal = JournalEntry.objects.create(owner=self.user, text='خاطره با علی', entry_date=today)
+        journal.mentioned_nodes.add(self.ali)
+        Interaction.objects.create(owner=self.user, node=self.ali, kind='call', date=today, note='گفتگوی خوب')
+        event = Event.objects.create(owner=self.user, title='قرار با علی', date=today)
+        event.participants.add(self.ali)
+        FollowUp.objects.create(owner=self.user, node=self.ali, text='پیگیری کتاب')
+        Commitment.objects.create(owner=self.user, node=self.ali, responsible='me', text='قول تماس')
+        MeetingReflection.objects.create(owner=self.user, node=self.ali, summary='آرام و مفید بود')
+        LifeEvent.objects.create(owner=self.user, node=self.ali, kind='other', title='شروع کار تازه', date=today)
+        Debt.objects.create(owner=self.user, node=self.ali, direction='i_owe', amount=100,
+                            paid=0, date=today, note='کتاب')
+        RelationshipRecommendation.objects.create(
+            owner=self.user, node=self.ali, title='پیشنهاد پیگیری', suggestion='حال‌پرسی',
+            status='completed', outcome='better', acted_at=timezone.now(),
+        )
+        foreign_node = Node.objects.create(owner=self.other, username='timeline-foreign', name='غریبه')
+        foreign_journal = JournalEntry.objects.create(owner=self.other, text='نباید دیده شود', entry_date=today)
+        foreign_journal.mentioned_nodes.add(foreign_node)
+
+        response = self.client.get(f'/memory/timeline/?person={self.ali.id}')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context['timeline']), 9)
+        self.assertSetEqual(
+            {row['kind'] for row in response.context['timeline']},
+            {'journal', 'interaction', 'event', 'followup', 'commitment',
+             'reflection', 'life_event', 'debt', 'recommendation'},
+        )
+        self.assertContains(response, 'خاطره با علی')
+        self.assertContains(response, 'گفتگوی خوب')
+        self.assertNotContains(response, 'نباید دیده شود')
+
+        foreign_filter = self.client.get(f'/memory/timeline/?person={foreign_node.id}')
+        self.assertEqual(foreign_filter.context['timeline'], [])
+
 
     def test_monthly_recap_is_private_and_renders_user_activity(self):
         Interaction.objects.create(owner=self.user, node=self.ali, kind='call', date=timezone.localdate())

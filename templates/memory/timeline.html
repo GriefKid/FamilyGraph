@@ -1,27 +1,41 @@
 {% extends "base.html" %}
-{% block title %}خط زمان خاطره‌ها · FamilyGraph{% endblock %}
-{% block page_title %}خط زمان خاطره‌ها{% endblock %}
+{% load jalali_tags %}
+{% block title %}خط زمان رابطه · FamilyGraph{% endblock %}
+{% block page_title %}خط زمان رابطه{% endblock %}
 {% block nav_insight_hub %}active{% endblock %}
 {% block extra_css %}<style>@media print{.sidebar,.topbar,.site-footer,.orb,.nav-scrim,form{display:none!important}.main-wrap{margin:0!important}.card{border:0!important;box-shadow:none!important;background:#fff!important;color:#111!important}}</style>{% endblock %}
 {% block content %}
-<main style="max-width:860px;margin:0 auto">
+<main style="max-width:900px;margin:0 auto">
   <section class="card" style="padding:20px">
-    <h1 style="margin-top:0;font-size:21px">خاطره‌ها در گذر زمان</h1>
-    <p style="color:var(--text-muted)">فقط خاطره‌های خصوصی خودت را می‌بینی.</p>
+    <h1 style="margin-top:0;font-size:21px">خط زمان رابطه</h1>
+    <p style="color:var(--text-muted)">{% if selected_person %}داستان ثبت‌شدهٔ تو و {{ selected_person.display_name }} در یک نگاه.{% else %}خاطره‌ها و اتفاق‌های ثبت‌شدهٔ خصوصی خودت را می‌بینی؛ برای خط زمان کامل، یک فرد را انتخاب کن.{% endif %}</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><a class="btn btn-sm" href="/memory/">مدیریت حافظه</a><a class="btn btn-sm" href="/insight-center/">مرکز شناخت</a></div>
     <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 8px">
       <select name="person" style="padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text)"><option value="">همهٔ افراد</option>{% for node in nodes %}<option value="{{ node.id }}" {% if selected_node == node.id|stringformat:"s" %}selected{% endif %}>{{ node.display_name }}</option>{% endfor %}</select>
+      <select name="kind" style="padding:8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text)">
+        <option value="all" {% if selected_kind == 'all' %}selected{% endif %}>همهٔ رخدادها</option>
+        <option value="journal" {% if selected_kind == 'journal' %}selected{% endif %}>خاطره‌ها</option>
+        <option value="interaction" {% if selected_kind == 'interaction' %}selected{% endif %}>تعامل‌ها</option>
+        <option value="event" {% if selected_kind == 'event' %}selected{% endif %}>رویدادها</option>
+        <option value="followup" {% if selected_kind == 'followup' %}selected{% endif %}>پیگیری‌ها</option>
+        <option value="commitment" {% if selected_kind == 'commitment' %}selected{% endif %}>تعهدها</option>
+        <option value="reflection" {% if selected_kind == 'reflection' %}selected{% endif %}>بازتاب ملاقات</option>
+        <option value="life_event" {% if selected_kind == 'life_event' %}selected{% endif %}>رویداد زندگی</option>
+        <option value="debt" {% if selected_kind == 'debt' %}selected{% endif %}>حساب‌ها</option>
+        <option value="recommendation" {% if selected_kind == 'recommendation' %}selected{% endif %}>نتیجهٔ پیشنهاد</option>
+      </select>
       <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" name="images" value="1" {% if images_only %}checked{% endif %}> فقط دارای عکس</label>
       <button class="btn btn-sm">اعمال فیلتر</button>
       <button class="btn btn-sm" type="button" onclick="window.print()">چاپ timeline</button>
     </form>
-    {% for entry in entries %}
-    <article style="padding:16px 0;border-bottom:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text-muted)">{{ entry.entry_date|default:entry.created_at }}</div>
-      <div style="line-height:1.9;margin-top:6px">{{ entry.text }}</div>
-      {% if entry.images.all %}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">{% for image in entry.images.all %}<img src="{{ image.image.url }}" alt="تصویر خاطره" style="width:110px;height:82px;object-fit:cover;border-radius:9px">{% endfor %}</div>{% endif %}
+    {% if timeline %}<div style="display:flex;gap:6px;flex-wrap:wrap;margin:14px 0">{% for kind,count in timeline_stats.items %}<span style="padding:4px 8px;border-radius:999px;background:var(--surface);color:var(--text-muted);font-size:10px">{{ kind }} · {{ count }}</span>{% endfor %}</div>{% endif %}
+    {% for entry in timeline %}
+    <article style="display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:start;padding:15px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:20px">{{ entry.icon }}</div>
+      <div><div style="font-weight:800;line-height:1.8">{{ entry.title }}</div>{% if entry.detail %}<div style="line-height:1.9;margin-top:3px">{{ entry.detail }}</div>{% endif %}{% if entry.images %}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">{% for image in entry.images %}<img src="{{ image.image.url }}" alt="تصویر خاطره" style="width:110px;height:82px;object-fit:cover;border-radius:9px">{% endfor %}</div>{% endif %}</div>
+      <div style="font-size:11px;color:var(--text-muted);white-space:nowrap">{{ entry.date|jalali_date:"long" }}</div>
     </article>
-    {% empty %}<p style="color:var(--text-muted)">خاطره‌ای با این فیلتر پیدا نشد.</p>{% endfor %}
+    {% empty %}<p style="color:var(--text-muted)">رخدادی با این فیلتر پیدا نشد.</p>{% endfor %}
   </section>
 </main>
 {% endblock %}

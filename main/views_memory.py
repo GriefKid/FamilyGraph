@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import (Debt, Event, ExtractionSuggestion, FollowUp, Interaction, JournalEntry,
+from .models import (Commitment, Debt, Event, ExtractionSuggestion, FollowUp, Interaction, JournalEntry,
                      KnowledgeTriple, MemoryFact, Node, NodeAlias, NodeMergeOperation, Relationship,
                      RelationshipRecommendation, NodeSafetySetting)
 
@@ -68,19 +68,106 @@ def memory_hub(request):
 
 @login_required
 def memory_timeline_view(request):
+    user = request.user
     selected_node = request.GET.get('person', '')
-    entries = JournalEntry.objects.filter(owner=request.user).prefetch_related(
-        'images', 'mentioned_nodes'
-    )
+    selected_person = None
     if selected_node.isdigit():
-        entries = entries.filter(mentioned_nodes__id=selected_node)
-    if request.GET.get('images') == '1':
-        entries = entries.filter(images__isnull=False).distinct()
+        selected_person = Node.objects.filter(
+            owner=user, pk=selected_node, merged_into__isnull=True,
+        ).first()
+
+    kind = request.GET.get('kind', 'all')
+    valid_kinds = {'all', 'journal', 'interaction', 'event', 'followup',
+                   'commitment', 'reflection', 'life_event', 'debt', 'recommendation'}
+    if kind not in valid_kinds:
+        kind = 'all'
+    images_only = request.GET.get('images') == '1'
+
+    timeline = []
+
+    def add(*, date, icon, title, detail='', item_kind, url, images=None):
+        if kind != 'all' and kind != item_kind:
+            return
+        timeline.append({
+            'date': date, 'icon': icon, 'title': title, 'detail': detail,
+            'kind': item_kind, 'url': url, 'images': images,
+        })
+
+    journal_qs = JournalEntry.objects.filter(owner=user).prefetch_related('images')
+    interactions_qs = Interaction.objects.filter(owner=user, node__owner=user).select_related('node')
+    events_qs = Event.objects.filter(owner=user, participants__owner=user).filter(
+        participants=selected_person,
+    ) if selected_person else Event.objects.none()
+    followups_qs = FollowUp.objects.filter(owner=user, node__owner=user).select_related('node')
+    commitments_qs = Commitment.objects.filter(owner=user, node__owner=user).select_related('node')
+    debts_qs = Debt.objects.filter(owner=user, node__owner=user).select_related('node')
+
+    if selected_person:
+        journal_qs = journal_qs.filter(mentioned_nodes=selected_person)
+        interactions_qs = interactions_qs.filter(node=selected_person)
+        followups_qs = followups_qs.filter(node=selected_person)
+        commitments_qs = commitments_qs.filter(node=selected_person)
+        debts_qs = debts_qs.filter(node=selected_person)
+    elif selected_node.isdigit():
+        # An invalid/foreign person filter must not silently fall back to all data.
+        journal_qs = JournalEntry.objects.none()
+        interactions_qs = Interaction.objects.none()
+        events_qs = Event.objects.none()
+        followups_qs = FollowUp.objects.none()
+        commitments_qs = Commitment.objects.none()
+        debts_qs = Debt.objects.none()
+
+    for entry in journal_qs[:80]:
+        add(date=entry.entry_date or entry.created_at.date(), icon='📓', title='خاطرهٔ مرتبط',
+            detail=entry.text[:240], item_kind='journal', url='/journal/', images=entry.images.all())
+    for item in interactions_qs[:80]:
+        add(date=item.date, icon='⚡', title=item.get_kind_display(), detail=item.note,
+            item_kind='interaction', url=f'/nodes/{item.node_id}/')
+    for item in events_qs.distinct()[:80]:
+        add(date=item.date, icon='📅', title=item.title, detail=item.description[:240],
+            item_kind='event', url='/events/')
+    for item in followups_qs[:80]:
+        state = 'انجام شده' if item.done else 'باز'
+        add(date=item.done_at.date() if item.done and item.done_at else item.created_at.date(),
+            icon='📌', title=f'پیگیری · {state}', detail=item.text,
+            item_kind='followup', url='/followups/')
+    for item in commitments_qs[:80]:
+        add(date=item.completed_at.date() if item.status == 'done' and item.completed_at else item.created_at.date(),
+            icon='🤝', title=f'تعهد · {item.get_responsible_display()}', detail=item.text,
+            item_kind='commitment', url='/relationship-life/')
+    for item in debts_qs[:80]:
+        add(date=item.date, icon='💰', title=f'حساب · {item.remaining:,} {item.currency}',
+            detail=item.note, item_kind='debt', url='/ledger/')
+
+    if selected_person:
+        from .models import LifeEvent, MeetingReflection
+        for item in MeetingReflection.objects.filter(owner=user, node=selected_person).select_related('event')[:60]:
+            add(date=item.happened_at.date(), icon='🫂', title='بازتاب ملاقات', detail=item.summary[:240],
+                item_kind='reflection', url=f'/nodes/{selected_person.id}/')
+        for item in LifeEvent.objects.filter(owner=user, node=selected_person, archived=False)[:60]:
+            add(date=item.date, icon='🌱', title=item.title or item.get_kind_display(), detail=item.get_kind_display(),
+                item_kind='life_event', url=f'/nodes/{selected_person.id}/')
+        for item in RelationshipRecommendation.objects.filter(
+                owner=user, node=selected_person, status='completed',
+        )[:60]:
+            outcome = {'better': 'بهتر شد', 'same': 'بدون تغییر', 'worse': 'بدتر شد'}.get(item.outcome, 'ثبت شد')
+            add(date=item.acted_at.date() if item.acted_at else item.created_at.date(), icon='✨',
+                title=f'نتیجهٔ پیشنهاد · {outcome}', detail=item.title,
+                item_kind='recommendation', url=f'/nodes/{selected_person.id}/')
+
+    timeline.sort(key=lambda row: (row['date'] or timezone.localdate(), row['title']), reverse=True)
+    timeline = timeline[:160]
+    stats = {}
+    for row in timeline:
+        stats[row['kind']] = stats.get(row['kind'], 0) + 1
     return render(request, 'memory/timeline.html', {
-        'entries': entries.order_by('-entry_date', '-created_at')[:120],
-        'nodes': Node.objects.filter(owner=request.user, merged_into__isnull=True).order_by('username'),
+        'timeline': timeline,
+        'timeline_stats': stats,
+        'selected_person': selected_person,
+        'nodes': Node.objects.filter(owner=user, merged_into__isnull=True).order_by('username'),
         'selected_node': selected_node,
-        'images_only': request.GET.get('images') == '1',
+        'selected_kind': kind,
+        'images_only': images_only,
     })
 
 
