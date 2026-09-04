@@ -6,6 +6,35 @@ import uuid
 from django.http import JsonResponse
 
 
+class ResponseSecurityHeadersMiddleware:
+    """Baseline browser hardening compatible with the current server-rendered UI."""
+
+    POLICY = "; ".join((
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+        "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+        "img-src 'self' data: blob: https:",
+        "connect-src 'self'",
+        "worker-src 'self' blob:",
+        "manifest-src 'self'",
+    ))
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.setdefault('Content-Security-Policy', self.POLICY)
+        response.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+        response.setdefault('Permissions-Policy', 'camera=(), geolocation=(), microphone=(self)')
+        return response
+
+
 class RequestObservabilityMiddleware:
     """Attach a request id and store only bounded, non-body operational metadata."""
     def __init__(self, get_response):

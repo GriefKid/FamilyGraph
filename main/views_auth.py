@@ -10,6 +10,9 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core import signing
+from django.core.files.storage import default_storage
+from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
@@ -412,6 +415,59 @@ def register_view(request):
 def logout_view(request):
     logout(request)
     return redirect('/login/')
+
+
+@login_required
+@require_POST
+def delete_account_view(request):
+    """Permanently remove the current tenant and its unshared uploaded files."""
+    user = request.user
+    confirmation = request.POST.get('confirmation', '').strip()
+    password = request.POST.get('password', '')
+    if confirmation != user.username:
+        messages.error(request, 'برای حذف حساب، نام کاربری را دقیق وارد کن.')
+        return redirect('profile_edit')
+    if not user.check_password(password):
+        messages.error(request, 'رمز عبور فعلی اشتباه است.')
+        return redirect('profile_edit')
+
+    from .models import JournalImage, Node, SocialPost, User as UserModel
+
+    media_names = {
+        name for name in (
+            user.avatar.name if user.avatar else '',
+            user.cover_image.name if user.cover_image else '',
+        ) if name
+    }
+    media_names.update(
+        Node.objects.filter(owner=user).exclude(picture='').values_list('picture', flat=True)
+    )
+    media_names.update(
+        SocialPost.objects.filter(author=user).exclude(image='').values_list('image', flat=True)
+    )
+    media_names.update(
+        JournalImage.objects.filter(Q(owner=user) | Q(entry__owner=user))
+        .exclude(image='').values_list('image', flat=True)
+    )
+
+    with transaction.atomic():
+        user.delete()
+    logout(request)
+
+    for name in filter(None, media_names):
+        still_used = (
+            UserModel.objects.filter(Q(avatar=name) | Q(cover_image=name)).exists()
+            or Node.objects.filter(picture=name).exists()
+            or SocialPost.objects.filter(image=name).exists()
+            or JournalImage.objects.filter(image=name).exists()
+        )
+        if not still_used:
+            try:
+                default_storage.delete(name)
+            except OSError:
+                pass
+    messages.success(request, 'حساب و داده‌های وابسته با موفقیت حذف شدند.')
+    return redirect('login')
 
 
 # ─────────────────────────────────────────────────────────────────

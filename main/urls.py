@@ -3,6 +3,7 @@ from . import views
 from .undo import undo_action_api
 from .views_auth import (
     login_view, logout_view, register_view, profile_view, captcha_refresh,
+    delete_account_view,
 )
 from .views_notifications import (
     notifications_view, notification_read_api, notifications_read_all_api,
@@ -175,6 +176,7 @@ urlpatterns = [
     path('logout/',      logout_view,      name='logout'),
     path('register/',    register_view,    name='register'),
     path('profile/',     profile_view,     name='profile'),
+    path('account/delete/', delete_account_view, name='delete_account'),
     path('people/', people_hub, name='people_hub'),
     path('insight-center/', insight_hub, name='insight_hub'),
     path('relationship-work/', relationship_work_hub, name='relationship_work_hub'),

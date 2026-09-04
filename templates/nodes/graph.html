@@ -901,6 +901,9 @@ function paint(nodes, edges, rootId, nMap){
 // Helpers
 // ═══════════════════════════════════════════════════════════
 function nr(n){ return Math.max(MIN_R, Math.min(MAX_R, MIN_R + (n.centrality || 0) * (MAX_R - MIN_R) * 5)); }
+const graphEsc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const graphSafeColor = (value, fallback='#6366f1') => /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(value||'')) ? String(value) : fallback;
+const graphId = value => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : 0;
 
 // Relationship-health ring around each person: red = overdue, amber = slipping,
 // green = healthy. Falls back to the node's group/community colour when there is
@@ -919,22 +922,23 @@ function buildLegend(commSet, nodes){
   if(all_groups && all_groups.length > 0){
     // Legend بر اساس گروه‌های دستی
     all_groups.slice(0, 10).forEach(g => {
-      const color = group_colors[g] || PAL[0];
+      const color = graphSafeColor(group_colors[g], PAL[0]);
       const cnt   = nodes.filter(n => n.group === g).length;
       const isActive = activeGroups.size === 0 || activeGroups.has(g);
       const row = document.createElement("div");
       row.className = "leg-row";
       row.style.justifyContent = "space-between";
       row.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1"
-             onclick="toggleGroup('${g.replace(/'/g,"\\'")}')">
+        <div data-toggle-group style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1">
           <div class="leg-dot" style="background:${color};box-shadow:0 0 5px ${color}88;opacity:${isActive?1:.3};"></div>
-          <span style="opacity:${isActive?1:.4};">${g} <span style="color:${color};font-weight:700">(${cnt})</span></span>
+          <span style="opacity:${isActive?1:.4};">${graphEsc(g)} <span style="color:${color};font-weight:700">(${cnt})</span></span>
         </div>
-        <button onclick="renameGroup('${g.replace(/'/g,"\\'")}','${color}')"
+        <button type="button" data-rename-group
           title="تغییر نام گروه"
           style="background:none;border:none;color:#475569;cursor:pointer;font-size:11px;padding:0 2px;line-height:1;flex-shrink:0">✏</button>
       `;
+      row.querySelector('[data-toggle-group]').addEventListener('click', () => toggleGroup(g));
+      row.querySelector('[data-rename-group]').addEventListener('click', () => renameGroup(g, color));
       c.appendChild(row);
     });
     // نودهای بدون گروه
@@ -1737,7 +1741,7 @@ async function loadGroupsMgr(){
     if(sel && d.nodes){
       const cur = sel.value;
       sel.innerHTML = '<option value="">اولین عضو را انتخاب کن</option>'
-        + (d.nodes||[]).map(n=>`<option value="${n.id}">${n.label||n.id}</option>`).join('');
+        + (d.nodes||[]).map(n=>`<option value="${graphId(n.id)}">${graphEsc(n.label||n.id)}</option>`).join('');
       sel.value = cur;
     }
     renderGroupsMgr(d);
@@ -1755,32 +1759,32 @@ function renderGroupsMgr(d){
   let html = '';
 
   groups.forEach((g,i) => {
-    const col = colors[g] || PAL_COLORS[i % PAL_COLORS.length];
+    const col = graphSafeColor(colors[g], PAL_COLORS[i % PAL_COLORS.length]);
     const members = nodes.filter(n => n.group === g);
     html += `
     <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
         <div style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0;"></div>
-        <span style="font-weight:700;font-size:14px;flex:1;">${g}</span>
+        <span style="font-weight:700;font-size:14px;flex:1;">${graphEsc(g)}</span>
         <span style="font-size:11px;color:var(--text-muted);background:rgba(255,255,255,.06);border:1px solid var(--border);padding:2px 8px;border-radius:10px;">${members.length} نفر</span>
-        <button onclick="mgr_renameGroup('${g.replace(/'/g,"\\'")}')"
+        <button type="button" data-gmgr-action="rename" data-group="${graphEsc(g)}"
           style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:12px;padding:3px 6px;">✏</button>
-        <button onclick="mgr_deleteGroup('${g.replace(/'/g,"\\'")}')"
+        <button type="button" data-gmgr-action="delete" data-group="${graphEsc(g)}"
           style="background:none;border:none;color:#f87171;cursor:pointer;font-size:12px;padding:3px 6px;">✕</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;">
         ${members.map(n => `<span style="font-size:11px;padding:3px 10px;background:rgba(99,102,241,.1);border:1px solid var(--primary-border);border-radius:20px;color:var(--text-soft);display:flex;align-items:center;gap:5px;">
-          ${n.label||n.id}
-          <button onclick="mgr_removeFromGroup(${n.id},'${g.replace(/'/g,"\\'")}')" style="background:none;border:none;color:#6b7280;cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
+          ${graphEsc(n.label||n.id)}
+          <button type="button" data-gmgr-action="remove" data-node-id="${graphId(n.id)}" data-group="${graphEsc(g)}" style="background:none;border:none;color:#6b7280;cursor:pointer;font-size:10px;padding:0;line-height:1;">✕</button>
         </span>`).join('')}
         ${members.length===0 ? '<span style="font-size:11px;color:#374151;font-style:italic;">خالی</span>' : ''}
       </div>
       <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
         <select id="add-to-${i}" style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:'Vazirmatn',sans-serif;font-size:12px;outline:none;">
           <option value="">+ افزودن نفر به این گروه</option>
-          ${nodes.filter(n => n.group !== g).map(n => `<option value="${n.id}">${n.label||n.id}</option>`).join('')}
+          ${nodes.filter(n => n.group !== g).map(n => `<option value="${graphId(n.id)}">${graphEsc(n.label||n.id)}</option>`).join('')}
         </select>
-        <button onclick="mgr_addToGroup(${i},'${g.replace(/'/g,"\\'")}')"
+        <button type="button" data-gmgr-action="add" data-group-index="${i}" data-group="${graphEsc(g)}"
           style="padding:6px 14px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-family:'Vazirmatn',sans-serif;font-size:12px;cursor:pointer;">افزودن</button>
       </div>
     </div>`;
@@ -1790,7 +1794,7 @@ function renderGroupsMgr(d){
     html += `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
       <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:10px;">بدون گروه (${ungrouped.length} نفر)</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${ungrouped.map(n => `<span style="font-size:11px;padding:3px 10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:20px;color:var(--text-muted);">${n.label||n.id}</span>`).join('')}
+        ${ungrouped.map(n => `<span style="font-size:11px;padding:3px 10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:20px;color:var(--text-muted);">${graphEsc(n.label||n.id)}</span>`).join('')}
       </div>
     </div>`;
   }
@@ -1800,6 +1804,16 @@ function renderGroupsMgr(d){
   }
 
   el.innerHTML = html;
+  el.querySelectorAll('[data-gmgr-action]').forEach(button => {
+    button.addEventListener('click', () => {
+      const action = button.dataset.gmgrAction;
+      const group = button.dataset.group || '';
+      if(action === 'rename') mgr_renameGroup(group);
+      else if(action === 'delete') mgr_deleteGroup(group);
+      else if(action === 'remove') mgr_removeFromGroup(graphId(button.dataset.nodeId), group);
+      else if(action === 'add') mgr_addToGroup(Number(button.dataset.groupIndex), group);
+    });
+  });
 }
 
 async function createGroup(){

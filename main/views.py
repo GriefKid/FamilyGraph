@@ -6,7 +6,6 @@ import time
 from datetime import date, timedelta
 from django.db.models import Q, ProtectedError, Prefetch
 from django.views.decorators.http import require_http_methods, require_GET, require_POST
-from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import redirect
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse, HttpResponse

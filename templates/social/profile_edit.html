@@ -119,6 +119,19 @@
       </form>
       <div class="media-list" style="margin-top:16px">{% for post in posts %}<div class="media-item"><div>{{ post.body|truncatechars:160 }}<div class="hint" style="margin:4px 0 0">{{ post.created_at|date:"j F، H:i" }}</div></div></div>{% empty %}<div class="hint">هنوز پستی نداری.</div>{% endfor %}</div>
     </div>
+
+    <div class="panel" style="grid-column:1/-1;border-color:rgba(244,63,94,.35)">
+      <h3 style="color:#fb7185">حذف کامل حساب</h3>
+      <div class="hint">این کار حساب، آدم‌ها، رابطه‌ها، خاطرات، پیام‌ها و فایل‌های متعلق به تو را برای همیشه حذف می‌کند. قبلش می‌توانی از «بکاپ و ابزارها» خروجی رمزگذاری‌شده بگیری.</div>
+      <form method="post" action="{% url 'delete_account' %}" onsubmit="return confirm('حساب و همه داده‌ها برای همیشه حذف شوند؟')">
+        {% csrf_token %}
+        <div class="fields">
+          <div class="field"><label>نام کاربری برای تأیید</label><input name="confirmation" autocomplete="username" required placeholder="{{ profile_user.username }}"></div>
+          <div class="field"><label>رمز عبور فعلی</label><input type="password" name="password" autocomplete="current-password" required></div>
+        </div>
+        <button type="submit" class="btn" style="background:#be123c">حذف دائمی حساب</button>
+      </form>
+    </div>
   </div>
 </div>
 <script>

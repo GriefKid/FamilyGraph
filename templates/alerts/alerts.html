@@ -433,10 +433,10 @@ async function legacyLoadDailyTips(btn){
     if(d.ok && d.result){
       const t = d.result;
       let html = '';
-      if(t.day_message) html += `<div style="font-size:12px;color:var(--text-soft);margin-bottom:10px;font-style:italic;">💬 ${t.day_message}</div>`;
+      if(t.day_message) html += `<div style="font-size:12px;color:var(--text-soft);margin-bottom:10px;font-style:italic;">💬 ${escA(t.day_message)}</div>`;
       html += (t.tips||[]).map(tip=>`
         <div class="tip-item">
-          <span style="font-size:18px;line-height:1">${tip.emoji||'✦'}</span>
+          <span style="font-size:18px;line-height:1">${escA(tip.emoji||'✦')}</span>
           <div class="tip-body">
             <div class="tip-title">${escA(tip.tip)}</div>
             <div class="tip-why">${escA(tip.why)}</div>
@@ -444,7 +444,7 @@ async function legacyLoadDailyTips(btn){
         </div>`).join('');
       res.innerHTML = html;
     } else {
-      res.innerHTML = `<div style="color:#f87171;font-size:12px">${d.error||'خطا'}</div>`;
+      res.innerHTML = `<div style="color:#f87171;font-size:12px">${escA(d.error||'خطا')}</div>`;
     }
     _dailyLoaded = true;
   } catch(e){

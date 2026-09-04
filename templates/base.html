@@ -1606,6 +1606,13 @@ function getCookie(n){
 function _esc(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
+function _safeLocalUrl(value){
+  try{
+    const url = new URL(String(value || '/'), window.location.origin);
+    if(url.origin !== window.location.origin) return '#';
+    return url.pathname + url.search + url.hash;
+  }catch(e){ return '#'; }
+}
 
 // ═══════════════════════════════════════════════════════════
 // V8: ویس‌به‌متن سراسری 🎤
@@ -1799,11 +1806,49 @@ window.fgUndo=(undoId,label)=>{
   };
 };
 const palette=document.getElementById('fgPalette'),paletteInput=document.getElementById('fgPaletteInput'),paletteResults=document.getElementById('fgPaletteResults');let paletteTimer,paletteReturnFocus;
-async function loadPalette(){const r=await fetch('/api/platform/command-palette/?q='+encodeURIComponent(paletteInput.value)),d=await r.json();paletteResults.innerHTML=(d.results||[]).map((x,i)=>`<a href="${x.url}" style="display:flex;gap:10px;padding:10px;border-radius:10px;color:var(--text);text-decoration:none"><span>${x.icon}</span><span><b>${x.title}</b><small style="display:block;color:var(--text-muted)">${x.subtitle}</small></span></a>`).join('')}
+async function loadPalette(){
+  try{
+    const r=await fetch('/api/platform/command-palette/?q='+encodeURIComponent(paletteInput.value));
+    const d=await r.json();
+    if(!r.ok) throw new Error('palette');
+    paletteResults.replaceChildren();
+    for(const item of (d.results||[])){
+      const link=document.createElement('a');
+      link.href=_safeLocalUrl(item.url);
+      link.style.cssText='display:flex;gap:10px;padding:10px;border-radius:10px;color:var(--text);text-decoration:none';
+      const icon=document.createElement('span');icon.textContent=String(item.icon||'');
+      const copy=document.createElement('span');
+      const title=document.createElement('b');title.textContent=String(item.title||'');
+      const subtitle=document.createElement('small');subtitle.textContent=String(item.subtitle||'');subtitle.style.cssText='display:block;color:var(--text-muted)';
+      copy.append(title,subtitle);link.append(icon,copy);paletteResults.append(link);
+    }
+  }catch(e){ paletteResults.textContent='جست‌وجو فعلاً در دسترس نیست.'; }
+}
 function openPalette(){paletteReturnFocus=document.activeElement;palette.style.display='block';paletteInput.value='';loadPalette();setTimeout(()=>paletteInput.focus(),20)}function closePalette(){if(palette.style.display==='none')return;palette.style.display='none';paletteReturnFocus?.focus?.()}paletteInput?.addEventListener('input',()=>{clearTimeout(paletteTimer);paletteTimer=setTimeout(loadPalette,150)});palette?.addEventListener('click',e=>{if(e.target===palette)closePalette()});palette?.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();paletteInput.focus()}});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette()}if(e.key==='Escape')closePalette()});
 const fgCsrf=()=>((document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop()||'');
 async function saveOnboardingGoal(goal){const r=await fetch('/api/platform/onboarding/goal/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':fgCsrf()},body:JSON.stringify({goal})});if(r.ok)loadOnboarding()}
-async function loadOnboarding(){try{const r=await fetch('/api/platform/onboarding/'),d=await r.json();if(d.completed)return;const box=document.getElementById('fgOnboarding'),out=document.getElementById('fgOnboardingSteps');box.style.display='block';if(!d.goal){out.innerHTML='<div style="color:var(--text-muted);font-size:12px;line-height:1.8">اول بگو دوست داری از کجا شروع کنی؛ بعد فقط قدم‌های مرتبط را می‌بینی.</div>'+(d.goal_choices||[]).map(g=>`<button class="btn btn-sm" style="display:block;width:100%;margin-top:8px;text-align:right" onclick="saveOnboardingGoal(\'${g.id}\')"><b>${g.label}</b><small style="display:block;opacity:.8;margin-top:3px">${g.description}</small></button>`).join('');return}out.innerHTML=d.steps.map(s=>`<a href="${s.url}" style="display:block;padding:7px;color:${s.done?'#34d399':'var(--text)'};text-decoration:none">${s.done?'✓':'○'} ${s.title}</a>`).join('')}catch(e){}}async function finishOnboarding(){await fetch('/api/platform/onboarding/complete/',{method:'POST',headers:{'X-CSRFToken':fgCsrf()}});document.getElementById('fgOnboarding').style.display='none'}{% if request.user.is_authenticated and not request.user.onboarding_completed %}loadOnboarding();{% endif %}
+async function loadOnboarding(){
+  try{
+    const r=await fetch('/api/platform/onboarding/'),d=await r.json();
+    if(!r.ok||d.completed)return;
+    const box=document.getElementById('fgOnboarding'),out=document.getElementById('fgOnboardingSteps');
+    box.style.display='block';out.replaceChildren();
+    if(!d.goal){
+      const intro=document.createElement('div');intro.style.cssText='color:var(--text-muted);font-size:12px;line-height:1.8';intro.textContent='اول بگو دوست داری از کجا شروع کنی؛ بعد فقط قدم‌های مرتبط را می‌بینی.';out.append(intro);
+      for(const goal of (d.goal_choices||[])){
+        const button=document.createElement('button');button.type='button';button.className='btn btn-sm';button.style.cssText='display:block;width:100%;margin-top:8px;text-align:right';
+        const title=document.createElement('b');title.textContent=String(goal.label||'');
+        const description=document.createElement('small');description.style.cssText='display:block;opacity:.8;margin-top:3px';description.textContent=String(goal.description||'');
+        button.append(title,description);button.addEventListener('click',()=>saveOnboardingGoal(String(goal.id||'')));out.append(button);
+      }
+      return;
+    }
+    for(const step of (d.steps||[])){
+      const link=document.createElement('a');link.href=_safeLocalUrl(step.url);link.style.cssText=`display:block;padding:7px;color:${step.done?'#34d399':'var(--text)'};text-decoration:none`;link.textContent=`${step.done?'✓':'○'} ${String(step.title||'')}`;out.append(link);
+    }
+  }catch(e){}
+}
+async function finishOnboarding(){await fetch('/api/platform/onboarding/complete/',{method:'POST',headers:{'X-CSRFToken':fgCsrf()}});document.getElementById('fgOnboarding').style.display='none'}{% if request.user.is_authenticated and not request.user.onboarding_completed %}loadOnboarding();{% endif %}
 window.addEventListener('error',e=>fetch('/api/platform/frontend-error/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':(document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop()||''},body:JSON.stringify({code:'window_error',message:e.message,path:location.pathname})}).catch(()=>{}));
 </script>
 <script>let fgWaitingWorker;function showFGUpdate(worker){fgWaitingWorker=worker;document.getElementById('fgUpdate').style.display='block'}function applyFGUpdate(){if(fgWaitingWorker)fgWaitingWorker.postMessage({type:'SKIP_WAITING'})}if('serviceWorker' in navigator){let refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!refreshing){refreshing=true;location.reload()}});window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').then(reg=>{if(reg.waiting&&navigator.serviceWorker.controller)showFGUpdate(reg.waiting);reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)showFGUpdate(worker)})})}).catch(()=>{}))}</script>

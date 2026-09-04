@@ -9,7 +9,6 @@ from django.contrib.auth.decorators import login_required
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 
 from .models import Node
@@ -118,7 +117,6 @@ def followup_toggle_api(request, pk):
 
 
 @login_required
-@csrf_exempt
 def followup_snooze_api(request, pk):
     """POST {days?} → defer an open follow-up without discarding it."""
     if request.method != 'POST':

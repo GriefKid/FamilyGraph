@@ -1594,12 +1594,14 @@ async function loadSummary(){
     });
     const data = await res.json();
     if(data.summary){
-      body.innerHTML = data.summary
+      body.textContent = String(data.summary || '')
+      body.style.whiteSpace = 'pre-wrap'
         .split(/\n\n+/)
         .map(p=>'<p>'+p.replace(/\n/g,'<br>')+'</p>')
         .join('');
     } else {
-      body.innerHTML = '<span style="color:#f43f5e">خطا: '+(data.error||'نامشخص')+'</span>';
+      body.textContent = 'خطا: ' + String(data.error || 'نامشخص');
+      body.style.color = '#f43f5e';
     }
   }catch(e){
     body.innerHTML = '<span style="color:#f43f5e">خطا در ارتباط با سرور</span>';
