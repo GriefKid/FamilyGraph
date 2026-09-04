@@ -3010,3 +3010,34 @@ class VCardImportTests(TestCase):
                                  data=json.dumps({'rows': rows}), content_type='application/json')
         self.assertEqual(apply.json()['created'], 3)
         self.assertTrue(Node.objects.filter(owner=self.user, name='مریم کریمی').exists())
+
+
+class NVCDraftTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='nvc', password='SecurePass1')
+        self.node = Node.objects.create(owner=self.user, username='nvc-person', name='کسی')
+        self.client.force_login(self.user)
+
+    def test_compose_builds_a_non_blaming_sentence_and_flags_absolutes(self):
+        from main.grounded_insights import nvc_compose
+        r = nvc_compose('همیشه دیر جواب می‌دهی', 'دلخور', 'پیش‌بینی‌پذیری', 'سر یک ساعت مشخص جواب بده')
+        self.assertIn('وقتی همیشه دیر جواب می‌دهی', r['draft'])
+        self.assertIn('من دلخور می‌شوم', r['draft'])
+        self.assertTrue(any('مطلق' in t or 'سرزنش' in t for t in r['tips']))
+
+    def test_endpoint_can_save_the_draft_as_a_followup(self):
+        resp = self.client.post(f'/api/relationship-life/nvc/{self.node.id}/', data=json.dumps({
+            'observation': 'قرارمان را لغو کردی', 'feeling': 'ناامید',
+            'need': 'اعتماد', 'request': 'اگر نمی‌رسی زودتر خبر بده', 'save': True,
+        }), content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['saved'])
+        self.assertTrue(FollowUp.objects.filter(
+            owner=self.user, node=self.node, text__startswith='[گفت‌وگو]').exists())
+
+    def test_endpoint_is_owner_scoped(self):
+        other = get_user_model().objects.create_user(username='nvc-other', password='SecurePass1')
+        self.client.force_login(other)
+        resp = self.client.post(f'/api/relationship-life/nvc/{self.node.id}/', data='{}',
+                                content_type='application/json')
+        self.assertEqual(resp.status_code, 404)

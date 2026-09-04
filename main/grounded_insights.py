@@ -822,6 +822,56 @@ def diversity_meter(user):
 
 
 # ─────────────────────────────────────────────────────────────────────
+#  NVC scaffold for a hard conversation (Rosenberg) — no interpretation,
+#  just structure. Fills the four parts into one non-blaming draft.
+# ─────────────────────────────────────────────────────────────────────
+
+_BLAME_WORDS = ('همیشه', 'هیچ‌وقت', 'هیچوقت', 'عمداً', 'عمدا', 'مقصر', 'تقصیر',
+                'بی‌فکر', 'خودخواه', 'دروغگو', 'بی‌مسئولیت')
+
+
+def nvc_compose(observation='', feeling='', need='', request=''):
+    """Return {'draft': str, 'tips': [str], 'parts': {...}} from the 4 NVC parts.
+    Deterministic; the model is never involved."""
+    o = str(observation or '').strip()[:400]
+    f = str(feeling or '').strip()[:200]
+    nd = str(need or '').strip()[:200]
+    rq = str(request or '').strip()[:300]
+
+    tips = []
+    if o and any(w in _norm_fa(o) for w in (_norm_fa(x) for x in _BLAME_WORDS)):
+        tips.append('در بخش «مشاهده» کلمه‌های مطلق یا سرزنش‌آمیز («همیشه»، «مقصر») را با یک '
+                    'واقعهٔ مشخص و قابل‌مشاهده جایگزین کن.')
+    if rq and ('نکن' in rq or 'نباید' in rq):
+        tips.append('درخواست را به شکلِ «چه کاری انجام بده» بگو، نه «چه کاری نکن».')
+    if f and (' که ' in f or 'حس می‌کنم که' in f):
+        tips.append('«احساس می‌کنم که تو…» معمولاً یک تفسیر است نه احساس؛ فقط نامِ حس '
+                    '(دلخور، نگران، خسته) را بنویس.')
+    if not tips:
+        tips.append('قبل از گفت‌وگو یک‌بار بلند بخوانش؛ اگر جایی حالت دفاعی به تو دست داد، '
+                    'همان‌جا را نرم‌تر کن.')
+
+    lines = []
+    if o:
+        lines.append(f'وقتی {o}،')
+    if f:
+        lines.append(f'من {f} می‌شوم،')
+    if nd:
+        lines.append(f'چون برایم {nd} مهم است.')
+    if rq:
+        lines.append(f'می‌خواهم بپرسم: {rq}')
+    draft = ' '.join(lines).strip() or (
+        'برای ساختن پیش‌نویس، دست‌کم مشاهده و درخواست را پر کن.')
+    return {
+        'draft': draft,
+        'tips': tips,
+        'parts': {'observation': o, 'feeling': f, 'need': nd, 'request': rq},
+        'generated_by': ENGINE,
+        'grounded': True,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
 #  Grounded chat: answer common questions about the owner's own network
 #  from stored observations, with no LLM. Returns a string, or None when
 #  the question is out of scope (caller may then fall back to a provider).

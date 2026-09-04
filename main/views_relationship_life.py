@@ -254,6 +254,28 @@ def safety_setting_api(request, pk):
 
 
 @login_required
+@require_POST
+def nvc_draft_api(request, pk):
+    """Compose an NVC draft for a hard conversation with this person.
+    Optionally saves it as a follow-up when ``save`` is truthy."""
+    node = get_object_or_404(Node, owner=request.user, pk=pk)
+    data = _body(request) or {}
+    from .grounded_insights import nvc_compose
+    result = nvc_compose(
+        data.get('observation', ''), data.get('feeling', ''),
+        data.get('need', ''), data.get('request', ''),
+    )
+    if data.get('save') and result['draft'] and not result['draft'].startswith('برای ساختن'):
+        from .models import FollowUp
+        FollowUp.objects.create(
+            owner=request.user, node=node,
+            text=f'[گفت‌وگو] {result["draft"][:280]}',
+        )
+        result['saved'] = True
+    return JsonResponse({'ok': True, **result})
+
+
+@login_required
 def person_export(request, pk):
     node = get_object_or_404(Node, owner=request.user, pk=pk)
     payload = {'person': {'username': node.username, 'name': node.display_name()},
