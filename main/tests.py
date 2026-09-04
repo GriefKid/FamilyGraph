@@ -878,6 +878,22 @@ class GraphInteractionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('private-graph-node', [node['username'] for node in response.json()['nodes']])
 
+    def test_graph_cache_is_separate_for_each_owner(self):
+        cache.clear()
+        User = get_user_model()
+        first_user = User.objects.create_user(username='graph-cache-first', password='SecurePass1')
+        second_user = User.objects.create_user(username='graph-cache-second', password='SecurePass1')
+        first_node = Node.objects.create(owner=first_user, username='cache-first-node')
+        second_node = Node.objects.create(owner=second_user, username='cache-second-node')
+
+        self.client.force_login(first_user)
+        first_payload = self.client.get('/api/graph/all/').json()
+        self.client.force_login(second_user)
+        second_payload = self.client.get('/api/graph/all/').json()
+
+        self.assertEqual([node['username'] for node in first_payload['nodes']], [first_node.username])
+        self.assertEqual([node['username'] for node in second_payload['nodes']], [second_node.username])
+
     def test_graph_omits_merged_people_and_edges_to_them(self):
         User = get_user_model()
         user = User.objects.create_user(username='graph-merged-owner', password='SecurePass1')
@@ -3340,6 +3356,20 @@ class BackgroundJobRunnerTests(TestCase):
         rec.refresh_from_db()
         self.assertEqual(rec.status, 'error')
         self.assertIn('nope', rec.result)
+
+    def test_stale_running_job_is_released_for_a_new_attempt(self):
+        from main.jobs import start_job
+        from main.models import BackgroundJob
+
+        stale = BackgroundJob.objects.create(owner=self.user, kind='stale', status='running')
+        BackgroundJob.objects.filter(pk=stale.id).update(
+            created_at=timezone.now() - timedelta(minutes=31),
+        )
+        rec = start_job(self.user, 'stale', lambda job: job.finish(result='دوباره اجرا شد'), sync=True)
+
+        stale.refresh_from_db()
+        self.assertEqual(stale.status, 'error')
+        self.assertEqual(rec.status, 'done')
 
     def test_jobs_api_is_owner_scoped(self):
         from main.models import BackgroundJob

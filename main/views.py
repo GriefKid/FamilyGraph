@@ -2338,6 +2338,11 @@ def chat_api(request):
 @login_required
 def graph_all_api(request):
     """Return all nodes+edges with community and centrality data for D3 graph."""
+    graph_cache_key = f'graph_all_data:{request.user.id}:{request.user.date_joined.isoformat()}'
+    if request.GET.get('refresh') != '1':
+        cached = cache.get(graph_cache_key)
+        if cached:
+            return JsonResponse(cached)
     try:
         import networkx as nx
         G, all_nodes, all_rels = _build_graph(request.user)
@@ -2488,14 +2493,16 @@ def graph_all_api(request):
                 e["days_since"]    = h["days_since"]
         edge_data.append(e)
 
-    return JsonResponse({
+    payload = {
         "nodes":         node_data,
         "edges":         edge_data,
         "root_id":       root_id,
         "all_groups":    all_groups_sorted,
         "group_colors":  group_color_map,
         "health_counts": health_counts,
-    })
+    }
+    cache.set(graph_cache_key, payload, timeout=15)
+    return JsonResponse(payload)
 
 
 # ════════════════════════════════════════════════════════════════

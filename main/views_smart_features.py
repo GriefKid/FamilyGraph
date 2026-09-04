@@ -1402,7 +1402,7 @@ def rename_group_api(request):
         grp = GroupModel.objects.get(name=old_name, owner=request.user)
         grp.name = new_name
         grp.save()
-        cache.delete('graph_all_data')
+        cache.delete(f'graph_all_data:{request.user.id}:{request.user.date_joined.isoformat()}')
         return JsonResponse({'ok': True})
     except GroupModel.DoesNotExist:
         return JsonResponse({'error': f'گروه «{old_name}» پیدا نشد'}, status=404)
@@ -1426,7 +1426,7 @@ def delete_group_api(request):
         return JsonResponse({'error': 'name لازم است'}, status=400)
 
     deleted, _ = GroupModel.objects.filter(name=name, owner=request.user).delete()
-    cache.delete('graph_all_data')
+    cache.delete(f'graph_all_data:{request.user.id}:{request.user.date_joined.isoformat()}')
     return JsonResponse({'ok': True, 'deleted': deleted})
 
 

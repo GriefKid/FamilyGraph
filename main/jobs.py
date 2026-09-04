@@ -8,6 +8,7 @@ Only for short, best-effort work — nothing that must survive a restart.
 """
 import logging
 import threading
+from datetime import timedelta
 
 from django.core.cache import cache
 from django.db import close_old_connections
@@ -46,7 +47,12 @@ def start_job(user, kind, worker, *, single=True, sync=False):
             owner=user, kind=kind, status='running',
         ).order_by('-created_at').first()
         if running:
-            return running
+            if running.created_at and running.created_at >= timezone.now() - timedelta(minutes=30):
+                return running
+            running.status = 'error'
+            running.result = 'کار قبلی بیش از ۳۰ دقیقه بدون پاسخ ماند و بسته شد.'
+            running.finished_at = timezone.now()
+            running.save(update_fields=['status', 'result', 'finished_at'])
         if not cache.add(lock_key, '1', 60 * 30):
             existing = BackgroundJob.objects.filter(owner=user, kind=kind).first()
             if existing:
