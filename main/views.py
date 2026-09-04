@@ -1580,19 +1580,17 @@ _FA_STOPWORDS = {
 
 
 def _retrieve_context(user, query, limit=8):
-    """Keyword + name retrieval over the owner's own history for the chat.
+    """Local semantic-ish retrieval over the owner's own history for chat.
 
-    Local, no embeddings — for a personal graph a normalised term match over
-    journals, interactions and memory facts is enough to answer questions
-    about things that are older than the 'recent' windows already in the
-    prompt (e.g. 'آخرین بار کی سارا را دیدم؟').
+    No remote embeddings are needed: Persian normalization, related terms and
+    fuzzy token scoring rank evidence older than recent chat windows.
     """
     from .models import (Commitment, Event, GiftIdea, Interaction, KnowledgeTriple,
                          LifeEvent, MeetingReflection, MemoryFact, PersonaProfile,
                          RelationshipGoal, RelationshipProfile)
-    qn = _fa_norm(query)
-    terms = {t for t in qn.replace('؟', ' ').replace('?', ' ').split()
-             if len(t) >= 2 and t not in _FA_STOPWORDS}
+    from .local_memory import query_terms, score_text
+
+    terms = query_terms(query)
     if not terms:
         return ''
 
@@ -1601,8 +1599,7 @@ def _retrieve_context(user, query, limit=8):
     named_ids = [node.id for node in named_nodes]
 
     def _score(text):
-        tn = _fa_norm(text)
-        return sum(tn.count(t) for t in terms)
+        return score_text(text, terms)
 
     lines = []
 
@@ -1621,7 +1618,7 @@ def _retrieve_context(user, query, limit=8):
                          + (f" [حال: {j.mood}]" if j.mood else ""))
 
     try:
-        iq = Interaction.objects.filter(owner=user).select_related('node')
+        iq = Interaction.objects.filter(owner=user, node__owner=user).select_related('node')
         if named_ids:
             iq = iq.filter(node_id__in=named_ids)
         for it in iq.order_by('-date')[:limit]:
@@ -1634,11 +1631,15 @@ def _retrieve_context(user, query, limit=8):
         pass
 
     try:
-        mq = MemoryFact.objects.filter(owner=user, active=True).select_related('node')
+        mq = MemoryFact.objects.filter(owner=user, node__owner=user, active=True).select_related('node')
         if named_ids:
             mq = mq.filter(node_id__in=named_ids)
-        for mf in mq.order_by('-confidence')[:limit]:
-            if named_ids or _score(mf.value) > 0:
+        scored_facts = sorted(
+            ((_score(mf.value) + (1 if named_ids else 0), mf) for mf in mq[:120]),
+            key=lambda pair: (-pair[0], -pair[1].confidence, -pair[1].id),
+        )
+        for score, mf in scored_facts[:limit]:
+            if score > 0:
                 lines.append(f"- دربارهٔ {mf.node.display_name()}: {mf.value}")
     except Exception:
         pass

@@ -1888,6 +1888,12 @@ class ChatRetrievalTests(TestCase):
         from main.views import _retrieve_context
         self.assertEqual(_retrieve_context(self.user, 'سلام'), '')
 
+    def test_local_persian_retrieval_ranks_related_terms_without_remote_model(self):
+        from main.local_memory import query_terms, score_text
+        terms = query_terms('آخرین احوال سارا چی بود؟')
+        self.assertIn('حال', terms)
+        self.assertGreater(score_text('درباره حال و روحیه سارا صحبت کردیم', query_terms('احساس سارا')), 0)
+
     def test_retrieval_stays_within_the_owner(self):
         from main.views import _retrieve_context
         other = get_user_model().objects.create_user(username='rag-other', password='SecurePass1')
