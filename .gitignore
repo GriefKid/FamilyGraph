@@ -9,6 +9,9 @@ venv/
 db.sqlite3
 db.sqlite3-journal
 db.backup-*.sqlite3
+backup_data.json
+backup_data*.json
+*.fgb
 *.bak
 django_cache/
 *.log
