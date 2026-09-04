@@ -62,9 +62,9 @@ def onboarding_api(request):
     user = request.user
     goal = (user.feature_overrides or {}).get('onboarding_goal', '')
     steps = [
-        {'id': 'person', 'title': 'افزودن اولین شخص', 'done': user.nodes.exclude(pk=user.root_node_id).exists(), 'url': '/nodes/create/'},
-        {'id': 'relationship', 'title': 'ساخت اولین رابطه', 'done': user.relationships.exists(), 'url': '/relationships/create/'},
-        {'id': 'journal', 'title': 'ثبت یک خاطره یا لحظه', 'done': user.journal_entries.exists(), 'url': '/journal/'},
+        {'id': 'person', 'title': 'افزودن اولین شخص مهم', 'description': 'یک نفر مهم را به گراف اضافه کن.', 'done': user.nodes.exclude(pk=user.root_node_id).exists(), 'url': '/nodes/create/'},
+        {'id': 'relationship', 'title': 'مشخص‌کردن یک رابطه', 'description': 'بگو این شخص چه نسبتی با تو دارد.', 'done': user.relationships.exists(), 'url': '/relationships/create/'},
+        {'id': 'journal', 'title': 'ثبت اولین لحظه', 'description': 'یک خاطرهٔ کوتاه ثبت کن تا شناخت رابطه شروع شود.', 'done': user.journal_entries.exists(), 'url': '/journal/'},
     ]
     goal_choices = [
         {'id': 'family', 'label': 'خانواده‌ام', 'description': 'آدم‌ها و خاطره‌های خانوادگی را مرتب کنم.'},

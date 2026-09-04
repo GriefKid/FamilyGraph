@@ -2521,8 +2521,9 @@ def settings_view(request):
             return JsonResponse({'ok': True})
         except (Node.DoesNotExist, ValueError):
             return JsonResponse({'error': 'نود پیدا نشد'}, status=404)
-    # صفحه تنظیمات به پروفایل ادغام شده
-    return redirect('profile')
+    # صفحه تنظیمات با پروفایل ادغام شده؛ مسیر قدیمی را بدون redirect زنجیره‌ای
+    # به صفحهٔ canonical بفرست تا لینک‌ها و بوکمارک‌های قدیمی هم روان بمانند.
+    return redirect('profile_edit')
 
 
 # ════════════════════════════════════════════════════════════════

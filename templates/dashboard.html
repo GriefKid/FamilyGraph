@@ -17,6 +17,8 @@
 .attention-item{border:1px solid transparent;padding:12px}.attention-item:hover{border-color:rgba(129,140,248,.2)}
 .stack-item{transition:padding .16s ease}.stack-item:hover{padding-right:5px}
 @media(max-width:480px){.briefing-actions{display:grid;grid-template-columns:1fr}.briefing-btn{text-align:center;justify-content:center}}
+.first-visit{margin:0 0 18px;padding:20px;border:1px solid var(--primary-border);border-radius:18px;background:linear-gradient(135deg,rgba(99,102,241,.16),rgba(139,92,246,.06));box-shadow:0 14px 36px rgba(20,15,60,.18)}
+.first-visit h2{font-size:17px;margin:0 0 5px}.first-visit p{font-size:12px;color:var(--text-soft);line-height:1.9;margin:0;max-width:720px}.first-visit-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:15px}.first-visit-step{display:flex;gap:9px;align-items:flex-start;padding:11px;border:1px solid var(--border);border-radius:13px;background:rgba(0,0,0,.12);color:var(--text);text-decoration:none}.first-visit-step:hover{border-color:var(--primary-border);transform:translateY(-1px)}.first-visit-number{display:grid;place-items:center;width:24px;height:24px;flex:0 0 24px;border-radius:50%;background:var(--grad-brand);font-size:11px;font-weight:900;color:#fff}.first-visit-step b{display:block;font-size:11.5px}.first-visit-step small{display:block;color:var(--text-muted);font-size:10.5px;line-height:1.7;margin-top:2px}.first-visit-footer{display:flex;align-items:center;gap:12px;margin-top:14px;font-size:11px;color:var(--text-muted)}.first-visit-footer a{color:var(--primary-light);text-decoration:none}.first-visit-footer button{border:0;background:transparent;color:var(--text-muted);cursor:pointer;font:inherit;text-decoration:underline}@media(max-width:700px){.first-visit-steps{grid-template-columns:1fr}}
 </style>
 {% endblock %}
 
@@ -39,6 +41,19 @@
       <a class="briefing-btn secondary" href="/graph/">🕸 دیدن نقشهٔ رابطه‌ها</a>
     </div>
   </section>
+
+  {% if not request.user.onboarding_completed %}
+  <section class="first-visit" aria-labelledby="first-visit-title">
+    <h2 id="first-visit-title">FamilyGraph چیه؟</h2>
+    <p>اینجا آدم‌های مهم زندگی‌ات، رابطه‌ها و خاطره‌هایت را کنار هم ثبت می‌کنی تا به‌مرور الگوهای رابطه‌ات را بهتر ببینی. لازم نیست همه‌چیز را یک‌جا کامل کنی؛ فقط با همین سه قدم شروع کن.</p>
+    <div class="first-visit-steps">
+      <a class="first-visit-step" href="{% url 'node_create' %}"><span class="first-visit-number">۱</span><span><b>افزودن اولین شخص</b><small>یک آدم مهم را اضافه کن.</small></span></a>
+      <a class="first-visit-step" href="{% url 'relationship_create' %}"><span class="first-visit-number">۲</span><span><b>مشخص‌کردن رابطه</b><small>نسبت او با خودت را بگو.</small></span></a>
+      <a class="first-visit-step" href="{% url 'journal' %}"><span class="first-visit-number">۳</span><span><b>ثبت اولین لحظه</b><small>یک خاطرهٔ کوتاه بنویس.</small></span></a>
+    </div>
+    <div class="first-visit-footer"><span>بعد از این، پیشنهادهای شخصی‌تر کم‌کم شکل می‌گیرند.</span><button type="button" onclick="finishOnboarding()">فعلاً ردش کن</button></div>
+  </section>
+  {% endif %}
 
   <section class="briefing-card" style="margin-bottom:18px">
     <h2>🎯 برنامهٔ امروز</h2>
@@ -139,7 +154,7 @@
   </section>
 
   {% if not onboarding_ready %}
-  <div class="onboarding-note">برای اینکه AI پیشنهادهای شخصی‌تری بدهد، <a href="/profile/">پروفایل و اطلاعات اولیه‌ات</a> را کامل کن.</div>
+  <div class="onboarding-note">برای اینکه AI پیشنهادهای شخصی‌تری بدهد، <a href="{% url 'profile_edit' %}">پروفایل و اطلاعات اولیه‌ات</a> را کامل کن.</div>
   {% endif %}
 </main>
 <script>
