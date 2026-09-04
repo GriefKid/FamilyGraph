@@ -6,5 +6,5 @@
   <a class="{% if request.resolver_match.url_name == 'yearbook' and not request.GET.month %}active{% endif %}" href="/yearbook/">کتاب سال</a>
 </nav>
 <style>
-.review-switch{display:flex;gap:6px;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;overflow-x:auto}.review-switch a{flex:1;min-width:max-content;text-align:center;padding:8px 11px;border-radius:10px;text-decoration:none;color:var(--text-muted);font-size:11px;font-weight:800}.review-switch a:hover{color:var(--text)}.review-switch a.active{background:var(--primary);color:#fff;box-shadow:0 5px 18px rgba(99,102,241,.25)}
+.review-switch{display:flex;flex-wrap:wrap;gap:6px;padding:5px;background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:14px}.review-switch a{flex:1 1 auto;min-width:max-content;text-align:center;padding:8px 11px;border-radius:10px;text-decoration:none;color:var(--text-muted);font-size:11px;font-weight:800}.review-switch a:hover{color:var(--text)}.review-switch a.active{background:var(--primary);color:#fff;box-shadow:0 5px 18px rgba(99,102,241,.25)}
 </style>
