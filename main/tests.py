@@ -1220,6 +1220,62 @@ class RelationshipWorkHubTests(TestCase):
         )
         self.assertFalse(future_row['can_complete'])
 
+    def test_review_queue_includes_open_ai_attention_without_crossing_tenants(self):
+        from .models import ExtractionSuggestion, RelationshipRecommendation
+
+        ExtractionSuggestion.objects.create(
+            owner=self.user, source='journal', source_id=81, kind='memory',
+            fingerprint='a' * 64, payload={'value': 'موضوع مهم سارا', 'explanation': 'بازبینی کن'},
+        )
+        RelationshipRecommendation.objects.create(
+            owner=self.user, node=self.node, kind='connect', title='یک پیام کوتاه',
+            suggestion='امروز حال سارا را بپرس.', reason='تعامل اخیر کم بوده است.', status='active',
+        )
+        ExtractionSuggestion.objects.create(
+            owner=self.other, source='journal', source_id=82, kind='memory',
+            fingerprint='b' * 64, payload={'value': 'نباید دیده شود'},
+        )
+        RelationshipRecommendation.objects.create(
+            owner=self.other, node=self.foreign_node, kind='connect', title='خصوصی دیگری',
+            suggestion='خصوصی دیگری', status='active',
+        )
+
+        response = self.client.get('/relationship-work/')
+
+        self.assertEqual(response.context['attention_counts'], {'suggestions': 1, 'recommendations': 1})
+        self.assertIn('suggestion', {item['kind'] for item in response.context['queue']})
+        self.assertIn('recommendation', {item['kind'] for item in response.context['queue']})
+        self.assertContains(response, 'موضوع مهم سارا')
+        self.assertContains(response, 'امروز حال سارا را بپرس.')
+        self.assertNotContains(response, 'نباید دیده شود')
+        self.assertNotContains(response, 'خصوصی دیگری')
+
+    def test_review_queue_can_close_only_owned_recommendation(self):
+        from .models import RelationshipRecommendation
+
+        recommendation = RelationshipRecommendation.objects.create(
+            owner=self.user, node=self.node, title='پیشنهاد من', suggestion='یک پیام بفرست.', status='active',
+        )
+        foreign = RelationshipRecommendation.objects.create(
+            owner=self.other, node=self.foreign_node, title='پیشنهاد خارجی', suggestion='خصوصی', status='active',
+        )
+
+        own_response = self.client.post(
+            f'/api/memory/recommendations/{recommendation.id}/',
+            data=json.dumps({'action': 'dismiss'}), content_type='application/json',
+        )
+        foreign_response = self.client.post(
+            f'/api/memory/recommendations/{foreign.id}/',
+            data=json.dumps({'action': 'dismiss'}), content_type='application/json',
+        )
+
+        self.assertEqual(own_response.status_code, 200)
+        self.assertEqual(foreign_response.status_code, 404)
+        recommendation.refresh_from_db()
+        foreign.refresh_from_db()
+        self.assertEqual(recommendation.status, 'dismissed')
+        self.assertEqual(foreign.status, 'active')
+
     def test_review_queue_prefetches_event_participants(self):
         today = timezone.localdate()
         for index in range(15):

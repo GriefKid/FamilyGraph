@@ -26,6 +26,8 @@
     <div class="review-stat"><strong>{{ counts.commitments }}</strong><span>تعهد باز</span></div>
     <div class="review-stat"><strong>{{ counts.events }}</strong><span>رویداد نیازمند اقدام</span></div>
     <div class="review-stat"><strong>{{ counts.debts }}</strong><span>حساب مالی باز</span></div>
+    <div class="review-stat"><strong>{{ attention_counts.suggestions }}</strong><span>پیشنهاد AI برای بازبینی</span></div>
+    <div class="review-stat"><strong>{{ attention_counts.recommendations }}</strong><span>پیشنهاد رابطه باز</span></div>
   </section>
 
   <section class="review-panel">
@@ -60,7 +62,7 @@
         </div>
         <div class="review-actions">
           <a class="review-action" href="{{ item.url }}">جزئیات</a>
-          {% if item.can_complete %}<button type="button" class="review-action primary" data-review-complete data-kind="{{ item.kind }}" data-id="{{ item.object_id }}">{% if item.kind == 'event' %}برگزار شد{% else %}انجام شد{% endif %}</button>{% endif %}
+          {% if item.can_complete %}<button type="button" class="review-action primary" data-review-complete data-kind="{{ item.kind }}" data-id="{{ item.object_id }}"{% if item.action_url %} data-action-url="{{ item.action_url }}"{% endif %}>{% if item.action_label %}{{ item.action_label }}{% elif item.kind == 'event' %}برگزار شد{% else %}انجام شد{% endif %}</button>{% endif %}
         </div>
       </article>
       {% endfor %}
@@ -92,7 +94,9 @@ document.querySelectorAll('[data-review-complete]').forEach(button=>{
       commitment:{url:`/api/relationship-life/commitments/${id}/`,body:{action:'done'}},
       event:{url:`/api/events/${id}/complete/`,body:null},
     };
-    const config=configs[kind];
+    const config=kind==='recommendation'
+      ? {url:button.dataset.actionUrl,body:{action:'dismiss'}}
+      : configs[kind];
     if(!config) return;
     button.disabled=true;
     button.textContent='در حال ثبت…';
