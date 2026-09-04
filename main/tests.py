@@ -2248,6 +2248,44 @@ class AIProviderConfigTests(TestCase):
         )
 
 
+class FutureIntentFollowupTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='fintent', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='fi-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.reza = Node.objects.create(owner=self.user, username='fi-reza', name='رضا احمدی')
+        self.client.force_login(self.user)
+
+    def test_a_named_future_intent_becomes_a_followup(self):
+        e = JournalEntry.objects.create(
+            owner=self.user, entry_date=date(2025, 6, 1),
+            text='امروز خوب بود. باید به رضا سر بزنم. بعد هم خرید کردم.',
+        )
+        from main.grounded_insights import future_intents_to_followups
+        self.assertEqual(future_intents_to_followups(self.user, e), 1)
+        fu = FollowUp.objects.get(owner=self.user, node=self.reza, done=False)
+        self.assertTrue(fu.text.startswith('[از خاطره]'))
+        self.assertIn('سر بزنم', fu.text)
+        # idempotent
+        self.assertEqual(future_intents_to_followups(self.user, e), 0)
+
+    def test_plain_past_tense_text_makes_no_followup(self):
+        e = JournalEntry.objects.create(
+            owner=self.user, entry_date=date(2025, 6, 2),
+            text='دیروز رضا را دیدم و با هم قهوه خوردیم.',
+        )
+        from main.grounded_insights import future_intents_to_followups
+        self.assertEqual(future_intents_to_followups(self.user, e), 0)
+
+    def test_journal_save_api_reports_followups_created(self):
+        resp = self.client.post('/api/journal/save/', data=json.dumps({
+            'text': 'یک لحظهٔ خوب. فردا به رضا احمدی زنگ می‌زنم حتماً.',
+        }), content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json.loads(resp.content)['followups_created'], 1)
+
+
 class JournalMomentTests(TestCase):
     def test_checkin_submission_requires_a_csrf_token(self):
         user = get_user_model().objects.create_user(username='checkin-csrf', password='SecurePass1')

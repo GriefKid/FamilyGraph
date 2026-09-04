@@ -590,6 +590,59 @@ def journal_result(suggestions, text, root_username):
 
 
 # ─────────────────────────────────────────────────────────────────────
+#  "قرار بود…" — turn future-intent sentences in a journal entry into
+#  follow-ups for the person they name. Deterministic, phrase-based.
+# ─────────────────────────────────────────────────────────────────────
+
+_FUTURE_MARKERS = (
+    'می‌زنم', 'میزنم', 'می‌رم', 'میرم', 'می‌بینم', 'میبینم', 'می‌بینمش', 'میبینمش',
+    'سر بزنم', 'سر می‌زنم', 'زنگ بزنم', 'زنگ می‌زنم', 'پیام بدم', 'پیام می‌دم',
+    'دعوتش کنم', 'ببرمش', 'براش بخرم', 'بهش بگم', 'قرار بذارم', 'قراره',
+    'باید بهش', 'باید براش', 'باید ببینم', 'یادم باشه', 'قول دادم',
+)
+_FUTURE_TIME = ('فردا', 'پس‌فردا', 'پس فردا', 'هفتهٔ بعد', 'هفته بعد', 'این هفته',
+                'آخر هفته', 'شنبه', 'یک‌شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'سه شنبه',
+                'چهارشنبه', 'پنج‌شنبه', 'پنجشنبه', 'جمعه', 'ماه بعد', 'به‌زودی', 'بزودی')
+
+
+def _sentences(text):
+    parts = re.split(r'[.!?؟\n،؛]+', str(text or ''))
+    return [p.strip() for p in parts if len(p.strip()) >= 6]
+
+
+def future_intents_to_followups(user, entry):
+    """Scan one journal entry for future-intent sentences and open a follow-up
+    (marked [از خاطره]) for each named person. Returns the count created."""
+    from .models import FollowUp
+    if not getattr(user, 'ai_extraction_enabled', True):
+        return 0
+    created = 0
+    seen = set()
+    markers = [_norm_fa(k) for k in _FUTURE_MARKERS]
+    times = [_norm_fa(t) for t in _FUTURE_TIME]
+    verbs = [_norm_fa(v) for v in ('کنم', 'بزنم', 'برم', 'ببینم', 'بدم', 'بگم')]
+    for raw in _sentences(entry.text):
+        s = _norm_fa(raw)
+        has_intent = any(k in s for k in markers)
+        has_time = any(t in s for t in times)
+        if not (has_intent or (has_time and any(v in s for v in verbs))):
+            continue
+        person = _match_person(user, raw)
+        if not person:
+            continue
+        text = f'[از خاطره] {raw[:240]}'
+        key = (person.id, text)
+        if key in seen:
+            continue
+        seen.add(key)
+        if FollowUp.objects.filter(owner=user, node=person, done=False, text=text).exists():
+            continue
+        FollowUp.objects.create(owner=user, node=person, text=text)
+        created += 1
+    return created
+
+
+# ─────────────────────────────────────────────────────────────────────
 #  Structural signals (deterministic, no interpretation)
 # ─────────────────────────────────────────────────────────────────────
 

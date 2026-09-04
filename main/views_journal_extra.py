@@ -130,7 +130,17 @@ def journal_save_api(request):
     from .memory_pipeline import capture_text
     suggestions = capture_text(request.user, entry.text, 'journal', entry.id)
 
-    return JsonResponse({'id': entry.id, 'message': 'ذخیره شد', 'suggestions_created': len(suggestions), 'occurred_at': entry.occurred_at.isoformat()})
+    followups_created = 0
+    try:
+        from .grounded_insights import future_intents_to_followups
+        followups_created = future_intents_to_followups(request.user, entry)
+    except Exception:
+        pass
+
+    return JsonResponse({'id': entry.id, 'message': 'ذخیره شد',
+                         'suggestions_created': len(suggestions),
+                         'followups_created': followups_created,
+                         'occurred_at': entry.occurred_at.isoformat()})
 
 
 @login_required
