@@ -400,11 +400,19 @@ def csv_import_apply(request):
     rows = data.get('rows')
     if not isinstance(rows, list):
         return JsonResponse({'error': 'ردیف‌ها معتبر نیستند.'}, status=400)
-    created = 0
+    created_ids = []
     for row in rows[:500]:
         username = str(row.get('username', '')).strip()[:100]
         if username:
-            _, was_created = Node.objects.get_or_create(owner=request.user, username=username,
+            node, was_created = Node.objects.get_or_create(owner=request.user, username=username,
                 defaults={'name': str(row.get('name', ''))[:200], 'phone_number': str(row.get('phone', ''))[:20]})
-            created += int(was_created)
-    return JsonResponse({'ok': True, 'created': created})
+            if was_created:
+                created_ids.append(node.id)
+    resp = {'ok': True, 'created': len(created_ids)}
+    if created_ids:
+        from .undo import record_undoable
+        undo = record_undoable(request.user, 'import',
+                               f'ورود {len(created_ids)} مخاطب', node_ids=created_ids)
+        resp['undo_id'] = undo.id
+        resp['undo_label'] = undo.label
+    return JsonResponse(resp)

@@ -1744,9 +1744,33 @@ function _esc(s){
 <div id="fgUpdate" role="status" aria-live="polite" style="display:none;position:fixed;left:20px;bottom:20px;z-index:99998;max-width:360px;padding:11px 15px;border-radius:12px;background:var(--bg2);border:1px solid var(--primary-border);box-shadow:0 15px 45px rgba(0,0,0,.4);font-size:12px"><span>نسخهٔ جدید آماده است.</span><button type="button" onclick="applyFGUpdate()" class="btn btn-sm" style="margin-right:9px">به‌روزرسانی</button></div>
 <div id="fgPalette" role="dialog" aria-modal="true" aria-label="جست‌وجو و فرمان‌ها" style="display:none;position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.65);padding:10vh 16px"><div style="max-width:620px;margin:auto;background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:12px"><input id="fgPaletteInput" aria-label="فرمان یا نام شخص" placeholder="نام شخص یا یک فرمان…" style="width:100%;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--text)"><div id="fgPaletteResults" style="margin-top:8px;max-height:55vh;overflow:auto"></div></div></div>
 <aside id="fgOnboarding" aria-label="شروع سریع" style="display:none;position:fixed;left:18px;bottom:76px;z-index:9000;width:min(340px,calc(100vw - 36px));padding:16px;background:var(--bg2);border:1px solid var(--primary-border);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.45)"><b>شروع سریع FamilyGraph</b><div id="fgOnboardingSteps" style="margin-top:10px"></div><button class="btn btn-sm" style="margin-top:9px" onclick="finishOnboarding()">فعلاً بستن</button></aside>
+<div id="fgUndo" role="status" aria-live="polite" style="display:none;position:fixed;left:20px;bottom:20px;z-index:99999;max-width:380px;padding:11px 15px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);box-shadow:0 15px 45px rgba(0,0,0,.4);font-size:12px">
+  <span id="fgUndoText"></span>
+  <button type="button" id="fgUndoBtn" class="btn btn-sm" style="margin-right:9px">برگردان</button>
+</div>
 <script>
 const fgToast=(message,error=false)=>{const el=document.getElementById('fgToast');if(!el)return;el.textContent=String(message);el.style.color=error?'#fb7185':'var(--text)';el.style.display='block';clearTimeout(window.__fgToastTimer);window.__fgToastTimer=setTimeout(()=>el.style.display='none',2800)};
 window.alert=message=>fgToast(message,true);
+window.fgUndo=(undoId,label)=>{
+  if(!undoId) return;
+  const bar=document.getElementById('fgUndo'),txt=document.getElementById('fgUndoText'),btn=document.getElementById('fgUndoBtn');
+  if(!bar) return;
+  txt.textContent=(label||'انجام شد')+' — ';
+  bar.style.display='block';
+  clearTimeout(window.__fgUndoTimer);
+  window.__fgUndoTimer=setTimeout(()=>bar.style.display='none',12000);
+  btn.onclick=async()=>{
+    btn.disabled=true;
+    try{
+      const r=await fetch('/api/undo/'+undoId+'/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+      const d=await r.json();
+      bar.style.display='none';
+      fgToast(r.ok?(d.message||'برگردانده شد'):(d.error||'برگرداندن نشد'),!r.ok);
+      if(r.ok) setTimeout(()=>location.reload(),700);
+    }catch(e){ fgToast('خطا در ارتباط با سرور',true); }
+    btn.disabled=false;
+  };
+};
 const palette=document.getElementById('fgPalette'),paletteInput=document.getElementById('fgPaletteInput'),paletteResults=document.getElementById('fgPaletteResults');let paletteTimer,paletteReturnFocus;
 async function loadPalette(){const r=await fetch('/api/platform/command-palette/?q='+encodeURIComponent(paletteInput.value)),d=await r.json();paletteResults.innerHTML=(d.results||[]).map((x,i)=>`<a href="${x.url}" style="display:flex;gap:10px;padding:10px;border-radius:10px;color:var(--text);text-decoration:none"><span>${x.icon}</span><span><b>${x.title}</b><small style="display:block;color:var(--text-muted)">${x.subtitle}</small></span></a>`).join('')}
 function openPalette(){paletteReturnFocus=document.activeElement;palette.style.display='block';paletteInput.value='';loadPalette();setTimeout(()=>paletteInput.focus(),20)}function closePalette(){if(palette.style.display==='none')return;palette.style.display='none';paletteReturnFocus?.focus?.()}paletteInput?.addEventListener('input',()=>{clearTimeout(paletteTimer);paletteTimer=setTimeout(loadPalette,150)});palette?.addEventListener('click',e=>{if(e.target===palette)closePalette()});palette?.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();paletteInput.focus()}});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette()}if(e.key==='Escape')closePalette()});

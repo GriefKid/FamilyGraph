@@ -1572,10 +1572,16 @@ class PersonaBatchTests(TestCase):
         self.assertGreaterEqual(state['people_ok'] + state['rel_ok'], 1)
 
     def test_start_endpoint_is_async_and_status_is_owner_scoped(self):
-        with mock.patch('main.views_persona.synthesize_everything'):
+        with mock.patch('main.jobs.threading.Thread'), \
+             mock.patch('main.views_persona.synthesize_everything'):
             r1 = self.client.post('/api/persona/synthesize-all/')
         self.assertEqual(r1.status_code, 200)
-        self.assertTrue(r1.json().get('started') or r1.json().get('already_running'))
+        self.assertIn('job', r1.json())
+        self.assertEqual(r1.json()['job']['kind'], 'persona-batch')
+        # status endpoint reflects that job for its owner
+        status = self.client.get('/api/persona/batch-status/').json()['progress']
+        self.assertIsNotNone(status)
+        # …and shows nothing for a different user
         other = get_user_model().objects.create_user(username='batch-other', password='SecurePass1')
         self.client.force_login(other)
         self.assertIsNone(self.client.get('/api/persona/batch-status/').json()['progress'])
@@ -3073,3 +3079,85 @@ class YearbookTests(TestCase):
 
     def test_bad_year_param_falls_back_to_current(self):
         self.assertEqual(self.client.get('/yearbook/?year=notanumber').status_code, 200)
+
+
+class BackgroundJobRunnerTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='jobs', password='SecurePass1')
+        self.client.force_login(self.user)
+
+    def test_start_job_runs_the_worker_and_records_progress_and_result(self):
+        from main.jobs import start_job
+        from main.models import BackgroundJob
+
+        def worker(job):
+            job.set_progress({'done': 1, 'total': 2})
+            job.set_progress({'done': 2, 'total': 2})
+            job.finish(result='۲ مورد')
+
+        rec = start_job(self.user, "unit-test-job", worker, single=False, sync=True)
+        rec.refresh_from_db()
+        self.assertEqual(rec.status, 'done')
+        self.assertEqual(rec.result, '۲ مورد')
+        self.assertEqual(rec.progress['done'], 2)
+        self.assertIsNotNone(rec.finished_at)
+
+    def test_worker_exception_marks_the_job_as_error(self):
+        from main.jobs import start_job
+        rec = start_job(self.user, 'boom', lambda job: (_ for _ in ()).throw(RuntimeError('nope')),
+                        single=False, sync=True)
+        rec.refresh_from_db()
+        self.assertEqual(rec.status, 'error')
+        self.assertIn('nope', rec.result)
+
+    def test_jobs_api_is_owner_scoped(self):
+        from main.models import BackgroundJob
+        BackgroundJob.objects.create(owner=self.user, kind='mine')
+        other = get_user_model().objects.create_user(username='jobs-other', password='SecurePass1')
+        theirs = BackgroundJob.objects.create(owner=other, kind='theirs')
+        listed = self.client.get('/api/jobs/').json()['jobs']
+        self.assertEqual([j['kind'] for j in listed], ['mine'])
+        self.assertEqual(self.client.get(f'/api/jobs/{theirs.id}/').status_code, 404)
+
+
+class UnifiedUndoTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='undo', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='undo-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.client.force_login(self.user)
+
+    def test_import_apply_returns_an_undo_id_that_deletes_the_new_nodes(self):
+        rows = [{'username': 'imp-a', 'name': 'الف'}, {'username': 'imp-b', 'name': 'ب'}]
+        resp = self.client.post('/api/relationship-life/import/csv/apply/',
+                                data=json.dumps({'rows': rows}), content_type='application/json')
+        self.assertEqual(resp.json()['created'], 2)
+        undo_id = resp.json()['undo_id']
+        self.assertEqual(Node.objects.filter(owner=self.user, username__startswith='imp-').count(), 2)
+
+        undo = self.client.post(f'/api/undo/{undo_id}/')
+        self.assertEqual(undo.status_code, 200)
+        self.assertEqual(Node.objects.filter(owner=self.user, username__startswith='imp-').count(), 0)
+        # second undo of the same action is rejected
+        self.assertEqual(self.client.post(f'/api/undo/{undo_id}/').status_code, 404)
+
+    def test_merge_apply_undo_restores_the_duplicate(self):
+        a = Node.objects.create(owner=self.user, username='dup-a', name='رضا')
+        b = Node.objects.create(owner=self.user, username='dup-b', name='رضا ک')
+        Interaction.objects.create(owner=self.user, node=b, kind='call', date=timezone.localdate())
+        resp = self.client.post('/api/memory/merge/', data=json.dumps(
+            {'primary_id': a.id, 'duplicate_id': b.id}), content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        b.refresh_from_db()
+        self.assertEqual(b.merged_into_id, a.id)
+        self.client.post(f'/api/undo/{resp.json()["undo_id"]}/')
+        b.refresh_from_db()
+        self.assertIsNone(b.merged_into_id)
+        self.assertEqual(Interaction.objects.get(node__username='dup-b').node_id, b.id)
+
+    def test_undo_is_owner_scoped(self):
+        from main.models import UndoableAction
+        other = get_user_model().objects.create_user(username='undo-other', password='SecurePass1')
+        act = UndoableAction.objects.create(owner=other, kind='import', label='x', payload={'node_ids': []})
+        self.assertEqual(self.client.post(f'/api/undo/{act.id}/').status_code, 404)

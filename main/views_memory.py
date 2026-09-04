@@ -339,7 +339,12 @@ def node_merge_apply_api(request):
     duplicate.merged_into = primary; duplicate.save(update_fields=['merged_into'])
     operation = NodeMergeOperation.objects.create(owner=request.user, primary_node=primary,
                                                    duplicate_node=duplicate, snapshot=snapshot)
-    return JsonResponse({'ok': True, 'operation_id': operation.id})
+    from .undo import record_undoable
+    undo = record_undoable(request.user, 'merge',
+                           f'ادغام «{duplicate.display_name()}» در «{primary.display_name()}»',
+                           operation_id=operation.id)
+    return JsonResponse({'ok': True, 'operation_id': operation.id,
+                         'undo_id': undo.id, 'undo_label': undo.label})
 
 
 @login_required

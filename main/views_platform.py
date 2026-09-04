@@ -290,3 +290,18 @@ def demo_mode_api(request):
         request.user.demo_mode = True
     request.user.save(update_fields=['demo_mode'])
     return JsonResponse({'ok': True, 'demo_mode': request.user.demo_mode})
+
+
+@login_required
+def jobs_list_api(request):
+    """Recent background jobs for the current user."""
+    from .models import BackgroundJob
+    jobs = BackgroundJob.objects.filter(owner=request.user)[:20]
+    return JsonResponse({'ok': True, 'jobs': [j.as_dict() for j in jobs]})
+
+
+@login_required
+def job_detail_api(request, pk):
+    from .models import BackgroundJob
+    job = get_object_or_404(BackgroundJob, pk=pk, owner=request.user)
+    return JsonResponse({'ok': True, 'job': job.as_dict()})

@@ -762,36 +762,34 @@ def synthesize_everything(user, progress=None):
 @require_POST
 def persona_synthesize_all_api(request):
     """Kick off a background pass over every person and relationship."""
-    key = _batch_key(request.user.id)
-    current = cache.get(key)
-    if current and current.get('running'):
-        return JsonResponse({'ok': True, 'already_running': True, 'progress': current})
-    if not cache.add(f'{key}:lock', '1', 60 * 30):
-        return JsonResponse({'ok': True, 'already_running': True,
-                             'progress': cache.get(key) or {'running': True}})
-
+    from .jobs import start_job
     user_id = request.user.id
-    seed = {'running': True, 'total': 0, 'done': 0}
-    cache.set(key, seed, 60 * 60)
 
-    def _worker():
-        try:
-            user = User.objects.get(pk=user_id)
-            synthesize_everything(user, progress=lambda s: cache.set(key, s, 60 * 60))
-        except Exception:
-            cache.set(key, {'running': False, 'error': 'اجرای دسته‌ای ناموفق بود'}, 60 * 60)
-        finally:
-            cache.delete(f'{key}:lock')
-            close_old_connections()
+    def _worker(job):
+        user = User.objects.get(pk=user_id)
+        state = synthesize_everything(user, progress=job.set_progress)
+        job.finish(result=(
+            f"افراد {state['people_ok']} · روابط {state['rel_ok']} · "
+            f"دادهٔ کم {state['skipped']} · خطا {state['failed']}"
+        ), status='error' if state['failed'] and not (state['people_ok'] or state['rel_ok']) else 'done')
 
-    try:
-        threading.Thread(target=_worker, name=f'persona-batch-{user_id}', daemon=True).start()
-    except Exception:
-        cache.delete(f'{key}:lock')
-        return JsonResponse({'error': 'نتوانستم اجرای دسته‌ای را شروع کنم'}, status=500)
-    return JsonResponse({'ok': True, 'started': True})
+    record = start_job(request.user, 'persona-batch', _worker)
+    return JsonResponse({'ok': True, 'job': record.as_dict()})
 
 
 @login_required
 def persona_batch_status_api(request):
-    return JsonResponse({'ok': True, 'progress': cache.get(_batch_key(request.user.id)) or None})
+    from .models import BackgroundJob
+    job = (BackgroundJob.objects.filter(owner=request.user, kind='persona-batch')
+           .order_by('-created_at').first())
+    progress = None
+    if job:
+        progress = dict(job.progress or {})
+        progress.setdefault('running', job.status == 'running')
+        if job.status != 'running':
+            progress['running'] = False
+        if job.result:
+            progress['result'] = job.result
+        if job.status == 'error':
+            progress.setdefault('error', job.result or 'اجرای دسته‌ای ناموفق بود')
+    return JsonResponse({'ok': True, 'progress': progress})

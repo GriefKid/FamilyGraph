@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .undo import undo_action_api
 from .views_auth import (
     login_view, logout_view, register_view, profile_view, captcha_refresh,
 )
@@ -71,7 +72,7 @@ from .views_relationship_life import (relationship_life_hub, meeting_briefing_ap
 from .views_platform import (platform_tools_view, command_palette_api, onboarding_api, onboarding_complete_api,
     onboarding_goal_api,
     ai_quality_dashboard, ai_debug_private, ai_trace_rerun, feature_flags_view, frontend_error_api,
-    system_health_api, encrypted_backup_download, encrypted_backup_preview,
+    system_health_api, jobs_list_api, job_detail_api, encrypted_backup_download, encrypted_backup_preview,
     encrypted_backup_restore, demo_mode_api)
 from .views_life import (
     life_event_create_api,
@@ -148,6 +149,9 @@ from .views_social_circles import (
 urlpatterns = [
     path('service-worker.js', service_worker, name='service_worker'),
     path('api/system/health/', system_health_api, name='system_health'),
+    path('api/jobs/', jobs_list_api, name='jobs_list'),
+    path('api/jobs/<int:pk>/', job_detail_api, name='job_detail'),
+    path('api/undo/<int:pk>/', undo_action_api, name='undo_action'),
     path('platform/tools/', platform_tools_view, name='platform_tools'),
     path('api/platform/command-palette/', command_palette_api, name='command_palette'),
     path('api/platform/onboarding/', onboarding_api, name='onboarding_status'),

@@ -1701,6 +1701,49 @@ class PushSubscription(models.Model):
         }
 
 
+class BackgroundJob(models.Model):
+    """یک کارِ پس‌زمینه (سنتز دسته‌ای، تحلیل و…) با پیشرفت و نتیجهٔ قابل‌مشاهده."""
+    STATUS_CHOICES = [
+        ('running', 'در حال اجرا'), ('done', 'انجام شد'), ('error', 'خطا'),
+    ]
+    owner       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                    related_name='background_jobs')
+    kind        = models.CharField(max_length=40)
+    status      = models.CharField(max_length=10, choices=STATUS_CHOICES, default='running')
+    progress    = models.JSONField(default=dict, blank=True)
+    result      = models.CharField(max_length=400, blank=True, default='')
+    created_at  = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['owner', 'kind', '-created_at'], name='job_owner_kind_created')]
+
+    def as_dict(self):
+        return {
+            'id': self.id, 'kind': self.kind, 'status': self.status,
+            'progress': self.progress or {}, 'result': self.result,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+        }
+
+
+class UndoableAction(models.Model):
+    """آخرین عملیاتِ قابل‌برگشت (ادغام، ورود دسته‌ای، حذف) تا کاربر بتواند
+    با یک کلیک برش گرداند."""
+    owner      = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                   related_name='undoable_actions')
+    kind       = models.CharField(max_length=30)
+    label      = models.CharField(max_length=200)
+    payload    = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    undone     = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['owner', 'undone', '-created_at'], name='undo_owner_state_created')]
+
+
 # ─────────────────────────────────────────────────────────────────
 # Signals
 # ─────────────────────────────────────────────────────────────────
