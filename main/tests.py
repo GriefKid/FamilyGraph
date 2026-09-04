@@ -3175,6 +3175,13 @@ class FeatureDiscoveryNavigationTests(TestCase):
         self.assertContains(response, 'href="/trust/"')
         self.assertContains(response, 'nav-item active')
 
+    def test_sidebar_has_viewport_bound_independent_scroll(self):
+        response = self.client.get('/insight-center/')
+        self.assertContains(response, 'height:100dvh;')
+        self.assertContains(response, 'min-height:0;')
+        self.assertContains(response, 'overscroll-behavior:contain;')
+        self.assertContains(response, '-webkit-overflow-scrolling:touch;')
+
 
 class BackgroundJobRunnerTests(TestCase):
     def setUp(self):
