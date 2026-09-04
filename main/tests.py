@@ -3041,3 +3041,35 @@ class NVCDraftTests(TestCase):
         resp = self.client.post(f'/api/relationship-life/nvc/{self.node.id}/', data='{}',
                                 content_type='application/json')
         self.assertEqual(resp.status_code, 404)
+
+
+class YearbookTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='yb', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='yb-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+        self.client.force_login(self.user)
+
+    def test_yearbook_renders_and_is_owner_scoped(self):
+        import jdatetime
+        jy = jdatetime.date.today().year
+        start = jdatetime.date(jy, 1, 5).togregorian()
+        friend = Node.objects.create(owner=self.user, username='yb-friend', name='دوست')
+        Interaction.objects.create(owner=self.user, node=friend, kind='call', date=start)
+        JournalEntry.objects.create(owner=self.user, entry_date=start,
+                                    text='یک خاطرهٔ نسبتاً بلند از امسال که باید در کتاب بیاید.')
+        # another owner's data must not leak in
+        other = get_user_model().objects.create_user(username='yb-other', password='SecurePass1')
+        Node.objects.create(owner=other, username='secret')
+
+        resp = self.client.get('/yearbook/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'دوست')
+        self.assertContains(resp, 'خاطرهٔ نسبتاً بلند')
+        self.assertContains(resp, 'window.print()')
+        self.assertNotContains(resp, 'secret')
+        self.assertEqual(resp.context['stats']['interactions'], 1)
+
+    def test_bad_year_param_falls_back_to_current(self):
+        self.assertEqual(self.client.get('/yearbook/?year=notanumber').status_code, 200)

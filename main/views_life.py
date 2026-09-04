@@ -392,3 +392,98 @@ def monthly_recap_view(request):
         'memory_highlights': list(month_memories[:5]),
         'next_steps': next_steps,
     })
+
+
+@login_required
+def yearbook_view(request):
+    """A printable 'year in relationships' book, built entirely from stored
+    data — no AI. ?year=<Jalali year>, default = current."""
+    import jdatetime
+    from django.db.models import Q, Max, Min
+    from .models import Interaction, Event, FollowUp, Relationship, RelationshipStrengthHistory
+    user = request.user
+
+    today = timezone.localdate()
+    try:
+        jy = int(request.GET.get('year') or jdatetime.date.today().year)
+    except (TypeError, ValueError):
+        jy = jdatetime.date.today().year
+    start = jdatetime.date(jy, 1, 1).togregorian()
+    try:
+        end = jdatetime.date(jy, 12, 30).togregorian()
+    except ValueError:
+        end = jdatetime.date(jy, 12, 29).togregorian()
+    end = min(end, today)
+    rng = (start, end)
+
+    inter = Interaction.objects.filter(owner=user, date__range=rng)
+    journals = JournalEntry.objects.filter(owner=user, entry_date__range=rng)
+    events = Event.objects.filter(owner=user, date__range=rng)
+
+    # آدم‌های پررنگ سال
+    top_people = []
+    for row in (inter.exclude(node__isnull=True)
+                .values('node_id')
+                .annotate(n=Count('id'), first=Min('date'), last=Max('date'))
+                .order_by('-n')[:8]):
+        node = Node.objects.filter(pk=row['node_id']).first()
+        if node:
+            top_people.append({'name': node.display_name(), 'id': node.id, 'n': row['n'],
+                               'first_fa': jalali_str(row['first']), 'last_fa': jalali_str(row['last'])})
+
+    # خاطره‌های ماندگار — بلندترین‌ها + آنهایی که حس دارند
+    highlights = list(
+        journals.exclude(text='').order_by('-occurred_at')[:200]
+    )
+    highlights.sort(key=lambda e: (bool(e.mood), len(e.text or '')), reverse=True)
+    memory_highlights = [{
+        'date_fa': jalali_str(e.entry_date or (e.created_at.date() if e.created_at else today)),
+        'text': (e.text or '')[:400], 'mood': e.mood,
+    } for e in highlights[:6]]
+
+    # رابطه‌هایی که امسال قوی‌تر شدند
+    grew = []
+    for rel in (Relationship.objects.filter(owner=user)
+                .filter(Q(source=user.root_node) | Q(target=user.root_node))
+                .select_related('source', 'target')):
+        series = list(RelationshipStrengthHistory.objects
+                      .filter(owner=user, relationship=rel, changed_at__date__range=rng)
+                      .order_by('changed_at').values_list('strength', flat=True))
+        if len(series) >= 2 and series[-1] > series[0]:
+            other = rel.target if rel.source_id == user.root_node_id else rel.source
+            grew.append({'name': other.display_name(), 'from': series[0], 'to': series[-1]})
+
+    # قدم‌های آرام سال بعد
+    next_steps = []
+    try:
+        from .health import attention_priority, compute_health
+        ranked = sorted(attention_priority(user, compute_health(user)).items(),
+                        key=lambda kv: -kv[1]['score'])
+        names = dict(Node.objects.filter(owner=user, id__in=[n for n, _ in ranked[:3]])
+                     .values_list('id', 'username'))
+        for nid, row in ranked[:3]:
+            if row['score'] >= 20:
+                next_steps.append({'name': names.get(nid, 'یک نفر'),
+                                   'why': (row['factors'] or ['یک قدم توجه'])[0]})
+    except Exception:
+        pass
+
+    stats = {
+        'people_total': Node.objects.filter(owner=user, merged_into__isnull=True).exclude(pk=user.root_node_id).count(),
+        'people_new': Node.objects.filter(owner=user, created_at__date__range=rng).exclude(pk=user.root_node_id).count(),
+        'interactions': inter.count(),
+        'journals': journals.count(),
+        'events': events.count(),
+        'followups_done': FollowUp.objects.filter(owner=user, done=True, done_at__date__range=rng).count(),
+    }
+
+    return render(request, 'daily/yearbook.html', {
+        'jy': jy,
+        'jy_prev': jy - 1, 'jy_next': jy + 1,
+        'range_fa': f'{jalali_str(start)} تا {jalali_str(end)}',
+        'stats': stats,
+        'top_people': top_people,
+        'memory_highlights': memory_highlights,
+        'grew': grew,
+        'next_steps': next_steps,
+    })
