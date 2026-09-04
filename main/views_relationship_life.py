@@ -305,6 +305,72 @@ def csv_import_preview(request):
     return JsonResponse({'rows': [row for row in clean if row['username']]})
 
 
+def _parse_vcards(text):
+    """Minimal vCard 2.1/3.0/4.0 reader → [{name, username, phone, email}]."""
+    import re as _re
+    # unfold folded lines (continuation lines start with space or tab)
+    unfolded = _re.sub(r'\r?\n[ \t]', '', text)
+    cards = []
+    cur = None
+    for line in unfolded.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        up = s.upper()
+        if up == 'BEGIN:VCARD':
+            cur = {'name': '', 'phone': '', 'email': ''}
+        elif up == 'END:VCARD':
+            if cur:
+                cards.append(cur)
+            cur = None
+        elif cur is None:
+            continue
+        else:
+            key, _, value = s.partition(':')
+            key = key.split(';', 1)[0].upper()
+            value = value.strip()
+            if key == 'FN' and value:
+                cur['name'] = value[:200]
+            elif key == 'N' and not cur['name']:
+                parts = [p.strip() for p in value.split(';') if p.strip()]
+                cur['name'] = ' '.join(reversed(parts[:2]))[:200] if parts else ''
+            elif key == 'TEL' and not cur['phone']:
+                cur['phone'] = _re.sub(r'[^\d+]', '', value)[:20]
+            elif key == 'EMAIL' and not cur['email']:
+                cur['email'] = value[:120]
+            elif key == 'ORG' and not cur['name']:
+                cur['name'] = value.replace(';', ' ').strip()[:200]
+    return cards
+
+
+@login_required
+@require_POST
+def vcard_import_preview(request):
+    uploaded = request.FILES.get('file')
+    if not uploaded:
+        return JsonResponse({'error': 'فایل vCard (.vcf) لازم است.'}, status=400)
+    try:
+        text = uploaded.read()[:2 * 1024 * 1024].decode('utf-8-sig', errors='ignore')
+    except Exception:
+        return JsonResponse({'error': 'فایل قابل خواندن نبود.'}, status=400)
+    cards = _parse_vcards(text)[:1000]
+    rows = []
+    seen = set()
+    for c in cards:
+        name = c['name'].strip()
+        if not name:
+            continue
+        base = ''.join(ch if ch.isalnum() else '_' for ch in name.lower()).strip('_') or 'contact'
+        username = base
+        i = 1
+        while username in seen:
+            i += 1
+            username = f'{base}_{i}'
+        seen.add(username)
+        rows.append({'username': username[:100], 'name': name, 'phone': c['phone']})
+    return JsonResponse({'rows': rows, 'count': len(rows)})
+
+
 @login_required
 @require_POST
 def csv_import_apply(request):

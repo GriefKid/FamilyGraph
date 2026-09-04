@@ -65,7 +65,7 @@ from .views_memory import (memory_hub, memory_timeline_view, knowledge_graph_vie
     node_merge_apply_api, node_merge_undo_api, clear_psychology_inferences_api)
 from .views_relationship_life import (relationship_life_hub, meeting_briefing_api,
     quick_capture_api, meeting_reflection_api, commitment_action_api,
-    safety_setting_api, person_export, csv_import_preview, csv_import_apply, service_worker,
+    safety_setting_api, person_export, csv_import_preview, csv_import_apply, vcard_import_preview, service_worker,
     introduction_brief_api, person_delete_complete, trust_center_view, person_card_view,
     share_link_create_api, share_link_revoke_api, shared_person_card_view)
 from .views_platform import (platform_tools_view, command_palette_api, onboarding_api, onboarding_complete_api,
@@ -358,6 +358,7 @@ urlpatterns = [
     path('api/relationship-life/introduction/', introduction_brief_api, name='introduction_brief'),
     path('api/relationship-life/import/csv/preview/', csv_import_preview, name='csv_import_preview'),
     path('api/relationship-life/import/csv/apply/', csv_import_apply, name='csv_import_apply'),
+    path('api/relationship-life/import/vcard/preview/', vcard_import_preview, name='vcard_import_preview'),
     path('api/extractions/',             extraction_suggestions_api, name='extraction_suggestions'),
     path('api/extractions/<int:pk>/',    extraction_suggestion_decide_api, name='extraction_suggestion_decide'),
     path('api/daily/tips/',              daily_tips_api,             name='daily_tips_api'),

@@ -2979,3 +2979,34 @@ class OverdueDebtFollowupTests(TestCase):
             FollowUp.objects.filter(owner=self.user, node=self.friend, done=False,
                                     text__startswith=f'[بدهی #{d.id}]').exists()
         )
+
+
+class VCardImportTests(TestCase):
+    VCF = (
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:مریم کریمی\r\nTEL;TYPE=CELL:+98 912 000 1122\r\nEND:VCARD\r\n"
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nN:Doe;John;;;\r\nEMAIL:john@example.com\r\nEND:VCARD\r\n"
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nORG:Acme Inc.\r\nEND:VCARD\r\n"
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n"
+    )
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='vcf', password='SecurePass1')
+        self.client.force_login(self.user)
+
+    def test_preview_parses_names_phones_and_skips_empty_cards(self):
+        f = SimpleUploadedFile('contacts.vcf', self.VCF.encode('utf-8'), 'text/vcard')
+        resp = self.client.post('/api/relationship-life/import/vcard/preview/', {'file': f})
+        self.assertEqual(resp.status_code, 200)
+        rows = resp.json()['rows']
+        self.assertEqual(len(rows), 3)                      # empty card dropped
+        self.assertEqual(rows[0]['name'], 'مریم کریمی')
+        self.assertEqual(rows[0]['phone'], '+989120001122')
+        self.assertEqual(rows[1]['name'], 'John Doe')
+
+    def test_apply_creates_owner_scoped_nodes(self):
+        f = SimpleUploadedFile('contacts.vcf', self.VCF.encode('utf-8'), 'text/vcard')
+        rows = self.client.post('/api/relationship-life/import/vcard/preview/', {'file': f}).json()['rows']
+        apply = self.client.post('/api/relationship-life/import/csv/apply/',
+                                 data=json.dumps({'rows': rows}), content_type='application/json')
+        self.assertEqual(apply.json()['created'], 3)
+        self.assertTrue(Node.objects.filter(owner=self.user, name='مریم کریمی').exists())
