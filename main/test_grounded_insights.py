@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .grounded_insights import cultural_work_analysis
+from .theories import extra_theories
 from .models import (
     ChatMessage,
     ChatAnalysis,
@@ -17,6 +18,7 @@ from .models import (
     Friendship,
     Information,
     Interaction,
+    Group,
     JournalEntry,
     Node,
     Relationship,
@@ -120,6 +122,29 @@ class GroundedInsightApiTests(TestCase):
         self.assertContains(response, 'فاصلهٔ تماس ثبت‌شده')
         self.assertContains(response, 'از گراف قابل تشخیص نیست')
         self.assertNotContains(response, 'ریسک تنهایی اجتماعی')
+
+    def test_theory_cards_add_grounded_network_and_support_signals(self):
+        group = Group.objects.create(owner=self.user, name='کار')
+        group.nodes.add(self.root, self.person)
+        Relationship.objects.create(
+            owner=self.user, source=self.person, target=self.root,
+            rel='دوست', strength=4, status='active',
+        )
+        Interaction.objects.create(
+            owner=self.user, node=self.person, kind='call',
+            date=timezone.localdate(), feeling=1, support_kind='heard',
+        )
+
+        cards = {card['name']: card for card in extra_theories(self.user)}
+
+        self.assertIn('دوطرفه‌بودن رابطه‌ها', cards)
+        self.assertIn('رابطه‌های چندلایه', cards)
+        self.assertIn('تمرکز شبکه', cards)
+        self.assertIn('هستهٔ شبکه', cards)
+        self.assertIn('روند گرم و سرد شدن', cards)
+        self.assertIn('تنوع حمایت اجتماعی', cards)
+        self.assertIn('100%', cards['دوطرفه‌بودن رابطه‌ها']['value'])
+        self.assertIn('شنیده‌شدن', cards['تنوع حمایت اجتماعی']['value'])
 
     def test_daily_tips_match_both_frontend_field_shapes_without_provider(self):
         with mock.patch(

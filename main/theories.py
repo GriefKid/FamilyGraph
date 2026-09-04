@@ -8,11 +8,12 @@ theories.py — نظریه‌های تکمیلی روانشناسی/جامعه�
 خروجی: لیست کارت — {icon, name, theory, value, value_color, label, note, tip}
 همه‌چیز fail-safe: نبود جدول/داده → کارت با پیام «داده کافی نیست».
 """
+from collections import defaultdict
 from datetime import timedelta
 
 from django.utils import timezone
 
-from .models import Node, Relationship, JournalEntry
+from .models import Interaction, Node, Relationship, JournalEntry
 
 
 def _safe(fn, default):
@@ -273,6 +274,195 @@ def extra_theories(user):
         'tip': 'این نمره از داده‌های ثبت‌شده مثل تعامل، حس، نبض رابطه و قدرت فعلی ساخته می‌شود و اطمینان جداگانه دارد. '
                'پژوهش‌های کیفیت رابطه (مثل مقیاس Rubin) نشون می‌دن خودآگاهی نسبت به کیفیت روابط، '
                'اولین قدم بهبودشونه — چیزی که اندازه گرفته بشه، مدیریت می‌شه.',
+    })
+
+    # ═══ 10. رابطه‌های دوطرفه — Reciprocity / directed network ═══
+    def _relationship_rows():
+        return list(Relationship.objects.filter(owner=user).values_list(
+            'source_id', 'target_id', 'strength', 'status', 'rel'))
+
+    rel_rows = _safe(_relationship_rows, [])
+    directed = {
+        (source_id, target_id)
+        for source_id, target_id, _strength, status, _rel in rel_rows
+        if source_id != target_id and status != 'inactive'
+    }
+    pairs = {tuple(sorted(pair)) for pair in directed}
+    reciprocal_pairs = sum(
+        1 for source_id, target_id in pairs
+        if (source_id, target_id) in directed and (target_id, source_id) in directed
+    )
+    if pairs:
+        reciprocal_pct = round(reciprocal_pairs / len(pairs) * 100)
+        value = f'{reciprocal_pct}% ({reciprocal_pairs} از {len(pairs)} جفت)'
+        color = '#34d399' if reciprocal_pct >= 60 else ('#fbbf24' if reciprocal_pct >= 30 else '#f87171')
+        note = 'فقط دوطرفه‌بودن یال‌های ثبت‌شده را نشان می‌دهد؛ به‌معنای برابر بودن احساس یا تلاش نیست'
+    else:
+        value = '—'; color = '#64748b'
+        note = 'برای دیدن این کارت، چند رابطه را از هر دو جهت در گراف ثبت کن'
+    cards.append({
+        'icon': '↔️', 'name': 'دوطرفه‌بودن رابطه‌ها',
+        'theory': 'Reciprocity in Social Networks — Gouldner (1960)',
+        'value': value, 'value_color': color, 'label': 'ثبت دوطرفهٔ یال‌ها', 'note': note,
+        'tip': 'در شبکه، رابطهٔ دوطرفه می‌تواند نشانه‌ای از شناخت متقابل باشد. این کارت ساختار ثبت‌شده را می‌سنجد، نه کیفیت، رضایت یا تعادل عاطفی رابطه.',
+    })
+
+    # ═══ 11. رابطه‌های چندلایه — Multiplexity ═══
+    def _group_map():
+        nodes = Node.objects.filter(owner=user).prefetch_related('groups')
+        return {node.id: {group.id for group in node.groups.all()} for node in nodes}
+
+    group_map = _safe(_group_map, {})
+    interaction_nodes = {node_id for node_id, _date, _feeling, _kind in inters if node_id}
+    def _followup_rows():
+        from .models import FollowUp
+        return list(FollowUp.objects.filter(owner=user).values_list('node_id', 'done'))
+    followup_rows = _safe(_followup_rows, [])
+    followup_nodes = {node_id for node_id, _done in followup_rows if node_id}
+    root_layers = []
+    if root_id:
+        neighbors = set()
+        for source_id, target_id, _strength, status, _rel in rel_rows:
+            if status != 'inactive' and root_id in (source_id, target_id):
+                neighbors.add(target_id if source_id == root_id else source_id)
+        for node_id in neighbors:
+            layers = {'رابطه'}
+            if group_map.get(root_id, set()) & group_map.get(node_id, set()):
+                layers.add('گروه مشترک')
+            if node_id in interaction_nodes:
+                layers.add('تعامل')
+            if node_id in followup_nodes:
+                layers.add('موضوع باز')
+            if len(layers) >= 2:
+                root_layers.append((node_names.get(node_id, '؟'), len(layers)))
+    root_layers.sort(key=lambda item: (-item[1], item[0]))
+    if root_layers:
+        value = '، '.join(f'{name} ({count} لایه)' for name, count in root_layers[:3])
+        note = 'رابطه‌هایی که در بیش از یک زمینهٔ ثبت‌شدهٔ تو حضور دارند؛ چندلایه بودن به‌معنای سالم یا امن بودن نیست'
+        color = '#a5b4fc'
+    else:
+        value = '—'; color = '#64748b'
+        note = 'گروه‌بندی، تعامل یا موضوع باز را برای یک رابطه ثبت کن تا لایه‌های مشترک دیده شود'
+    cards.append({
+        'icon': '🧩', 'name': 'رابطه‌های چندلایه',
+        'theory': 'Multiplexity — چندنقشی‌بودن پیوندهای اجتماعی',
+        'value': value, 'value_color': color, 'label': 'چند زمینهٔ مشترک با «من»', 'note': note,
+        'tip': 'یک رابطه ممکن است هم‌زمان خانوادگی، دوستانه، کاری و بخشی از یک گروه باشد. این کارت فقط هم‌پوشانی داده‌های ثبت‌شده را نشان می‌دهد و دربارهٔ مرزهای رابطه قضاوت نمی‌کند.',
+    })
+
+    # ═══ 12. تمرکز شبکه — Freeman centralization ═══
+    adjacency = defaultdict(set)
+    for source_id, target_id, _strength, status, _rel in rel_rows:
+        if status != 'inactive' and source_id != target_id:
+            adjacency[source_id].add(target_id)
+            adjacency[target_id].add(source_id)
+    degrees = sorted(((node_id, len(neighbors)) for node_id, neighbors in adjacency.items()),
+                     key=lambda item: (-item[1], item[0]))
+    degree_sum = sum(degree for _node_id, degree in degrees)
+    if len(degrees) >= 2 and degree_sum:
+        top_degree = sum(degree for _node_id, degree in degrees[:3])
+        concentration = round(top_degree / degree_sum * 100)
+        top_names = '، '.join(node_names.get(node_id, '؟') for node_id, _degree in degrees[:3])
+        value = f'{concentration}% · {top_names}'
+        color = '#f87171' if concentration >= 75 else ('#fbbf24' if concentration >= 50 else '#34d399')
+        note = 'سهم سه گرهٔ پراتصال از همهٔ اتصال‌های ثبت‌شده؛ تمرکز بالا یعنی شبکه مسیرهای جایگزین کمتری دارد'
+    else:
+        value = '—'; color = '#64748b'
+        note = 'برای سنجش تمرکز، حداقل دو نفر با اتصال ثبت‌شده لازم است'
+    cards.append({
+        'icon': '🎯', 'name': 'تمرکز شبکه',
+        'theory': 'Network Centralization — Freeman (1979)',
+        'value': value, 'value_color': color, 'label': 'وابستگی اتصال‌ها به چند نفر', 'note': note,
+        'tip': 'تمرکز زیاد الزاماً بد نیست؛ گاهی یک نفر عمداً هماهنگ‌کنندهٔ شبکه است. این کارت فقط به تو یادآوری می‌کند که آیا مسیرهای مستقل دیگری هم ثبت شده‌اند یا نه.',
+    })
+
+    # ═══ 13. هستهٔ شبکه — k-core ═══
+    core_numbers = {node_id: 0 for node_id in adjacency}
+    remaining = set(adjacency)
+    k = 1
+    while remaining:
+        removed = {node_id for node_id in remaining
+                   if sum(neighbor in remaining for neighbor in adjacency[node_id]) < k}
+        if removed:
+            for node_id in removed:
+                core_numbers[node_id] = k - 1
+                remaining.remove(node_id)
+        else:
+            k += 1
+    if core_numbers:
+        max_core = max(core_numbers.values())
+        core_names = [node_names.get(node_id, '؟') for node_id, score in core_numbers.items()
+                      if score == max_core]
+        value = f'k={max_core}: ' + '، '.join(core_names[:5])
+        color = '#34d399' if max_core >= 2 else '#a5b4fc'
+        note = 'افراد این هسته چند اتصال به افراد متصل دیگر دارند؛ هسته‌ای بودن به‌معنای مهم‌تر یا بهتر بودن فرد نیست'
+    else:
+        value = '—'; color = '#64748b'
+        note = 'با ساختن چند اتصال متقاطع، هستهٔ شبکه قابل مشاهده می‌شود'
+    cards.append({
+        'icon': '🫀', 'name': 'هستهٔ شبکه',
+        'theory': 'k-Core Decomposition — Seidman (1983)',
+        'value': value, 'value_color': color, 'label': 'مرکزِ چنداتصالهٔ شبکه', 'note': note,
+        'tip': 'k-core به‌جای شمردن محبوبیت، دنبال بخشی از شبکه می‌گردد که هر عضو آن چند اتصال درون شبکه‌ای دارد. این یک ویژگی ساختاری است، نه رتبه‌بندی آدم‌ها.',
+    })
+
+    # ═══ 14. روند گرم و سرد شدن — temporal tie change ═══
+    recent_cutoff = today - timedelta(days=30)
+    previous_cutoff = today - timedelta(days=60)
+    recent_counts = defaultdict(int)
+    previous_counts = defaultdict(int)
+    for node_id, interaction_date, _feeling, _kind in inters:
+        if interaction_date >= recent_cutoff:
+            recent_counts[node_id] += 1
+        elif interaction_date >= previous_cutoff:
+            previous_counts[node_id] += 1
+    trajectory = []
+    for node_id in set(recent_counts) | set(previous_counts):
+        delta = recent_counts[node_id] - previous_counts[node_id]
+        total_interactions = recent_counts[node_id] + previous_counts[node_id]
+        if total_interactions >= 2 and delta:
+            trajectory.append((delta, node_names.get(node_id, '؟'), recent_counts[node_id], previous_counts[node_id]))
+    warming = sorted((row for row in trajectory if row[0] > 0), reverse=True)
+    cooling = sorted((row for row in trajectory if row[0] < 0))
+    trajectory_parts = []
+    if warming:
+        trajectory_parts.append('گرم‌تر: ' + '، '.join(row[1] for row in warming[:2]))
+    if cooling:
+        trajectory_parts.append('سردتر: ' + '، '.join(row[1] for row in cooling[:2]))
+    if trajectory_parts:
+        value = ' | '.join(trajectory_parts); color = '#fbbf24'
+        note = 'مقایسهٔ تعداد تعامل‌های ثبت‌شده در ۳۰ روز اخیر با ۳۰ روز قبل؛ تغییر تعداد تماس علت رابطه را توضیح نمی‌دهد'
+    else:
+        value = '—'; color = '#64748b'
+        note = 'برای دیدن روند، با چند نفر در دو بازهٔ زمانی تعامل ثبت کن'
+    cards.append({
+        'icon': '🌡️', 'name': 'روند گرم و سرد شدن',
+        'theory': 'Temporal Tie Dynamics — پویایی زمانی پیوندها',
+        'value': value, 'value_color': color, 'label': 'تغییر ریتم تعامل', 'note': note,
+        'tip': 'رابطه‌ها در طول زمان تغییر می‌کنند. این کارت تغییر فراوانی ثبت تماس را به‌عنوان دعوتی برای مرور نشان می‌دهد، نه اینکه علت فاصله یا صمیمیت را حدس بزند.',
+    })
+
+    # ═══ 15. تنوع حمایت اجتماعی — Cohen & Wills (1985) ═══
+    def _support_rows():
+        return list(Interaction.objects.filter(owner=user).values_list('support_kind', flat=True))
+    support_rows = _safe(_support_rows, [])
+    support_labels = {
+        'heard': 'شنیده‌شدن', 'info': 'اطلاعات', 'practical': 'کمک عملی', 'presence': 'حضور',
+    }
+    support_kinds = {kind for kind in support_rows if kind}
+    if support_kinds:
+        names = '، '.join(support_labels.get(kind, kind) for kind in sorted(support_kinds))
+        value = f'{len(support_kinds)} نوع: {names}'
+        color = '#34d399' if len(support_kinds) >= 3 else '#fbbf24'
+        note = f'{len(support_rows)} تعامل با نوع حمایت ثبت شده؛ نوع حمایت با کیفیت یا کافی بودن آن یکی نیست'
+    else:
+        value = '—'; color = '#64748b'
+        note = 'در ثبت تعامل، نوع حمایت را هم مشخص کن تا این کارت فعال شود'
+    cards.append({
+        'icon': '🫂', 'name': 'تنوع حمایت اجتماعی',
+        'theory': 'Stress-Buffering / Social Support — Cohen & Wills (1985)',
+        'value': value, 'value_color': color, 'label': 'انواع حمایت تجربه‌شده', 'note': note,
+        'tip': 'حمایت می‌تواند عاطفی، اطلاعاتی، عملی یا صرفاً حضور باشد. این کارت تنوع چیزی را که خودت بعد از تعامل ثبت کرده‌ای نشان می‌دهد و جای پرسیدن نیاز واقعی را نمی‌گیرد.',
     })
 
     return cards
