@@ -1885,6 +1885,35 @@ class GroundedChatReplyTests(TestCase):
         self.assertTrue(body.get('grounded'))
         self.assertIn('نفر', body['reply'])
 
+    def test_most_interaction_question_is_answered_from_data(self):
+        r = self._ask('بیشترین تعامل من با کیه؟')
+        self.assertIn('علی رضایی', r)
+        self.assertIn('1 تعامل', r)
+
+    def test_safety_scaffold_output_never_reaches_the_user(self):
+        from main.views import _is_model_nonanswer
+        self.assertTrue(_is_model_nonanswer('User Safety: safe\nResponse Safety: safe'))
+        self.assertTrue(_is_model_nonanswer('safe'))
+        self.assertTrue(_is_model_nonanswer('S1,S3'))
+        self.assertFalse(_is_model_nonanswer('بیشترین تعامل تو با علیه.'))
+
+        class _Msg:
+            content = 'User Safety: safe\nResponse Safety: safe'
+
+        class _Resp:
+            choices = [type('C', (), {'message': _Msg()})()]
+
+        fake = mock.Mock()
+        fake.chat.completions.create.return_value = _Resp()
+        with mock.patch('main.views._get_ai_client_and_model',
+                        return_value=(fake, 'openrouter/free')):
+            resp = self.client.post('/api/chat/', data=json.dumps(
+                {'message': 'یک نکتهٔ فلسفی بگو'}), content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        body = json.loads(resp.content)
+        self.assertNotIn('Safety', body['reply'])
+        self.assertTrue(body.get('degraded'))
+
 
 class GraphTimelapseTests(TestCase):
     def setUp(self):

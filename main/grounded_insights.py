@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import Interaction, Node, Relationship
@@ -1063,6 +1063,22 @@ def grounded_chat_reply(user, message):
             bits.append(lc)
         return (f'{person.display_name()} — ' + ' · '.join(bits)
                 + '\n(برای شناخت عمیق‌تر، از صفحهٔ او دکمهٔ «✦ بگو چی می‌دونی» را بزن.)')
+
+    if any(k in m for k in ('بیشترین تعامل', 'بیشترین ارتباط', 'کیو بیشتر', 'کیو بیشتر می بینم',
+                            'با کی بیشتر', 'نزدیک ترین', 'صمیمی ترین', 'پرتماس ترین',
+                            'کمترین تعامل', 'کیو کمتر')):
+        least = any(k in m for k in ('کمترین', 'کمتر'))
+        rows = list(Interaction.objects.filter(owner=user).exclude(node__isnull=True)
+                    .values('node_id').annotate(n=Count('id'))
+                    .order_by('n' if least else '-n')[:5])
+        if not rows:
+            return 'هنوز تعاملی ثبت نکرده‌ای تا بشود شمرد.'
+        names = {n.id: n.display_name() for n in
+                 Node.objects.filter(owner=user, id__in=[r['node_id'] for r in rows])}
+        head = 'کم‌تعامل‌ترین‌ها (بر اساس آنچه ثبت شده):' if least \
+            else 'بیشترین تعاملِ ثبت‌شده با:'
+        return head + '\n' + '\n'.join(
+            f'• {names.get(r["node_id"], "یک نفر")} — {r["n"]} تعامل' for r in rows)
 
     if any(k in m for k in ('این هفته', 'اخیرا', 'چه خبر', 'تازگی', 'روزهای اخیر')):
         since = today - _dt.timedelta(days=7)

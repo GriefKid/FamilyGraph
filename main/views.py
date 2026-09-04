@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import time
 from datetime import date, timedelta
 from django.db.models import Q, ProtectedError, Prefetch
@@ -30,6 +31,30 @@ def _ai_error_msg(e: Exception) -> str:
         return ('سهمیهٔ سرویس آنلاین فعلاً تمام شده 😔 — پاسخ‌گویی با مدل محلی ادامه پیدا می‌کند؛ '
                 'برای استفادهٔ آنلاین باید سهمیه بعداً آزاد شود یا key سرویس دیگری تنظیم کنی.')
     return f'خطای AI: {s[:200]}'
+
+_NONANSWER_RE = re.compile(
+    r'^\s*("?)(user|response|assistant|prompt)?\s*safety\s*:',
+    re.IGNORECASE,
+)
+
+
+def _is_model_nonanswer(text: str) -> bool:
+    """True when the model returned classifier/guard scaffolding instead of a
+    real answer (OpenRouter's free auto-router sometimes lands on a safety
+    model). Such output must never reach the user as the reply."""
+    t = (text or '').strip().strip('"\'` ').lower()
+    if not t:
+        return False
+    if _NONANSWER_RE.match(text or ''):
+        return True
+    if t in {'safe', 'unsafe', 'safe.', 'unsafe.'}:
+        return True
+    if re.fullmatch(r's\d{1,2}(\s*,\s*s\d{1,2})*', t):
+        return True
+    if 'response safety:' in t or 'user safety:' in t:
+        return True
+    return False
+
 
 def _get_ai_client_and_model():
     """Return the project's configured OpenAI-compatible client and model."""
@@ -2061,6 +2086,15 @@ def chat_api(request):
             from .views_smart_features import _strip_reasoning
             raw_content = getattr(response.choices[0].message, 'content', None) or ''
             reply = normalize_persian_reply(_strip_reasoning(raw_content))
+            if _is_model_nonanswer(raw_content) or _is_model_nonanswer(reply):
+                # The free router landed on a guard/classifier model. Ask once
+                # more (it usually routes elsewhere); if it still isn't an
+                # answer, fall through to the deterministic degraded reply.
+                retry = client.chat.completions.create(**completion_options)
+                raw_content = getattr(retry.choices[0].message, 'content', None) or ''
+                reply = normalize_persian_reply(_strip_reasoning(raw_content))
+                if _is_model_nonanswer(raw_content) or _is_model_nonanswer(reply):
+                    raise RuntimeError('model returned safety-classifier scaffold')
 
         # یک فرصت بازنویسی سبک و محدود برای خروجی انگلیسی، رباتیک یا بیش‌ازحد بلند.
         # این مرحله داده‌های خصوصی گراف را دوباره ارسال نمی‌کند.
