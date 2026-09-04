@@ -72,3 +72,21 @@ class HamdamPersianTests(TestCase):
         self.assertEqual(ChatMessage.objects.filter(
             owner=self.user, role='assistant').get().content,
             response.json()['reply'])
+
+    @patch('main.views._get_ai_client_and_model')
+    def test_chat_never_displays_persistently_non_persian_output(self, get_ai):
+        completions = _FakeCompletions([
+            'Here is my long internal reasoning process in English.',
+            'This second answer is still entirely in English.',
+        ])
+        client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+        get_ai.return_value = (client, 'test-model')
+
+        response = self.client.post('/api/chat/', data=json.dumps({
+            'message': 'نظرت درباره دوستی چیه؟',
+        }), content_type='application/json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['degraded'])
+        self.assertEqual(response.json()['reason'], 'generation_quality')
+        self.assertNotIn('English', response.json()['reply'])

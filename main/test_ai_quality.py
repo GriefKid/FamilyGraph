@@ -6,7 +6,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from .ai_quality import percentile, run_persian_extraction_eval
-from .models import (AIExtractionTrace, AIQualityEvaluation, ExtractionSuggestion,
+from .models import (AIExtractionTrace, AIQualityEvaluation, AIRequestMetric, ExtractionSuggestion,
                      Node, ObservabilityEvent, RelationshipRecommendation)
 
 
@@ -108,6 +108,22 @@ class AIQualityDashboardTests(TestCase):
         serialized = json.dumps(evaluation.report, ensure_ascii=False)
         self.assertNotIn('راز شخصی کاربر', serialized)
         self.assertNotIn('"text"', serialized)
+
+    def test_dashboard_prefers_real_chat_latency_telemetry(self):
+        AIRequestMetric.objects.create(
+            owner=self.admin, feature='chat', provider='openrouter',
+            requested_model='minimax/minimax-m3:free',
+            actual_model='minimax/minimax-m3:free', duration_ms=6100,
+            deadline_ms=8000, status='success', attempts=1,
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse('ai_quality_dashboard'))
+
+        self.assertEqual(response.context['metric_source'], 'چت همدم')
+        self.assertEqual(response.context['p50_ms'], 6100)
+        self.assertEqual(response.context['under_10s_rate'], 100.0)
+        self.assertContains(response, 'minimax/minimax-m3:free')
 
     def test_management_command_can_save_the_report(self):
         call_command('evaluate_ai_quality', '--save', '--fail-under', '100')

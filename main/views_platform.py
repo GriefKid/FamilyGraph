@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import (AIExtractionTrace, AIQualityEvaluation, Commitment, ExtractionSuggestion, FeatureFlag,
+from .models import (AIExtractionTrace, AIQualityEvaluation, AIRequestMetric, Commitment, ExtractionSuggestion, FeatureFlag,
                      Interaction, JournalEntry, KnowledgeTriple, MemoryFact, Node,
                      ObservabilityEvent, Relationship, RelationshipRecommendation)
 from .uploads import UploadValidationError, read_limited_upload
@@ -120,16 +120,32 @@ def ai_quality_dashboard(request):
             'approval_rate': round(100 * row['approved'] / decided, 1) if decided else None,
         })
 
-    trace_total = AIExtractionTrace.objects.count()
-    durations = list(AIExtractionTrace.objects.order_by('-created_at').values_list('duration_ms', flat=True)[:1000])
-    trace_statuses = AIExtractionTrace.objects.values('status').annotate(total=Count('id')).order_by('status')
-    provider_rows = list(AIExtractionTrace.objects.values('provider').annotate(
-        total=Count('id'),
-        failed=Count('id', filter=Q(status='ai_failed')),
-        avg_ms=Avg('duration_ms'),
-    ).order_by('provider'))
+    chat_metrics = AIRequestMetric.objects.filter(feature='chat')
+    if chat_metrics.exists():
+        trace_total = chat_metrics.count()
+        durations = list(chat_metrics.order_by('-created_at').values_list('duration_ms', flat=True)[:1000])
+        trace_statuses = chat_metrics.values('status').annotate(total=Count('id')).order_by('status')
+        provider_rows = list(chat_metrics.values('provider', 'actual_model').annotate(
+            total=Count('id'),
+            failed=Count('id', filter=Q(status__in=(
+                'error', 'timeout', 'degraded_timeout', 'degraded_quality',
+            ))),
+            avg_ms=Avg('duration_ms'),
+        ).order_by('provider', 'actual_model'))
+        metric_source = 'چت همدم'
+    else:
+        trace_total = AIExtractionTrace.objects.count()
+        durations = list(AIExtractionTrace.objects.order_by('-created_at').values_list('duration_ms', flat=True)[:1000])
+        trace_statuses = AIExtractionTrace.objects.values('status').annotate(total=Count('id')).order_by('status')
+        provider_rows = list(AIExtractionTrace.objects.values('provider').annotate(
+            total=Count('id'), failed=Count('id', filter=Q(status='ai_failed')),
+            avg_ms=Avg('duration_ms'),
+        ).order_by('provider'))
+        metric_source = 'استخراج متن'
     for row in provider_rows:
         row['label'] = row['provider'] or 'استخراج محلی'
+        if row.get('actual_model'):
+            row['label'] += f" · {row['actual_model']}"
         row['avg_ms'] = round(row['avg_ms'] or 0)
         row['error_rate'] = round(100 * row['failed'] / row['total'], 1) if row['total'] else 0
 
@@ -146,6 +162,7 @@ def ai_quality_dashboard(request):
         'trace_statuses': trace_statuses,
         'trace_count': trace_total,
         'duration_sample_count': len(durations),
+        'metric_source': metric_source,
         'avg_ms': round(sum(durations) / len(durations)) if durations else 0,
         'p50_ms': percentile(durations, 50),
         'p95_ms': percentile(durations, 95),

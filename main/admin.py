@@ -4,6 +4,7 @@ from .models import (
     ArtisticWork,
     AIExtractionTrace,
     AIQualityEvaluation,
+    AIRequestMetric,
     ChatAnalysis,
     Commitment,
     Debt,
@@ -37,6 +38,7 @@ admin.site.register(NodeSafetySetting)
 admin.site.register(FeatureFlag)
 admin.site.register(AIExtractionTrace)
 admin.site.register(AIQualityEvaluation)
+admin.site.register(AIRequestMetric)
 admin.site.register(KnowledgeTriple)
 admin.site.register(ObservabilityEvent)
 

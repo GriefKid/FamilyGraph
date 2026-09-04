@@ -56,7 +56,7 @@
   {% if request.GET.ran %}<div class="quality-success">مجموعه‌تست اجرا و نتیجه‌ی جدید ثبت شد.</div>{% endif %}
 
   <section class="quality-grid" aria-label="خلاصه سرعت">
-    <article class="quality-stat"><span>اجراهای ثبت‌شده</span><strong>{{ trace_count }}</strong><small>{{ duration_sample_count }} اجرای اخیر در نمونه</small></article>
+    <article class="quality-stat"><span>اجراهای ثبت‌شده</span><strong>{{ trace_count }}</strong><small>{{ metric_source }} · {{ duration_sample_count }} اجرای اخیر</small></article>
     <article class="quality-stat"><span>میانه زمان پاسخ</span><strong>{{ p50_ms }}</strong><small>میلی‌ثانیه (P50)</small></article>
     <article class="quality-stat"><span>زمان بدترین ۵٪</span><strong>{{ p95_ms }}</strong><small>میلی‌ثانیه (P95)</small></article>
     <article class="quality-stat"><span>پاسخ زیر ۱۰ ثانیه</span><strong class="{% if under_10s_rate >= 90 %}quality-good{% else %}quality-warn{% endif %}">{{ under_10s_rate }}٪</strong><small>میانگین: {{ avg_ms }} میلی‌ثانیه</small></article>

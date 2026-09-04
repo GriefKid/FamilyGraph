@@ -2148,7 +2148,7 @@ class AIProviderConfigTests(TestCase):
         'GROQ_API_KEY': '',
     }
 
-    def test_openrouter_uses_the_official_free_router_by_default(self):
+    def test_openrouter_uses_the_tested_free_persian_model_by_default(self):
         from main.views_smart_features import _model
         with mock.patch.dict('os.environ', {
             **self.CLOUD_ENV,
@@ -2156,7 +2156,7 @@ class AIProviderConfigTests(TestCase):
             'OPENROUTER_API_KEY': 'key',
             'AI_MODEL': '',
         }, clear=False):
-            self.assertEqual(_model(), 'openrouter/free')
+            self.assertEqual(_model(), 'minimax/minimax-m3:free')
 
     def test_ai_provider_env_pins_the_backend(self):
         from main.views_smart_features import _ai_client, _model
@@ -2287,10 +2287,12 @@ class AIProviderConfigTests(TestCase):
         from main.views_smart_features import _OllamaChatCompletions
 
         raw_response = mock.MagicMock()
-        raw_response.read.return_value = json.dumps({
-            'model': 'hamdam-fa:latest',
-            'message': {'content': 'می‌فهمم؛ دوست داری بیشتر تعریف کنی؟'},
-        }).encode('utf-8')
+        raw_response.readline.side_effect = [
+            (json.dumps({'model': 'hamdam-fa:latest', 'message': {'content': 'می‌فهمم؛ '},
+                         'done': False}, ensure_ascii=False) + '\n').encode('utf-8'),
+            (json.dumps({'model': 'hamdam-fa:latest', 'message': {'content': 'دوست داری بیشتر تعریف کنی؟'},
+                         'done': True}, ensure_ascii=False) + '\n').encode('utf-8'),
+        ]
         context = mock.MagicMock()
         context.__enter__.return_value = raw_response
         with mock.patch(
@@ -2306,6 +2308,7 @@ class AIProviderConfigTests(TestCase):
         request = opened.call_args.args[0]
         payload = json.loads(request.data.decode('utf-8'))
         self.assertIs(payload['think'], False)
+        self.assertIs(payload['stream'], True)
         self.assertEqual(payload['options']['num_predict'], 300)
         self.assertEqual(
             result.choices[0].message.content,

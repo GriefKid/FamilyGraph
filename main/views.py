@@ -67,6 +67,65 @@ def _get_ai_client_and_model():
         )
     return client, _model()
 
+
+class ChatResponseDeadline(TimeoutError):
+    """Raised when chat must stop provider work and return a local response."""
+
+
+def _chat_response_deadline_seconds():
+    try:
+        configured = float(os.environ.get('CHAT_RESPONSE_DEADLINE', '8'))
+    except (TypeError, ValueError):
+        configured = 8.0
+    # The browser aborts after nine seconds; reserve time for JSON + network.
+    return min(8.0, max(2.0, configured))
+
+
+def _chat_provider_name(client):
+    from .views_smart_features import _AIClientFailover, _OllamaClient
+
+    if isinstance(client, _AIClientFailover):
+        return 'openrouter+ollama'
+    if isinstance(client, _OllamaClient):
+        return 'ollama'
+    base_url = str(getattr(client, 'base_url', '')).lower()
+    for provider in ('openrouter', 'groq', 'mistral', 'gemini'):
+        if provider in base_url or (provider == 'gemini' and 'googleapis' in base_url):
+            return provider
+    return 'custom' if base_url else ''
+
+
+def _record_chat_metric(user, started, *, provider, requested_model='', actual_model='',
+                        status='success', attempts=0, fallback_used=False):
+    """Store operational numbers only; never prompt, reply, or person data."""
+    try:
+        from .models import AIRequestMetric
+        AIRequestMetric.objects.create(
+            owner=user, feature='chat', provider=provider,
+            requested_model=str(requested_model or '')[:120],
+            actual_model=str(actual_model or '')[:120],
+            duration_ms=max(0, round((time.monotonic() - started) * 1000)),
+            deadline_ms=round(_chat_response_deadline_seconds() * 1000),
+            status=status, attempts=max(0, attempts), fallback_used=fallback_used,
+        )
+    except Exception:
+        pass
+
+
+def _fast_degraded_chat_reply(message):
+    """Useful sub-millisecond fallback when free/local generation is unavailable."""
+    normalized = _fa_norm(message)
+    if any(word in normalized for word in ('ناراحتم', 'غمگین', 'دلم گرفته', 'تنها', 'گریه')):
+        return 'می‌فهمم که الان سنگینه. من اینجام؛ دوست داری از چیزی که بیشتر آزارت داده بگی؟'
+    if any(word in normalized for word in ('عصبانی', 'دعوا', 'قهر', 'دلخور')):
+        return 'حق داری درگیرش باشی. اگر بخوای، بگو دقیقاً چه اتفاقی افتاد تا بدون قضاوت باهم بازش کنیم.'
+    if any(word in normalized for word in ('استرس', 'اضطراب', 'نگران')):
+        return 'می‌فهمم که نگرانی خسته‌کننده است. الان مهم‌ترین چیزی که ذهنت را درگیر کرده چیست؟'
+    return (
+        'بخش گفت‌وگوی آزاد الان به سقف زمان پاسخ رسید. '
+        'اگر اسم یکی از آدم‌های گرافت را بگویی و تحلیل رابطه بخواهی، از داده‌های ثبت‌شده فوری جواب می‌دهم.'
+    )
+
 COMMUNITY_PALETTE = [
     "#6366f1","#ec4899","#f59e0b","#10b981","#3b82f6",
     "#ef4444","#8b5cf6","#06b6d4","#f97316","#14b8a6",
@@ -1699,6 +1758,9 @@ def chat_api(request):
     if not user_message:
         return JsonResponse({'error': 'message is empty'}, status=400)
 
+    request_started = time.monotonic()
+    chat_deadline_at = request_started + _chat_response_deadline_seconds()
+
     from .persian_chat import (
         PERSIAN_FEW_SHOTS,
         STYLE_LABELS,
@@ -1715,14 +1777,22 @@ def chat_api(request):
         if any(marker in quick_text for marker in ('چند شنبه', 'چه روزی', 'امروز چند')):
             today = timezone.localdate()
             from .utils_jalali import jalali_day_name
+            _record_chat_metric(
+                request.user, request_started, provider='local-rules',
+                actual_model='authoritative-date', status='success',
+            )
             return JsonResponse({
                 'reply': f'امروز {jalali_day_name(today)} است.',
-                'style': chat_style,
+                'style': chat_style, 'grounded': True,
             })
         if any(marker in quick_text for marker in ('سلام', 'درود', 'خوبی', 'صبح بخیر', 'شب بخیر')):
+            _record_chat_metric(
+                request.user, request_started, provider='local-rules',
+                actual_model='small-talk', status='success',
+            )
             return JsonResponse({
                 'reply': 'سلام! من اینجام. چطور می‌تونم کمکت کنم؟',
-                'style': chat_style,
+                'style': chat_style, 'grounded': True,
             })
 
     # Answer common questions about the user's own network straight from the
@@ -1739,6 +1809,10 @@ def chat_api(request):
             ChatMessage.objects.create(owner=request.user, role='assistant', content=grounded[:2000])
         except Exception:
             pass
+        _record_chat_metric(
+            request.user, request_started, provider='local-data',
+            actual_model='grounded-insights', status='success',
+        )
         return JsonResponse({'reply': grounded, 'style': chat_style, 'grounded': True})
 
     # ── V5: تاریخچه گفتگو — چت دوطرفه و پیوسته ──
@@ -1766,9 +1840,14 @@ def chat_api(request):
     root_node = request.user.root_node
 
     # ─── serialize graph (فقط داده‌های این کاربر) ────────────────────────────
-    all_nodes = Node.objects.filter(owner=request.user)
-    all_rels  = Relationship.objects.filter(owner=request.user).select_related('source', 'target')
-    all_info  = Information.objects.filter(node__owner=request.user).select_related('node')
+    all_nodes = Node.objects.filter(owner=request.user).only(
+        'id', 'username', 'name', 'first_name', 'last_name', 'nickname',
+        'career', 'birth_day', 'owner_id',
+    )[:300]
+    all_rels = Relationship.objects.filter(owner=request.user).select_related(
+        'source', 'target',
+    )[:400]
+    all_info = Information.objects.filter(node__owner=request.user).select_related('node')[:250]
 
     # اطلاعات خود کاربر اصلی
     root_info = ""
@@ -1794,7 +1873,7 @@ def chat_api(request):
     if root_node:
         my_rels = Relationship.objects.filter(
             Q(source=root_node) | Q(target=root_node), owner=request.user
-        ).select_related('source', 'target')
+        ).select_related('source', 'target')[:250]
         rels_text = "\n".join(
             f"- من ↔ {(r.target if r.source == root_node else r.source).display_name()}"
             + (f" [{r.rel}]" if r.rel else "")
@@ -1914,12 +1993,17 @@ def chat_api(request):
             except Exception:
                 relationship_context = ''
         # Bound dynamic context so local models spend time answering, not reading.
-        rels_text = rels_text[:3000]
-        nodes_text = nodes_text[:3000]
-        info_text = info_text[:4000]
-        journal_text = journal_text[:1800]
-        actions_text = actions_text[:1800]
-        ledger_text = ledger_text[:1800]
+        retrieved_context = retrieved_context[:3200]
+        rels_text = rels_text[:2000]
+        nodes_text = nodes_text[:1600]
+        info_text = info_text[:2800]
+        journal_text = journal_text[:1000]
+        actions_text = actions_text[:900]
+        ledger_text = ledger_text[:900]
+        if not named_nodes:
+            # Generic conversation does not need a directory dump. Relevant
+            # journals/facts can still arrive through keyword retrieval.
+            rels_text = nodes_text = info_text = ''
 
         # Direct analysis questions do not need a generative model.  Returning
         # the evidence engine's result keeps latency predictable and prevents
@@ -1940,6 +2024,10 @@ def chat_api(request):
                 reply = ' '.join(part for part in parts if part)
                 _persist_chat_exchange(
                     request.user, user_message, reply, ephemeral=bool(data.get('ephemeral')),
+                )
+                _record_chat_metric(
+                    request.user, request_started, provider='local-data',
+                    actual_model='relationship-intelligence', status='success',
                 )
                 return JsonResponse({
                     'reply': reply,
@@ -2025,10 +2113,19 @@ def chat_api(request):
             f"حساب‌ها:\n{ledger_text[:350]}"
         )[:3800]
 
+    provider_name = ''
+    ai_model = ''
+    actual_model = ''
+    attempts = 0
+    fallback_used = False
+    degraded_reason = ''
     try:
+        if chat_deadline_at - time.monotonic() <= 0.35:
+            raise ChatResponseDeadline('context preparation used the chat budget')
         client, ai_model = _get_ai_client_and_model()
+        provider_name = _chat_provider_name(client)
         generation_started = time.monotonic()
-        from .views_smart_features import _OllamaClient
+        from .views_smart_features import _AIClientFailover, _OllamaClient
         is_local_ollama = isinstance(client, _OllamaClient)
         forced_provider = os.environ.get('AI_PROVIDER', '').strip().lower()
         is_openrouter = bool(os.environ.get('OPENROUTER_API_KEY', '').strip()) and (
@@ -2047,15 +2144,26 @@ def chat_api(request):
                 }] if relationship_context else [])
                 + [{"role": "user", "content": user_message}]
             ),
-            'max_tokens': 48 if local_mode else 112,
+            'max_tokens': 48 if local_mode else 160,
             'temperature': 0.6,
         }
+
+        def _call_completion(options):
+            nonlocal attempts
+            remaining = chat_deadline_at - time.monotonic()
+            if remaining <= 0.35:
+                raise ChatResponseDeadline('chat provider deadline reached')
+            bounded = dict(options)
+            bounded['timeout'] = max(0.25, remaining)
+            attempts += 1
+            return client.chat.completions.create(**bounded)
+
         if is_openrouter:
             # The free router can select a reasoning model. Reserve the small
             # output budget for the actual answer so content is not empty.
             completion_options['reasoning_effort'] = 'none'
         try:
-            response = client.chat.completions.create(**completion_options)
+            response = _call_completion(completion_options)
         except Exception as exc:
             if not local_mode:
                 raise
@@ -2071,26 +2179,31 @@ def chat_api(request):
                     date_context + "\n" + local_policy + "\n"
                     "کوتاه، دقیق جواب بده."
                 )
-                response = client.chat.completions.create(
-                    model=ai_model,
-                    messages=[
+                response = _call_completion({
+                    'model': ai_model,
+                    'messages': [
                         {"role": "system", "content": fallback_prompt},
                         {"role": "user", "content": user_message},
                     ],
-                    max_tokens=48,
-                    temperature=0.6,
-                )
+                    'max_tokens': 48,
+                    'temperature': 0.6,
+                })
         if local_timeout:
-            reply = 'مدل محلی دیر پاسخ داد. یک‌بار دیگر کوتاه‌تر بپرس تا سریع جواب بدهم.'
+            reply = _fast_degraded_chat_reply(user_message)
         else:
             from .views_smart_features import _strip_reasoning
+            actual_model = str(getattr(response, 'model', '') or ai_model)
+            if isinstance(client, _AIClientFailover):
+                fallback_used = client.chat.completions.last_backend == 'ollama'
             raw_content = getattr(response.choices[0].message, 'content', None) or ''
             reply = normalize_persian_reply(_strip_reasoning(raw_content))
             if _is_model_nonanswer(raw_content) or _is_model_nonanswer(reply):
                 # The free router landed on a guard/classifier model. Ask once
                 # more (it usually routes elsewhere); if it still isn't an
                 # answer, fall through to the deterministic degraded reply.
-                retry = client.chat.completions.create(**completion_options)
+                retry = _call_completion(completion_options)
+                response = retry
+                actual_model = str(getattr(retry, 'model', '') or ai_model)
                 raw_content = getattr(retry.choices[0].message, 'content', None) or ''
                 reply = normalize_persian_reply(_strip_reasoning(raw_content))
                 if _is_model_nonanswer(raw_content) or _is_model_nonanswer(reply):
@@ -2099,12 +2212,16 @@ def chat_api(request):
         # یک فرصت بازنویسی سبک و محدود برای خروجی انگلیسی، رباتیک یا بیش‌ازحد بلند.
         # این مرحله داده‌های خصوصی گراف را دوباره ارسال نمی‌کند.
         quality_issues = persian_quality_issues(reply)
+        finish_reason = str(getattr(response.choices[0], 'finish_reason', '') or '') if response else ''
+        if finish_reason in {'length', 'deadline'}:
+            quality_issues.append('incomplete_answer')
         if (quality_issues and not is_local_ollama and not local_timeout
-                and time.monotonic() - generation_started < 2.5):
+                and time.monotonic() - generation_started < 2.5
+                and chat_deadline_at - time.monotonic() > 0.75):
             try:
-                rewrite = client.chat.completions.create(
-                    model=ai_model,
-                    messages=[
+                rewrite = _call_completion({
+                    'model': ai_model,
+                    'messages': [
                         {"role": "system", "content": persian_policy},
                         {
                             "role": "user",
@@ -2114,18 +2231,63 @@ def chat_api(request):
                             ),
                         },
                     ],
-                    max_tokens=120,
-                    temperature=0.35,
-                )
+                    'max_tokens': 120,
+                    'temperature': 0.35,
+                })
                 rewritten = normalize_persian_reply(rewrite.choices[0].message.content)
-                if rewritten and not persian_quality_issues(rewritten):
+                rewritten_issues = persian_quality_issues(rewritten)
+                rewrite_finish = str(getattr(rewrite.choices[0], 'finish_reason', '') or '')
+                if rewrite_finish in {'length', 'deadline'}:
+                    rewritten_issues.append('incomplete_answer')
+                if rewritten and not rewritten_issues:
                     reply = rewritten
                     quality_issues = []
             except Exception:
                 pass
 
+        # OpenRouter's free router can return an English reasoning trace or a
+        # classifier instead of Persian chat. Give the local model the
+        # remaining shared budget; never display a known-bad answer.
+        if (quality_issues and isinstance(client, _AIClientFailover)
+                and client.chat.completions.last_backend == 'openrouter'
+                and chat_deadline_at - time.monotonic() > 0.75):
+            try:
+                cache.set('ai:provider-cooldown:openrouter', True, timeout=60)
+                local_retry = _call_completion({
+                    'model': ai_model,
+                    'messages': [
+                        {'role': 'system', 'content': (
+                            'فقط به فارسی طبیعی ایران و حداکثر سه جمله جواب بده. '
+                            'مقدمه و فرایند فکر ننویس.'
+                        )},
+                        {'role': 'user', 'content': user_message[:1200]},
+                    ],
+                    'max_tokens': 48,
+                    'temperature': 0.45,
+                })
+                local_content = _strip_reasoning(
+                    getattr(local_retry.choices[0].message, 'content', None) or ''
+                )
+                local_reply = normalize_persian_reply(local_content)
+                local_issues = persian_quality_issues(local_reply)
+                local_finish = str(getattr(local_retry.choices[0], 'finish_reason', '') or '')
+                if local_finish in {'length', 'deadline'}:
+                    local_issues.append('incomplete_local_answer')
+                if local_reply and not local_issues and not _is_model_nonanswer(local_reply):
+                    reply = local_reply
+                    quality_issues = []
+                    actual_model = str(getattr(local_retry, 'model', '') or actual_model)
+                    fallback_used = True
+            except Exception:
+                pass
+
+        if quality_issues:
+            reply = _fast_degraded_chat_reply(user_message)
+            degraded_reason = 'generation_quality'
+
         if not reply:
-            reply = 'ببخش، نتونستم جواب خوبی بسازم. یک بار دیگه برام می‌نویسی؟'
+            reply = _fast_degraded_chat_reply(user_message)
+            degraded_reason = 'generation_empty'
 
         # ── V8: ذخیره‌ی دوطرفه — درد دل‌ها دیگه گم نمی‌شن ──
         # BUGFIX: صفحه insights هم از همین API استفاده می‌کنه؛ با فلگ ephemeral
@@ -2134,27 +2296,41 @@ def chat_api(request):
             request.user, user_message, reply, ephemeral=bool(data.get('ephemeral')),
         )
 
-        return JsonResponse({'reply': reply, 'style': chat_style})
+        _record_chat_metric(
+            request.user, request_started, provider=provider_name,
+            requested_model=ai_model, actual_model=actual_model,
+            status=('degraded_timeout' if local_timeout else
+                    ('degraded_quality' if degraded_reason else 'success')),
+            attempts=attempts, fallback_used=fallback_used,
+        )
+
+        return JsonResponse({
+            'reply': reply, 'style': chat_style,
+            **({'degraded': True,
+                'reason': degraded_reason or 'generation_deadline'}
+               if local_timeout or degraded_reason else {}),
+        })
     except Exception as exc:
         logging.getLogger(__name__).warning(
             'All chat providers failed for user_id=%s: %s',
             request.user.id, type(exc).__name__,
         )
-        normalized = _fa_norm(user_message)
-        if any(word in normalized.split() for word in ('سلام', 'درود')):
-            reply = 'سلام، خوش اومدی. بخش مولد الان موقتاً در دسترس نیست، ولی تحلیل‌های ثبت‌شدهٔ روابط همچنان کار می‌کنند.'
-        else:
-            reply = (
-                'بخش گفت‌وگوی آزاد الان موقتاً پاسخ‌گو نیست. '
-                'اگر دربارهٔ یکی از آدم‌های گرافت تحلیل بخواهی، می‌توانم همان لحظه از داده‌های ثبت‌شده جواب بدهم.'
-            )
+        reply = _fast_degraded_chat_reply(user_message)
         _persist_chat_exchange(
             request.user, user_message, reply,
             ephemeral=bool(data.get('ephemeral')),
         )
+        error_name = type(exc).__name__.lower()
+        timed_out = isinstance(exc, TimeoutError) or 'timeout' in error_name or 'deadline' in error_name
+        _record_chat_metric(
+            request.user, request_started, provider=provider_name or 'unavailable',
+            requested_model=ai_model, actual_model=actual_model,
+            status='timeout' if timed_out else 'error', attempts=attempts,
+            fallback_used=fallback_used,
+        )
         return JsonResponse({
             'reply': reply, 'style': chat_style, 'degraded': True,
-            'reason': 'generation_provider_unavailable',
+            'reason': 'generation_deadline' if timed_out else 'generation_provider_unavailable',
         })
 
 

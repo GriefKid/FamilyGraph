@@ -1049,6 +1049,26 @@ class AIQualityEvaluation(models.Model):
         ordering = ['-created_at']
 
 
+class AIRequestMetric(models.Model):
+    """Privacy-safe latency and reliability telemetry for an AI feature."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                              on_delete=models.CASCADE, related_name='ai_request_metrics')
+    feature = models.CharField(max_length=40, default='chat')
+    provider = models.CharField(max_length=40, blank=True)
+    requested_model = models.CharField(max_length=120, blank=True)
+    actual_model = models.CharField(max_length=120, blank=True)
+    duration_ms = models.PositiveIntegerField(default=0)
+    deadline_ms = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, default='success')
+    attempts = models.PositiveSmallIntegerField(default=0)
+    fallback_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['feature', '-created_at'], name='ai_metric_feature_time')]
+
+
 class KnowledgeTriple(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                               related_name='knowledge_triples')

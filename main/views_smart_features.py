@@ -35,21 +35,22 @@ class _ChatCompletionFailover:
         self.primary = primary
         self.fallback = fallback
         self.fallback_model = fallback_model
+        self.last_backend = ''
 
     def create(self, *args, **kwargs):
         try:
-            return self.primary.chat.completions.create(*args, **kwargs)
-        except Exception as primary_error:
-            message = str(primary_error).lower()
-            retryable = (
-                '401', '403', '404', '429', 'unauthorized', 'forbidden',
-                'not found', 'no endpoints', 'rate limit', 'timeout', 'timed out', 'connection',
-                '500', '502', '503', '504', 'service unavailable',
-            )
-            if not any(marker in message for marker in retryable):
-                raise
+            total_timeout = min(8.0, max(0.5, float(kwargs.get('timeout') or 8.0)))
+        except (TypeError, ValueError):
+            total_timeout = 8.0
+        deadline = time.monotonic() + total_timeout
+
+        def fallback_response(primary_error=None):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.25:
+                raise OllamaRequestTimeout('مهلت پاسخ‌گویی هوش مصنوعی تمام شد.')
             fallback_kwargs = dict(kwargs)
             fallback_kwargs['model'] = self.fallback_model
+            fallback_kwargs['timeout'] = remaining
             source_messages = kwargs.get('messages') or []
             user_message = next(
                 (
@@ -65,9 +66,6 @@ class _ChatCompletionFailover:
                 if isinstance(item, dict) and item.get('role') == 'system'
                 and item.get('content')
             ]
-            # chat_api appends a small evidence-only system message last.  Keep
-            # that message for the local fallback instead of forwarding the
-            # full graph prompt, which is both slower and less relevant.
             evidence_context = system_messages[-1][:2600] if len(system_messages) > 1 else ''
             fallback_system = (
                 'به فارسی محاوره‌ای و کوتاه جواب بده. فقط بر اساس شواهد داده‌شده '
@@ -84,12 +82,63 @@ class _ChatCompletionFailover:
             )
             fallback_kwargs.pop('reasoning_effort', None)
             try:
-                return self.fallback.chat.completions.create(*args, **fallback_kwargs)
+                response = self.fallback.chat.completions.create(*args, **fallback_kwargs)
+                self.last_backend = 'ollama'
+                return response
             except Exception as fallback_error:
+                if primary_error is None:
+                    raise
                 raise RuntimeError(
                     f'Cloud AI failed ({primary_error}); local Ollama fallback '
                     f'with model {self.fallback_model!r} also failed ({fallback_error})'
                 ) from fallback_error
+
+        cooldown_key = 'ai:provider-cooldown:openrouter'
+        try:
+            primary_is_cooling_down = bool(cache.get(cooldown_key))
+        except Exception:
+            primary_is_cooling_down = False
+        if primary_is_cooling_down:
+            return fallback_response()
+
+        primary_kwargs = dict(kwargs)
+        primary_kwargs['timeout'] = min(total_timeout, _openrouter_timeout())
+        try:
+            response = self.primary.chat.completions.create(*args, **primary_kwargs)
+            actual_model = str(getattr(response, 'model', '') or '').lower()
+            choices = getattr(response, 'choices', None) or []
+            content = (
+                getattr(getattr(choices[0], 'message', None), 'content', '')
+                if choices else ''
+            )
+            classifier_model = any(
+                marker in actual_model for marker in ('safety', 'guard', 'moderation')
+            )
+            if classifier_model or not str(content or '').strip():
+                try:
+                    cache.set(cooldown_key, True, timeout=60)
+                except Exception:
+                    pass
+                return fallback_response(RuntimeError(
+                    f'OpenRouter selected a non-chat model: {actual_model or "empty response"}'
+                ))
+            self.last_backend = 'openrouter'
+            return response
+        except Exception as primary_error:
+            message = str(primary_error).lower()
+            retryable = (
+                '401', '403', '404', '429', 'unauthorized', 'forbidden',
+                'not found', 'no endpoints', 'rate limit', 'timeout', 'timed out', 'connection',
+                '500', '502', '503', '504', 'service unavailable',
+            )
+            if not any(marker in message for marker in retryable):
+                raise
+            try:
+                cooldown = 300 if any(marker in message for marker in ('401', '403', '404', '429', 'rate limit')) else 30
+                cache.set(cooldown_key, True, timeout=cooldown)
+            except Exception:
+                pass
+            return fallback_response(primary_error)
 
 
 class _AIClientFailover:
@@ -217,7 +266,10 @@ class _OllamaChatCompletions:
         payload = {
             'model': model,
             'messages': messages,
-            'stream': False,
+            # Native streaming lets a slow CPU return the tokens already
+            # generated before the hard chat deadline instead of discarding
+            # the whole answer while waiting for one final JSON document.
+            'stream': True,
             'think': False,
         }
         keep_alive = os.environ.get('OLLAMA_KEEP_ALIVE', '15m').strip()
@@ -237,10 +289,14 @@ class _OllamaChatCompletions:
             configured_timeout = float(os.environ.get('OLLAMA_REQUEST_TIMEOUT', '6'))
         except (TypeError, ValueError):
             configured_timeout = 6.0
+        try:
+            requested_timeout = float(kwargs.get('timeout') or configured_timeout)
+        except (TypeError, ValueError):
+            requested_timeout = configured_timeout
         # Keep the local chat contract below the UI's ten-second target even if
         # an old .env still contains the previous 240-second default. Leave
         # room for Django's database and serialization work around the model.
-        timeout = min(6.0, max(1.0, configured_timeout))
+        timeout = min(6.0, max(0.25, configured_timeout), max(0.25, requested_timeout))
         deadline = time.monotonic() + timeout
 
         def _request(current_payload):
@@ -256,7 +312,40 @@ class _OllamaChatCompletions:
             )
             try:
                 with urlopen(request, timeout=remaining) as response:
-                    return json.loads(response.read().decode('utf-8'))
+                    if not current_payload.get('stream'):
+                        return json.loads(response.read().decode('utf-8'))
+                    chunks = []
+                    response_model = current_payload.get('model', '')
+                    completed = False
+                    done_reason = ''
+                    while time.monotonic() < deadline:
+                        raw_line = response.readline()
+                        if not raw_line:
+                            break
+                        item = json.loads(raw_line.decode('utf-8'))
+                        response_model = item.get('model') or response_model
+                        content = item.get('message', {}).get('content', '')
+                        if content:
+                            chunks.append(content)
+                        if item.get('done'):
+                            completed = True
+                            done_reason = str(item.get('done_reason') or 'stop')
+                            break
+                    content = ''.join(chunks).strip()
+                    if not content:
+                        raise OllamaRequestTimeout(
+                            'مدل محلی در مهلت پاسخ‌گویی متنی تولید نکرد.'
+                        )
+                    if not completed:
+                        # Make deadline-truncated output explicit instead of
+                        # pretending it was a complete model answer.
+                        content = content.rstrip('،؛: ') + '…'
+                    return {
+                        'model': response_model,
+                        'message': {'content': content},
+                        'done': completed,
+                        'done_reason': done_reason or ('stop' if completed else 'deadline'),
+                    }
             except TimeoutError as exc:
                 raise OllamaRequestTimeout(
                     'مدل محلی در مهلت پاسخ‌گویی نکرد؛ دوباره تلاش کن.'
@@ -292,6 +381,7 @@ class _OllamaChatCompletions:
             model=result.get('model', model),
             choices=[SimpleNamespace(
                 message=SimpleNamespace(content=content),
+                finish_reason=result.get('done_reason', 'stop'),
             )],
         )
 
@@ -318,7 +408,7 @@ def _available_ollama_client():
 
 
 # ── AI Provider Config ────────────────────────────────────────────────────
-# اولویت: OpenRouter → Gemini → Mistral → Groq → Ollama محلی
+# اولویت: Groq → Mistral → Gemini → OpenRouter → Ollama محلی
 #
 # Mistral  (رایگان، بدون بلاک ایران): console.mistral.ai → MISTRAL_API_KEY
 # Groq     (14,400 req/day رایگان): console.groq.com → GROQ_API_KEY
@@ -343,9 +433,21 @@ _PROVIDER_KEY_ENV = {
 
 def _openrouter_timeout():
     try:
-        return min(5.0, max(1.0, float(os.environ.get('OPENROUTER_TIMEOUT', '2.5'))))
+        return min(6.0, max(1.0, float(os.environ.get('OPENROUTER_TIMEOUT', '5'))))
     except (TypeError, ValueError):
-        return 2.5
+        return 5.0
+
+
+def _cloud_timeout(provider=''):
+    """Bound every remote request; OpenAI SDK defaults are far too long for chat."""
+    if provider == 'openrouter':
+        return _openrouter_timeout()
+    variable = f'{provider.upper()}_TIMEOUT' if provider else 'AI_REQUEST_TIMEOUT'
+    raw = os.environ.get(variable, os.environ.get('AI_REQUEST_TIMEOUT', '6.5'))
+    try:
+        return min(7.0, max(1.0, float(raw)))
+    except (TypeError, ValueError):
+        return 6.5
 
 
 def _forced_provider():
@@ -366,7 +468,8 @@ def _forced_provider():
         if not base:
             return None
         key = os.environ.get('AI_API_KEY', '').strip() or 'not-needed'
-        return OpenAI(base_url=base, api_key=key), key, 'custom'
+        return OpenAI(base_url=base, api_key=key, max_retries=0,
+                      timeout=_cloud_timeout('custom')), key, 'custom'
     if name in _PROVIDER_BASE_URLS:
         key = os.environ.get(_PROVIDER_KEY_ENV[name], '')
         if not key:
@@ -374,8 +477,8 @@ def _forced_provider():
         primary = OpenAI(
             base_url=_PROVIDER_BASE_URLS[name],
             api_key=key,
-            max_retries=0 if name == 'openrouter' else 2,
-            **({'timeout': _openrouter_timeout()} if name == 'openrouter' else {}),
+            max_retries=0,
+            timeout=_cloud_timeout(name),
         )
         fallback = _available_ollama_client() if name == 'openrouter' else None
         if fallback:
@@ -389,21 +492,32 @@ def _ai_client():
     """Return (OpenAI client, api_key, provider).
 
     If AI_PROVIDER is set it wins. Otherwise:
-    Priority: OpenRouter → Gemini → Mistral → Groq → local Ollama
+    Priority: Groq → Mistral → Gemini → OpenRouter → local Ollama
     """
     forced = _forced_provider()
     if forced:
         return forced
 
-    # Prefer the project's free cloud provider when a key is configured.
-    # OpenRouter accepts the OpenAI client already used by this project.
+    groq_key = os.environ.get('GROQ_API_KEY', '')
+    if groq_key:
+        return OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_key,
+                      max_retries=0, timeout=_cloud_timeout('groq')), groq_key, 'groq'
+    mistral_key = os.environ.get('MISTRAL_API_KEY', '')
+    if mistral_key:
+        return OpenAI(base_url="https://api.mistral.ai/v1", api_key=mistral_key,
+                      max_retries=0, timeout=_cloud_timeout('mistral')), mistral_key, 'mistral'
+    gemini_key = os.environ.get('GEMINI_API_KEY', '')
+    if gemini_key:
+        return (
+            OpenAI(base_url="https://generativelanguage.googleapis.com/v1beta/openai/", api_key=gemini_key,
+                   max_retries=0, timeout=_cloud_timeout('gemini')),
+            gemini_key, 'gemini'
+        )
     openrouter_key = os.environ.get('OPENROUTER_API_KEY', '')
     if openrouter_key:
         primary = OpenAI(
-            base_url='https://openrouter.ai/api/v1',
-            api_key=openrouter_key,
-            max_retries=0,
-            timeout=_openrouter_timeout(),
+            base_url='https://openrouter.ai/api/v1', api_key=openrouter_key,
+            max_retries=0, timeout=_openrouter_timeout(),
         )
         fallback_config = _available_ollama_client()
         if fallback_config:
@@ -411,19 +525,6 @@ def _ai_client():
             primary = _AIClientFailover(primary, fallback, fallback_model)
         provider = 'openrouter+ollama' if fallback_config else 'openrouter'
         return primary, openrouter_key, provider
-
-    gemini_key = os.environ.get('GEMINI_API_KEY', '')
-    if gemini_key:
-        return (
-            OpenAI(base_url="https://generativelanguage.googleapis.com/v1beta/openai/", api_key=gemini_key),
-            gemini_key, 'gemini'
-        )
-    mistral_key = os.environ.get('MISTRAL_API_KEY', '')
-    if mistral_key:
-        return OpenAI(base_url="https://api.mistral.ai/v1", api_key=mistral_key), mistral_key, 'mistral'
-    groq_key = os.environ.get('GROQ_API_KEY', '')
-    if groq_key:
-        return OpenAI(base_url="https://api.groq.com/openai/v1", api_key=groq_key), groq_key, 'groq'
     # Ollama exposes an OpenAI-compatible local API and needs no cloud key.
     available = _available_ollama_client()
     if available:
@@ -434,7 +535,9 @@ def _ai_client():
 
 
 _PROVIDER_DEFAULT_MODEL = {
-    'openrouter': 'openrouter/free',
+    # Stable Persian quality in the live free-model benchmark. Availability
+    # is still protected by the local fallback and provider circuit breaker.
+    'openrouter': 'minimax/minimax-m3:free',
     'gemini': 'gemini-2.5-flash',
     'mistral': 'mistral-small-latest',      # رایگان، بدون بلاک ایران
     'groq': 'llama-3.3-70b-versatile',      # 14,400 req/day رایگان، سریع
@@ -463,14 +566,14 @@ def _model():
         and os.environ.get(_PROVIDER_KEY_ENV[forced])
     ):
         return _PROVIDER_DEFAULT_MODEL[forced]
-    if os.environ.get('OPENROUTER_API_KEY'):
-        return 'openrouter/free'
-    if os.environ.get('GEMINI_API_KEY'):
-        return "gemini-2.5-flash"
-    if os.environ.get('MISTRAL_API_KEY'):
-        return "mistral-small-latest"
     if os.environ.get('GROQ_API_KEY'):
         return "llama-3.3-70b-versatile"
+    if os.environ.get('MISTRAL_API_KEY'):
+        return "mistral-small-latest"
+    if os.environ.get('GEMINI_API_KEY'):
+        return "gemini-2.5-flash"
+    if os.environ.get('OPENROUTER_API_KEY'):
+        return _PROVIDER_DEFAULT_MODEL['openrouter']
     return _ollama_model()
 
 
