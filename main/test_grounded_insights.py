@@ -122,6 +122,10 @@ class GroundedInsightApiTests(TestCase):
         self.assertContains(response, 'فاصلهٔ تماس ثبت‌شده')
         self.assertContains(response, 'از گراف قابل تشخیص نیست')
         self.assertNotContains(response, 'ریسک تنهایی اجتماعی')
+        self.assertContains(response, 'نقشه‌ی زنده‌ی رابطه‌های تو')
+        self.assertContains(response, 'psychTheorySearch')
+        self.assertContains(response, 'data-filter="sociology"')
+        self.assertContains(response, 'role="tablist"')
 
     def test_theory_cards_add_grounded_network_and_support_signals(self):
         group = Group.objects.create(owner=self.user, name='کار')

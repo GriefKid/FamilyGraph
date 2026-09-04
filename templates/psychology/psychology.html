@@ -57,6 +57,40 @@
   gap:16px;
   margin-bottom:8px;
 }
+.psych-hero{
+  position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1.5fr) minmax(220px,.8fr);
+  gap:22px; align-items:stretch; margin-bottom:18px; padding:26px 28px;
+  border:1px solid rgba(139,92,246,.34); border-radius:24px;
+  background:
+    radial-gradient(circle at 88% 15%,rgba(236,72,153,.18),transparent 32%),
+    radial-gradient(circle at 15% 100%,rgba(99,102,241,.18),transparent 38%),
+    linear-gradient(135deg,rgba(30,31,55,.96),rgba(22,24,43,.92));
+  box-shadow:0 16px 48px rgba(16,12,45,.24);
+}
+.psych-hero::after{content:'';position:absolute;width:180px;height:180px;border:1px solid rgba(196,181,253,.16);border-radius:50%;left:-70px;bottom:-105px;box-shadow:0 0 0 18px rgba(196,181,253,.04),0 0 0 36px rgba(196,181,253,.025);pointer-events:none}
+.psych-hero-copy{position:relative;z-index:1}
+.psych-eyebrow{display:inline-flex;align-items:center;gap:7px;color:#c4b5fd;font-size:10px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;margin-bottom:10px}
+.psych-eyebrow::before{content:'';width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 5px rgba(52,211,153,.12)}
+.psych-hero h1{font-size:clamp(22px,3vw,34px);line-height:1.35;margin:0 0 9px;letter-spacing:-.6px}
+.psych-hero p{max-width:650px;margin:0;color:var(--text-soft);font-size:12.5px;line-height:2}
+.psych-hero-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}
+.psych-hero-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid rgba(196,181,253,.2);border-radius:999px;background:rgba(255,255,255,.055);color:#d9d4f4;font-size:10.5px}
+.psych-hero-score{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:14px;min-height:150px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(7,7,20,.22)}
+.psych-score-ring{width:108px;height:108px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#a78bfa calc(var(--score,0) * 1%),rgba(255,255,255,.08) 0);position:relative}
+.psych-score-ring::before{content:'';position:absolute;inset:8px;border-radius:50%;background:#202139;border:1px solid rgba(255,255,255,.1)}
+.psych-score-ring > div{position:relative;text-align:center}.psych-score-num{display:block;font-size:25px;font-weight:900;color:#fff;line-height:1}.psych-score-unit{display:block;color:#c4b5fd;font-size:9px;margin-top:4px}
+.psych-score-copy{max-width:100px}.psych-score-copy strong{display:block;color:#fff;font-size:12px;margin-bottom:5px}.psych-score-copy span{display:block;color:var(--text-muted);font-size:10px;line-height:1.8}
+.psych-toolbar{position:sticky;top:calc(var(--topbar-h) + 8px);z-index:20;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 20px;padding:9px;border:1px solid var(--border);border-radius:16px;background:rgba(20,21,38,.86);backdrop-filter:blur(18px);box-shadow:0 8px 22px rgba(0,0,0,.13)}
+.psych-filter-list{display:flex;gap:5px;flex-wrap:wrap}.psych-filter{border:1px solid transparent;border-radius:10px;background:transparent;color:var(--text-muted);padding:8px 11px;font:700 11px var(--font-sans);cursor:pointer;transition:.18s}.psych-filter:hover{color:var(--text);background:rgba(255,255,255,.06)}.psych-filter.active{color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 5px 16px rgba(99,102,241,.28)}
+.psych-search{margin-right:auto;min-width:180px;max-width:250px;width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.045);color:var(--text);font:500 11px var(--font-sans);outline:none}.psych-search:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(99,102,241,.12)}.psych-search::placeholder{color:var(--text-muted)}
+.psych-filter-status{font-size:10px;color:var(--text-muted);white-space:nowrap}
+[data-psych-section][hidden], .metric-card[hidden]{display:none!important}
+.metric-card{box-shadow:0 7px 20px rgba(5,5,18,.08)}
+.metric-card::before{content:'';position:absolute;top:0;right:20px;left:20px;height:2px;border-radius:0 0 4px 4px;background:linear-gradient(90deg,transparent,rgba(167,139,250,.5),transparent);opacity:.45;transition:.2s}.metric-card:hover::before{opacity:1}
+.metric-card:hover{transform:translateY(-3px)}
+.psych-section-title{scroll-margin-top:80px}
+@media(max-width:720px){.psych-hero{grid-template-columns:1fr;padding:21px}.psych-hero-score{min-height:120px;justify-content:flex-start;padding:12px 18px}.psych-toolbar{top:5px}.psych-search{order:3;max-width:none;margin-right:0}.psych-filter-status{margin-right:auto}.psych-grid{grid-template-columns:1fr;gap:12px}.metric-card{padding:18px}}
+@media(prefers-reduced-motion:reduce){.metric-card,.metric-card::before,.stat-tile{transition:none}.metric-card:hover,.stat-tile:hover{transform:none}}
 .theory-library{margin:0 0 24px;padding:16px 18px;border:1px solid var(--primary-border);border-radius:18px;background:linear-gradient(135deg,var(--card),rgba(99,102,241,.08));}.theory-library-head{display:flex;align-items:center;gap:12px;justify-content:space-between}.theory-library h2{font-size:15px;margin:0}.theory-library-toggle{border:1px solid var(--primary-border);border-radius:10px;background:var(--primary-glow);color:var(--primary-light);padding:8px 11px;font:800 11px var(--font-sans);cursor:pointer;white-space:nowrap}.theory-library-body{display:none;margin-top:14px}.theory-library.open .theory-library-body{display:block}.theory-library p{font-size:12px;color:var(--text-soft);line-height:1.9;margin:0 0 12px}.theory-library details{border-top:1px solid var(--border);padding:10px 0}.theory-library summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--text);list-style:none}.theory-library summary::-webkit-details-marker{display:none}.theory-library summary::before{content:'＋';color:var(--primary-light);margin-left:8px}.theory-library details[open] summary::before{content:'−'}.theory-library dl{margin:10px 0 0;font-size:11.5px;color:var(--text-soft);line-height:1.9}.theory-library dt{display:inline;font-weight:800;color:var(--primary-light)}.theory-library dd{display:inline;margin:0 4px 0 14px}.theory-library .safety{padding:10px 12px;border-radius:10px;background:rgba(245,158,11,.1);color:#fde68a;font-size:11px;line-height:1.9}
 
 /* ── Metric Card ── */
@@ -276,6 +310,38 @@
 </div>
 {% else %}
 
+<section class="psych-hero" aria-labelledby="psychHeroTitle">
+  <div class="psych-hero-copy">
+    <div class="psych-eyebrow">Relationship intelligence</div>
+    <h1 id="psychHeroTitle">نقشه‌ی زنده‌ی رابطه‌های تو</h1>
+    <p>اینجا الگوهای ثبت‌شده‌ی شبکه، ریتم ارتباط‌ها و تجربه‌ی خودت را کنار هم می‌بینی؛ برای شناخت بهتر و قدم بعدی، نه قضاوت آدم‌ها.</p>
+    <div class="psych-hero-meta">
+      <span class="psych-hero-chip">👥 {{ n_nodes }} نفر در شبکه</span>
+      <span class="psych-hero-chip">🔗 {{ n_edges }} رابطه</span>
+      <span class="psych-hero-chip">📚 {{ theory_catalog|length }} نظریه</span>
+    </div>
+  </div>
+  <div class="psych-hero-score" aria-label="امتیاز پوشش و تازگی داده">
+    <div class="psych-score-ring" style="--score:{{ health_score|default:0 }}">
+      <div><span class="psych-score-num">{{ health_score|default:'—' }}</span><span class="psych-score-unit">از ۱۰۰</span></div>
+    </div>
+    <div class="psych-score-copy"><strong>پوشش داده</strong><span>{{ health_label|default:'با ثبت چند تعامل، دقیق‌تر می‌شود' }}</span></div>
+  </div>
+</section>
+
+<nav class="psych-toolbar" aria-label="ناوبری تحلیل‌ها">
+  <div class="psych-filter-list" role="tablist" aria-label="فیلتر بخش‌های تحلیل">
+    <button class="psych-filter active" type="button" role="tab" aria-selected="true" data-filter="all" onclick="setPsychFilter('all', this)">همه</button>
+    <button class="psych-filter" type="button" role="tab" aria-selected="false" data-filter="network" onclick="setPsychFilter('network', this)">شبکه</button>
+    <button class="psych-filter" type="button" role="tab" aria-selected="false" data-filter="psychology" onclick="setPsychFilter('psychology', this)">روان‌شناسی</button>
+    <button class="psych-filter" type="button" role="tab" aria-selected="false" data-filter="sociology" onclick="setPsychFilter('sociology', this)">جامعه‌شناسی</button>
+    <button class="psych-filter" type="button" role="tab" aria-selected="false" data-filter="behavior" onclick="setPsychFilter('behavior', this)">رفتار و تجربه</button>
+    <button class="psych-filter" type="button" role="tab" aria-selected="false" data-filter="data" onclick="setPsychFilter('data', this)">داده</button>
+  </div>
+  <input class="psych-search" id="psychTheorySearch" type="search" autocomplete="off" placeholder="جست‌وجوی کارت یا نظریه…" aria-label="جست‌وجوی کارت یا نظریه" oninput="searchPsychCards(this.value)">
+  <span class="psych-filter-status" id="psychFilterStatus" aria-live="polite"></span>
+</nav>
+
 <section class="theory-library">
   <div class="theory-library-head"><h2>راهنمای مانیتورینگ رابطه و شبکه</h2><button class="theory-library-toggle" type="button" aria-expanded="false" onclick="toggleTheoryLibrary(this)">دیدن راهنما ({{ theory_catalog|length }})</button></div>
   <div class="theory-library-body">
@@ -331,8 +397,8 @@
 
 <!-- ══ MY POSITION (full-width) ══════════════════════════════ -->
 {% if my_role %}
-<div class="psych-section-title">موقعیت من در شبکه</div>
-<div class="full-card" style="margin-bottom:16px;">
+<div class="psych-section-title" id="positionSection" data-psych-section="network psychology">موقعیت من در شبکه</div>
+<div class="full-card" data-psych-section="network psychology" style="margin-bottom:16px;">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start;">
     <div>
       <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">نقش شبکه‌ای</div>
@@ -384,8 +450,8 @@
 {% endif %}
 
 <!-- ══ ROW 1 — RELATIONSHIP STRUCTURE ════════════════════════ -->
-<div class="psych-section-title">ساختار روابط</div>
-<div class="psych-grid">
+<div class="psych-section-title" id="structureSection" data-psych-section="network">ساختار روابط</div>
+<div class="psych-grid" data-psych-section="network">
 
   <!-- 1. Dunbar -->
   <div class="metric-card">
@@ -525,8 +591,8 @@
 </div><!-- /row 1 -->
 
 <!-- ══ ROW 2 — TOPOLOGY ═══════════════════════════════════════ -->
-<div class="psych-section-title">توپولوژی شبکه</div>
-<div class="psych-grid">
+<div class="psych-section-title" id="topologySection" data-psych-section="network">توپولوژی شبکه</div>
+<div class="psych-grid" data-psych-section="network">
 
   <!-- 5. Small World -->
   <div class="metric-card">
@@ -660,8 +726,8 @@
 </div><!-- /row 2 -->
 
 <!-- ══ ROW 3 — BROKERAGE & SUGGESTIONS ═══════════════════════ -->
-<div class="psych-section-title">حفره‌های ساختاری و پیشنهادها</div>
-<div class="psych-grid">
+<div class="psych-section-title" id="sociologySection" data-psych-section="sociology">حفره‌های ساختاری و پیشنهادها</div>
+<div class="psych-grid" data-psych-section="sociology">
 
   <!-- 9. Structural Holes -->
   <div class="metric-card">
@@ -779,8 +845,8 @@
 </div><!-- /row 3 -->
 
 <!-- ══ ROW 4 — DIVERSITY ══════════════════════════════════════ -->
-<div class="psych-section-title">تنوع و ترکیب روابط</div>
-<div class="psych-grid">
+<div class="psych-section-title" id="diversitySection" data-psych-section="sociology">تنوع و ترکیب روابط</div>
+<div class="psych-grid" data-psych-section="sociology">
 
   <!-- 13. Relationship Types -->
   <div class="metric-card">
@@ -859,8 +925,8 @@
 </div><!-- /row 4 -->
 
 <!-- ══ ساخت شناخت شواهدمحور برای افراد و روابط ═════════════════ -->
-<div class="psych-section-title">شناختِ همهٔ افراد و روابط</div>
-<div class="ai-card" id="batchCard">
+<div class="psych-section-title" id="behaviorSection" data-psych-section="behavior psychology">شناختِ همهٔ افراد و روابط</div>
+<div class="ai-card" data-psych-section="behavior psychology" id="batchCard">
   <div class="ai-card-head">
     <span style="font-size:24px">🧠</span>
     <div>
@@ -881,8 +947,8 @@
 </div>
 
 <!-- ══ AI PANEL ═══════════════════════════════════════════════ -->
-<div class="psych-section-title">تحلیل هوش مصنوعی</div>
-<div class="ai-card" id="aiCard" style="display:none">
+<div class="psych-section-title" data-psych-section="behavior psychology">تحلیل هوش مصنوعی</div>
+<div class="ai-card" data-psych-section="behavior psychology" id="aiCard" style="display:none">
   <div class="ai-card-head">
     <span style="font-size:24px">🧠</span>
     <div>
@@ -895,8 +961,8 @@
 <!-- ════════════════════════════════════════════════════════════
      پوشش و تازگی داده — DATA COVERAGE SCORE (FamilyGraph)
      ════════════════════════════════════════════════════════════ -->
-<div class="psych-section-title">امتیاز پوشش و تازگی داده</div>
-<div class="full-card" style="border-color:{{ health_color }}33">
+<div class="psych-section-title" id="dataSection" data-psych-section="data">امتیاز پوشش و تازگی داده</div>
+<div class="full-card" data-psych-section="data" style="border-color:{{ health_color }}33">
   <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:18px;">
     <div style="text-align:center;">
       <div style="font-size:56px;font-weight:800;color:{{ health_color }};line-height:1">{{ health_score }}</div>
@@ -925,8 +991,8 @@
 <!-- ════════════════════════════════════════════════════════════
      شاخص‌های ساختاری تکمیلی
      ════════════════════════════════════════════════════════════ -->
-<div class="psych-section-title">شاخص‌های ساختاری تکمیلی</div>
-<div class="psych-grid">
+<div class="psych-section-title" data-psych-section="network">شاخص‌های ساختاری تکمیلی</div>
+<div class="psych-grid" data-psych-section="network">
 
   <!-- Registered contact gap -->
   <div class="metric-card">
@@ -1019,8 +1085,8 @@
 </div><!-- .psych-grid -->
 
 <!-- ════════ جامعه‌شناسی پیشرفته ════════ -->
-<div class="psych-section-title">جامعه‌شناسی پیشرفته شبکه</div>
-<div class="psych-grid">
+<div class="psych-section-title" data-psych-section="sociology">جامعه‌شناسی پیشرفته شبکه</div>
+<div class="psych-grid" data-psych-section="sociology">
 
   <!-- حمایت اجتماعی Cobb -->
   <div class="metric-card">
@@ -1148,8 +1214,8 @@
 
 <!-- ════════ V5: نظریه‌های رفتاری — از داده‌های تعامل تو ════════ -->
 {% if extra_theories %}
-<div class="psych-section-title">نظریه‌های رفتاری — از تعامل‌های واقعی تو</div>
-<div class="psych-grid">
+<div class="psych-section-title" id="experienceSection" data-psych-section="behavior">نظریه‌های رفتاری — از تعامل‌های واقعی تو</div>
+<div class="psych-grid" data-psych-section="behavior">
   {% for t in extra_theories %}
   <div class="metric-card">
     <div class="metric-head">
@@ -1188,6 +1254,35 @@ const PULSE_FIELDS = [['support','حمایت'],['autonomy','اختیار'],['bel
 function togglePulse(button){
   const card = document.getElementById('pulseCard'); const open = card.classList.toggle('open');
   button.setAttribute('aria-expanded', String(open)); button.textContent = open ? 'بستن پالس' : 'ثبت پالس';
+}
+function setPsychFilter(filter, button){
+  document.querySelectorAll('.psych-filter').forEach(item => {
+    const active = item === button;
+    item.classList.toggle('active', active);
+    item.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[data-psych-section]').forEach(section => {
+    const scopes = (section.dataset.psychSection || '').split(/\s+/);
+    section.hidden = filter !== 'all' && !scopes.includes(filter);
+  });
+  const search = document.getElementById('psychTheorySearch');
+  if(search) searchPsychCards(search.value);
+}
+function searchPsychCards(raw){
+  const query = String(raw || '').trim().toLocaleLowerCase();
+  const activeFilter = document.querySelector('.psych-filter.active')?.dataset.filter || 'all';
+  const cards = document.querySelectorAll('.metric-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const section = card.closest('[data-psych-section]');
+    const scopes = (section?.dataset.psychSection || '').split(/\s+/);
+    const inFilter = activeFilter === 'all' || scopes.includes(activeFilter);
+    const matches = !query || card.textContent.toLocaleLowerCase().includes(query);
+    card.hidden = !(inFilter && matches);
+    if(!card.hidden) visible++;
+  });
+  const status = document.getElementById('psychFilterStatus');
+  if(status) status.textContent = query ? `${visible} کارت پیدا شد` : '';
 }
 (function(){
   const wrap=document.getElementById('pulseFields'); if(!wrap) return;
