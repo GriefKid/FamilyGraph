@@ -25,6 +25,7 @@ from .models import (
     Relationship,
     SocialPost,
 )
+from .uploads import UploadValidationError, normalize_image_upload
 
 User = get_user_model()
 
@@ -1034,7 +1035,14 @@ def profile_edit_view(request):
                     messages.error(request, 'فرمت تاریخ تولد درست نیست.')
                     return redirect('profile_edit')
             if request.FILES.get('avatar'):
-                user.avatar = request.FILES['avatar']
+                try:
+                    user.avatar = normalize_image_upload(
+                        request.FILES['avatar'], max_bytes=5 * 1024 * 1024,
+                        max_dimension=1600, label='آواتار',
+                    )
+                except UploadValidationError as exc:
+                    messages.error(request, str(exc))
+                    return redirect('profile_edit')
             user.save()
             self_node = Node.objects.filter(owner=user, username=user.username).first()
             if self_node:
@@ -1115,10 +1123,20 @@ def profile_edit_view(request):
             if not user.is_public:
                 messages.error(request, 'برای انتشار پست، ابتدا پروفایلت را پابلیک کن.')
             elif body:
+                post_image = request.FILES.get('post_image')
+                if post_image:
+                    try:
+                        post_image = normalize_image_upload(
+                            post_image, max_bytes=8 * 1024 * 1024,
+                            max_dimension=2400, label='تصویر پست',
+                        )
+                    except UploadValidationError as exc:
+                        messages.error(request, str(exc))
+                        return redirect('profile_edit')
                 SocialPost.objects.create(
                     author=user,
                     body=body,
-                    image=request.FILES.get('post_image'),
+                    image=post_image,
                     is_public=True,
                 )
                 messages.success(request, 'پست عمومی منتشر شد.')
@@ -1233,7 +1251,13 @@ def profile_cover_api(request):
         request.user.cover_image = None
         changed += ['cover_preset', 'cover_image']
     if request.FILES.get('cover_image'):
-        request.user.cover_image = request.FILES['cover_image']
+        try:
+            request.user.cover_image = normalize_image_upload(
+                request.FILES['cover_image'], max_bytes=8 * 1024 * 1024,
+                max_dimension=3000, label='تصویر کاور',
+            )
+        except UploadValidationError as exc:
+            return JsonResponse({'error': str(exc), 'code': 'invalid_image'}, status=400)
         changed.append('cover_image')
     if changed:
         request.user.save(update_fields=list(dict.fromkeys(changed)))

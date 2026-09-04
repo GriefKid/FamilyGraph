@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .models import Node, Relationship
+from .uploads import read_limited_upload
 
 
 MAX_SIZE = 100 * 1024 * 1024
@@ -32,14 +33,22 @@ def _normalize(value):
 
 
 def _read_export(upload):
-    raw = upload.read()
+    raw = read_limited_upload(upload, max_bytes=MAX_SIZE, label='فایل واتساپ')
     if upload.name.lower().endswith('.zip'):
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            members = archive.infolist()
+            if len(members) > 50:
+                raise ValueError('تعداد فایل‌های داخل ZIP بیش از حد مجاز است')
             candidates = [name for name in archive.namelist() if name.lower().endswith('.txt')]
             if not candidates:
                 raise ValueError('داخل فایل ZIP هیچ گفتگوی متنی پیدا نشد')
-            if archive.getinfo(candidates[0]).file_size > MAX_SIZE:
+            info = archive.getinfo(candidates[0])
+            if info.flag_bits & 0x1:
+                raise ValueError('ZIP رمزدار پشتیبانی نمی‌شود')
+            if info.file_size > MAX_SIZE:
                 raise ValueError('حجم متن داخل ZIP بیشتر از ۱۰۰ مگابایت است')
+            if info.file_size and info.file_size / max(info.compress_size, 1) > 200:
+                raise ValueError('نسبت فشرده‌سازی ZIP غیرعادی است')
             raw = archive.read(candidates[0])
     for encoding in ('utf-8-sig', 'utf-8', 'utf-16'):
         try:

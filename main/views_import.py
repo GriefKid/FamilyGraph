@@ -8,7 +8,6 @@ views_import.py — ایمپورت تعاملی تلگرام (V8.1)
   + undo    → پاک‌سازی کامل هر چیزی که ایمپورت ساخته
   + analyze → نام‌های صریح گفتگو را با شاهد درمی‌آورد و از کاربر می‌پرسد کی‌اند
 """
-import io
 import json
 from datetime import datetime, timedelta
 
@@ -20,8 +19,9 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from .models import Node, Relationship
+from .uploads import UploadValidationError, read_limited_upload
 
-MAX_SIZE = 400 * 1024 * 1024
+MAX_SIZE = 100 * 1024 * 1024
 SCAN_TTL = 2 * 3600           # کش اسکن: ۲ ساعت
 SAMPLE_CHARS = 7000           # حجم نمونه‌ی متن هر مخاطب برای استخراج محلی
 IMPORT_NOTE = 'ایمپورت تلگرام'
@@ -79,17 +79,17 @@ def telegram_scan_api(request):
     f = request.FILES.get('file')
     if not f:
         return JsonResponse({'error': 'فایل result.json رو انتخاب کن'}, status=400)
-    if f.size > MAX_SIZE:
-        return JsonResponse({'error': 'فایل بزرگ‌تر از ۴۰۰ مگابایته'}, status=400)
-
     try:
         days_limit = max(7, min(int(request.POST.get('days', 365)), 3650))
     except (TypeError, ValueError):
         days_limit = 365
 
     try:
-        data = json.load(io.TextIOWrapper(f.file, encoding='utf-8'))
-    except Exception:
+        raw = read_limited_upload(f, max_bytes=MAX_SIZE, label='فایل تلگرام')
+        data = json.loads(raw.decode('utf-8-sig'))
+    except UploadValidationError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    except (UnicodeDecodeError, json.JSONDecodeError):
         return JsonResponse({'error': 'JSON نامعتبر — همون result.json تلگرام رو بده'}, status=400)
 
     if isinstance(data, dict) and 'chats' in data:

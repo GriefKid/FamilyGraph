@@ -22,6 +22,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from .models import Group, Node, Information, Event
+from .uploads import UploadValidationError, normalize_image_upload
 from django.views.generic import ListView
 from django.views.generic import TemplateView
 
@@ -2384,6 +2385,13 @@ def journal_image_upload_api(request):
     image_file = request.FILES.get('image')
     if not image_file:
         return JsonResponse({'error': 'فایلی ارسال نشد'}, status=400)
+    try:
+        image_file = normalize_image_upload(
+            image_file, max_bytes=10 * 1024 * 1024, max_dimension=4096,
+            label='تصویر خاطره',
+        )
+    except UploadValidationError as exc:
+        return JsonResponse({'error': str(exc), 'code': 'invalid_image'}, status=400)
     img = JournalImage.objects.create(image=image_file, owner=request.user)
     return JsonResponse({'id': img.id, 'url': img.image.url})
 
@@ -3092,6 +3100,14 @@ def node_create_from_image(request):
     if not target_id:
         return JsonResponse({'error': 'target_id required'}, status=400)
     target = get_object_or_404(Node, pk=target_id, owner=req_user)
+    if image:
+        try:
+            image = normalize_image_upload(
+                image, max_bytes=8 * 1024 * 1024, max_dimension=2400,
+                label='تصویر شخص',
+            )
+        except UploadValidationError as exc:
+            return JsonResponse({'error': str(exc), 'code': 'invalid_image'}, status=400)
 
     # ── Generate unique username از نام ──────────────────
     raw  = f"{first_name} {last_name}".strip()

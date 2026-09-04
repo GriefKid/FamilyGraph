@@ -255,10 +255,13 @@ class DashboardBriefingTests(TestCase):
 
     def test_journal_image_upload_assigns_the_current_user_as_owner(self):
         from .models import JournalImage
+        from PIL import Image
         user = get_user_model().objects.create_user(username='journal-upload', password='SecurePass1')
         self.client.force_login(user)
+        image_bytes = io.BytesIO()
+        Image.new('RGB', (8, 8), 'white').save(image_bytes, 'JPEG')
         response = self.client.post('/api/journal/upload-image/', {
-            'image': SimpleUploadedFile('owned.jpg', b'image-bytes', content_type='image/jpeg'),
+            'image': SimpleUploadedFile('owned.jpg', image_bytes.getvalue(), content_type='image/jpeg'),
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(JournalImage.objects.get(pk=response.json()['id']).owner, user)

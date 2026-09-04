@@ -10,6 +10,8 @@ import os
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 
+from .uploads import UploadValidationError, normalize_audio_upload
+
 MAX_SIZE = 15 * 1024 * 1024   # 15MB
 
 
@@ -21,8 +23,10 @@ def stt_api(request):
     audio = request.FILES.get('audio')
     if not audio:
         return JsonResponse({'error': 'فایل صوتی دریافت نشد'}, status=400)
-    if audio.size > MAX_SIZE:
-        return JsonResponse({'error': 'فایل صوتی بزرگ‌تر از ۱۵ مگابایته'}, status=400)
+    try:
+        audio = normalize_audio_upload(audio, max_bytes=MAX_SIZE)
+    except UploadValidationError as exc:
+        return JsonResponse({'error': str(exc), 'code': 'invalid_audio'}, status=400)
 
     groq_key = os.environ.get('GROQ_API_KEY', '')
     openai_key = os.environ.get('OPENAI_API_KEY', '')
@@ -54,5 +58,5 @@ def stt_api(request):
     except Exception as e:
         msg = str(e)
         if '429' in msg or 'rate' in msg.lower():
-            return JsonResponse({'error': 'سهمیه‌ی امروز Whisper تموم شده — فردا دوباره'}, status=500)
-        return JsonResponse({'error': f'خطای تبدیل گفتار: {msg[:150]}'}, status=500)
+            return JsonResponse({'error': 'سهمیه‌ی امروز Whisper تمام شده؛ کمی بعد دوباره امتحان کن.'}, status=429)
+        return JsonResponse({'error': 'تبدیل گفتار کامل نشد؛ دوباره امتحان کن.'}, status=502)

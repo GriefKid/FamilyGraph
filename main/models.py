@@ -7,6 +7,8 @@ from django.conf import settings
 from django.db.models.signals import m2m_changed, pre_delete
 from django.dispatch import receiver
 
+from .uploads import validate_image_file
+
 
 # ─────────────────────────────────────────────────────────────────
 # 1. Custom User Model  (باید اول از همه باشه)
@@ -20,8 +22,10 @@ class User(AbstractUser):
     )
     trust_score = models.IntegerField(default=80, verbose_name='امتیاز اعتماد')
     avatar      = models.ImageField(upload_to='avatars/', blank=True, null=True,
+                                    validators=[validate_image_file],
                                     verbose_name='آواتار')
     cover_image = models.ImageField(upload_to='profile_covers/', blank=True, null=True,
+                                    validators=[validate_image_file],
                                     verbose_name='بک‌گراند پروفایل')
     cover_preset = models.CharField(max_length=40, blank=True, default='aurora',
                                     verbose_name='بک‌گراند آماده')
@@ -140,7 +144,8 @@ class Node(models.Model):
     first_name      = models.CharField(max_length=100, blank=True, verbose_name='نام')
     last_name       = models.CharField(max_length=100, blank=True, verbose_name='نام خانوادگی')
     nickname        = models.CharField(max_length=100, blank=True, verbose_name='لقب / اسم مستعار')
-    picture         = models.ImageField(upload_to='media/', blank=True, null=True)
+    picture         = models.ImageField(upload_to='media/', blank=True, null=True,
+                                        validators=[validate_image_file])
     name            = models.CharField(max_length=200, blank=True)   # legacy
     birth_day       = models.DateField(blank=True, null=True)
     career          = models.CharField(max_length=200, blank=True)
@@ -562,7 +567,8 @@ class SocialPost(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_posts'
     )
     body = models.TextField(max_length=1200)
-    image = models.ImageField(upload_to='social_posts/', blank=True, null=True)
+    image = models.ImageField(upload_to='social_posts/', blank=True, null=True,
+                              validators=[validate_image_file])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_public = models.BooleanField(default=True)
@@ -1550,7 +1556,8 @@ class JournalImage(models.Model):
     )
     entry       = models.ForeignKey(JournalEntry, on_delete=models.CASCADE,
                                      related_name='images', null=True, blank=True)
-    image       = models.ImageField(upload_to='journal/', verbose_name='تصویر')
+    image       = models.ImageField(upload_to='journal/', validators=[validate_image_file],
+                                    verbose_name='تصویر')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

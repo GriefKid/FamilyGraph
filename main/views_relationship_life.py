@@ -16,6 +16,7 @@ from pathlib import Path
 from .models import (Commitment, Debt, Event, GiftIdea, Information, Interaction,
                      JournalEntry, MeetingReflection, MemoryFact, Node, NodeSafetySetting,
                      Relationship, ShareLink)
+from .uploads import UploadValidationError, read_limited_upload
 
 
 def _body(request):
@@ -317,8 +318,12 @@ def csv_import_preview(request):
     if not uploaded:
         return JsonResponse({'error': 'فایل CSV لازم است.'}, status=400)
     try:
-        text = uploaded.read().decode('utf-8-sig')
+        text = read_limited_upload(
+            uploaded, max_bytes=5 * 1024 * 1024, label='فایل CSV',
+        ).decode('utf-8-sig')
         rows = list(csv.DictReader(io.StringIO(text)))[:500]
+    except UploadValidationError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
     except (UnicodeDecodeError, csv.Error):
         return JsonResponse({'error': 'CSV معتبر UTF-8 نیست.'}, status=400)
     clean = [{'username': str(r.get('username') or r.get('name') or '').strip()[:100],
@@ -372,8 +377,12 @@ def vcard_import_preview(request):
     if not uploaded:
         return JsonResponse({'error': 'فایل vCard (.vcf) لازم است.'}, status=400)
     try:
-        text = uploaded.read()[:2 * 1024 * 1024].decode('utf-8-sig', errors='ignore')
-    except Exception:
+        text = read_limited_upload(
+            uploaded, max_bytes=2 * 1024 * 1024, label='فایل vCard',
+        ).decode('utf-8-sig', errors='ignore')
+    except UploadValidationError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+    except (UnicodeDecodeError, OSError):
         return JsonResponse({'error': 'فایل قابل خواندن نبود.'}, status=400)
     cards = _parse_vcards(text)[:1000]
     rows = []

@@ -1,6 +1,7 @@
 from django import forms
 from django.utils.text import slugify
 from .models import Node, Information, Relationship, Event
+from .uploads import UploadValidationError, normalize_image_upload
 
 
 class NodeForm(forms.ModelForm):
@@ -22,6 +23,18 @@ class NodeForm(forms.ModelForm):
             self.cleaned_data.get('name', ''),
         ]))
         return slugify(seed, allow_unicode=True)[:92] or 'person'
+
+    def clean_picture(self):
+        picture = self.cleaned_data.get('picture')
+        if not picture:
+            return picture
+        try:
+            return normalize_image_upload(
+                picture, max_bytes=8 * 1024 * 1024, max_dimension=2400,
+                label='تصویر شخص',
+            )
+        except UploadValidationError as exc:
+            raise forms.ValidationError(str(exc), code='invalid_image_upload') from exc
 
     class Meta:
         model = Node

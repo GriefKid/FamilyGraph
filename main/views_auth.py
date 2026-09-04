@@ -14,6 +14,8 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_GET
 
+from .uploads import UploadValidationError, normalize_image_upload
+
 User = get_user_model()
 
 
@@ -457,7 +459,13 @@ def profile_view(request):
                 except ValueError:
                     error = 'فرمت تاریخ اشتباهه (YYYY-MM-DD).'
             if 'avatar' in request.FILES:
-                user.avatar = request.FILES['avatar']
+                try:
+                    user.avatar = normalize_image_upload(
+                        request.FILES['avatar'], max_bytes=5 * 1024 * 1024,
+                        max_dimension=1600, label='آواتار',
+                    )
+                except UploadValidationError as exc:
+                    error = str(exc)
             if not error:
                 user.save()
                 # ── sync self-node ────────────────────────────

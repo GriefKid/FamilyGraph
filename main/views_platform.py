@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST
 from .models import (AIExtractionTrace, Commitment, ExtractionSuggestion, FeatureFlag,
                      Interaction, JournalEntry, KnowledgeTriple, MemoryFact, Node,
                      ObservabilityEvent, Relationship)
+from .uploads import UploadValidationError, read_limited_upload
 
 
 def _body(request):
@@ -198,7 +199,7 @@ def _fernet(password, salt):
 
 
 def _read_backup(uploaded, password):
-    raw = uploaded.read()
+    raw = read_limited_upload(uploaded, max_bytes=50 * 1024 * 1024, label='فایل بکاپ')
     if not raw.startswith(b'FGB1'):
         raise ValueError('فرمت بکاپ معتبر نیست.')
     try:
@@ -233,7 +234,7 @@ def encrypted_backup_preview(request):
         return JsonResponse({'error': 'فایل بکاپ لازم است.'}, status=400)
     try:
         payload = _read_backup(uploaded, password)
-    except (ValueError, RuntimeError) as exc:
+    except (UploadValidationError, ValueError, RuntimeError) as exc:
         return JsonResponse({'error': str(exc)}, status=400)
     return JsonResponse({'valid': True, 'version': payload.get('version'),
                          'counts': {key: len(value) for key, value in payload.items() if isinstance(value, list)}})
@@ -248,7 +249,7 @@ def encrypted_backup_restore(request):
         return JsonResponse({'error': 'فایل بکاپ لازم است.'}, status=400)
     try:
         payload = _read_backup(uploaded, password)
-    except (ValueError, RuntimeError) as exc:
+    except (UploadValidationError, ValueError, RuntimeError) as exc:
         return JsonResponse({'error': str(exc)}, status=400)
     if payload.get('version') != 1:
         return JsonResponse({'error': 'نسخه بکاپ پشتیبانی نمی‌شود.'}, status=400)
