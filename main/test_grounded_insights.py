@@ -367,3 +367,24 @@ class StructuralSignalTests(TestCase):
                                    date=timezone.localdate() - timedelta(days=400))
         names = [f['name'] for f in fading_relationships(self.user)]
         self.assertIn(p.display_name(), names)
+
+
+class DiversityMeterTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='div', password='SecurePass1')
+        self.root = Node.objects.create(owner=self.user, username='d-root')
+        self.user.root_node = self.root
+        self.user.save(update_fields=['root_node'])
+
+    def test_flags_a_one_trade_network(self):
+        from .grounded_insights import diversity_meter
+        for i in range(6):
+            Node.objects.create(owner=self.user, username=f'eng{i}', career='مهندس نرم‌افزار')
+        notes = diversity_meter(self.user)['notes']
+        self.assertTrue(any('مهندس' in n and '٪' in n for n in notes))
+
+    def test_small_network_is_silent(self):
+        from .grounded_insights import diversity_meter
+        Node.objects.create(owner=self.user, username='one', career='x')
+        self.assertEqual(diversity_meter(self.user)['notes'], [])

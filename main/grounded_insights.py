@@ -110,6 +110,8 @@ def network_analysis(user, summary):
         patterns.append(f'گراف به {communities} خوشهٔ ساختاری تقسیم می‌شود؛ این خوشه‌ها فقط نزدیکی شبکه‌ای را نشان می‌دهند.')
     if brokers:
         patterns.append('افراد با نقش اتصال ساختاری بیشتر: ' + '، '.join(brokers) + '.')
+    for note in diversity_meter(user).get('notes', []):
+        patterns.append(note)
     if not patterns:
         patterns.append('برای مشاهدهٔ الگوهای ساختاری، چند رابطه و تعامل تاریخ‌دار ثبت کن.')
 
@@ -778,6 +780,45 @@ def support_balance(user, days=180):
         'by_kind': {_SUPPORT_LABELS[k]: v for k, v in by_kind.items()},
         'notes': notes,
     }
+
+
+def diversity_meter(user):
+    """چقدر شبکه از نظر شغل/شهر/گروه یک‌دست است (homophily). فقط توصیف
+    از روی فیلدهای واردشده، نه ارزش‌گذاری."""
+    people = list(
+        Node.objects.filter(owner=user, merged_into__isnull=True)
+        .exclude(pk=user.root_node_id)
+        .prefetch_related('groups')
+    )
+    n = len(people)
+    if n < 4:
+        return {'people': n, 'notes': [], 'facets': {}}
+
+    facets = {}
+    notes = []
+    for field, label in (('career', 'شغل'), ('city', 'شهر')):
+        vals = [(_norm_fa(getattr(p, field, '')) or '').strip() for p in people]
+        filled = [v for v in vals if v]
+        if len(filled) < max(4, n * 0.4):
+            continue
+        top, cnt = Counter(filled).most_common(1)[0]
+        share = round(cnt / len(filled) * 100)
+        facets[label] = {'top': top, 'share': share, 'distinct': len(set(filled))}
+        if share >= 60:
+            notes.append(f'{share}٪ از کسانی که {label}شان ثبت شده، «{top}» هستند.')
+
+    group_counts = Counter()
+    for p in people:
+        for g in p.groups.all():
+            group_counts[g.name] += 1
+    if group_counts:
+        top_g, gc = group_counts.most_common(1)[0]
+        if gc / n >= 0.6:
+            notes.append(f'بیشتر شبکه‌ات ({round(gc / n * 100)}٪) در گروه «{top_g}» است.')
+
+    if not notes and facets:
+        notes.append('از فیلدهای ثبت‌شده، شبکه‌ات از نظر شغل و شهر نسبتاً متنوع است.')
+    return {'people': n, 'facets': facets, 'notes': notes}
 
 
 # ─────────────────────────────────────────────────────────────────────
