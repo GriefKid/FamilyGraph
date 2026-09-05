@@ -1391,6 +1391,19 @@ class ChatMessage(models.Model):
     """پیام‌های چت با همدم — تا گفتگو بین جلسه‌ها یادش بمونه."""
     ROLE_CHOICES = [('user', 'کاربر'), ('assistant', 'همدم')]
 
+    mentioned_nodes = models.ManyToManyField(
+        'Node', blank=True, related_name='chat_messages',
+        verbose_name='افراد مرتبط',
+    )
+    extraction_status = models.CharField(
+        max_length=16,
+        choices=[('pending', 'pending'), ('processed', 'processed'), ('disabled', 'disabled'), ('error', 'error')],
+        default='pending',
+    )
+    extraction_error = models.CharField(max_length=120, blank=True)
+    extracted_suggestion_count = models.PositiveIntegerField(default=0)
+    extracted_at = models.DateTimeField(null=True, blank=True)
+
     role       = models.CharField(max_length=10, choices=ROLE_CHOICES)
     content    = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1407,6 +1420,17 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:60]}"
+
+
+@receiver(m2m_changed, sender=ChatMessage.mentioned_nodes.through)
+def enforce_chat_node_ownership(sender, instance, action, pk_set, **kwargs):
+    """Never attach another tenant's person to a private chat message."""
+    if action != 'pre_add' or not instance.owner_id or not pk_set:
+        return
+    if Node.objects.filter(pk__in=pk_set, owner__isnull=False).exclude(
+        owner_id=instance.owner_id,
+    ).exists():
+        raise ValidationError('Chat mentions must belong to the same owner.')
 
 
 # ─────────────────────────────────────────────────────────────────

@@ -1577,17 +1577,51 @@ def _named_nodes_for_query(user, query, limit=3):
     return [node for _, node in matches[:limit]]
 
 
-def _persist_chat_exchange(user, user_message, reply, *, ephemeral=False):
+def _persist_chat_input(user, user_message, *, ephemeral=False):
+    """Persist and index the user's message before generation starts.
+
+    The message must survive provider failures and fast local replies. Named
+    people are linked without promoting any inference to a fact; extracted
+    suggestions remain reviewable in the private inbox.
+    """
+    if ephemeral:
+        return None
+    from .models import ChatMessage
+    message = ChatMessage.objects.create(
+        role='user', content=user_message[:4000], owner=user,
+    )
+    try:
+        named_nodes = _named_nodes_for_query(user, user_message)
+        message.mentioned_nodes.set([node for node in named_nodes if node.owner_id == user.id])
+    except Exception:
+        pass
+    if not getattr(user, 'ai_extraction_enabled', True) or not getattr(user, 'ai_chat_enabled', True):
+        message.extraction_status = 'disabled'
+        message.extracted_at = timezone.now()
+        message.save(update_fields=['extraction_status', 'extracted_at'])
+        return message
+    try:
+        from .memory_pipeline import capture_text
+        suggestions = capture_text(user, user_message, 'chat', message.id)
+        message.extraction_status = 'processed'
+        message.extracted_suggestion_count = len(suggestions)
+        message.extracted_at = timezone.now()
+        message.save(update_fields=['extraction_status', 'extracted_suggestion_count', 'extracted_at'])
+    except Exception as exc:
+        message.extraction_status = 'error'
+        message.extraction_error = type(exc).__name__[:120]
+        message.extracted_at = timezone.now()
+        message.save(update_fields=['extraction_status', 'extraction_error', 'extracted_at'])
+    return message
+
+
+def _persist_chat_exchange(user, user_message, reply, *, ephemeral=False, user_chat=None):
     if ephemeral:
         return
     try:
         from .models import ChatMessage
-        user_chat = ChatMessage.objects.create(
-            role='user', content=user_message[:4000], owner=user,
-        )
+        user_chat = user_chat or _persist_chat_input(user, user_message)
         ChatMessage.objects.create(role='assistant', content=(reply or '')[:4000], owner=user)
-        from .memory_pipeline import capture_text
-        capture_text(user, user_message, 'chat', user_chat.id)
     except Exception:
         pass
 
@@ -1605,9 +1639,9 @@ def _retrieve_context(user, query, limit=8):
     No remote embeddings are needed: Persian normalization, related terms and
     fuzzy token scoring rank evidence older than recent chat windows.
     """
-    from .models import (Commitment, Event, GiftIdea, Interaction, KnowledgeTriple,
-                         LifeEvent, MeetingReflection, MemoryFact, PersonaProfile,
-                         RelationshipGoal, RelationshipProfile)
+    from .models import (ChatMessage, Commitment, Event, ExtractionSuggestion, GiftIdea,
+                         Interaction, KnowledgeTriple, LifeEvent, MeetingReflection,
+                         MemoryFact, PersonaProfile, RelationshipGoal, RelationshipProfile)
     from .local_memory import query_terms, score_text
 
     terms = query_terms(query)
@@ -1636,6 +1670,51 @@ def _retrieve_context(user, query, limit=8):
                 break
             lines.append(f"- یادداشت {jalali_str(j.entry_date or j.created_at.date())}: {j.text[:280]}"
                          + (f" [حال: {j.mood}]" if j.mood else ""))
+
+    # Chat input is a first-class private observation, not just a short-lived
+    # conversation window. Search it by content and by explicit person links
+    # so older messages can inform future analysis without sending the entire
+    # chat archive to the model.
+    try:
+        cq = ChatMessage.objects.filter(owner=user, role='user')
+        if named_ids:
+            cq = cq.filter(Q(mentioned_nodes__id__in=named_ids) | Q(content__icontains=query[:60]))
+        scored_chat = sorted(
+            ((_score(message.content), message) for message in cq.order_by('-created_at')[:400]),
+            key=lambda pair: (-pair[0], -pair[1].id),
+        )
+        for score, message in scored_chat[:limit]:
+            if score <= 0:
+                break
+            lines.append(
+                f"- گفت‌وگوی همدم {jalali_str(message.created_at.date())}: "
+                f"{message.content[:280]}"
+            )
+    except Exception:
+        pass
+
+    # Pending extractions are useful leads, but are explicitly labelled as
+    # unverified so the model cannot silently turn a suggestion into a fact.
+    try:
+        pending = ExtractionSuggestion.objects.filter(
+            owner=user, source='chat', status='pending',
+        ).order_by('-created_at')[:120]
+        for suggestion in pending:
+            payload = suggestion.payload if isinstance(suggestion.payload, dict) else {}
+            snippet = str(payload.get('snippet') or payload.get('value') or '').strip()
+            linked_to_question = False
+            if named_ids and suggestion.source_id:
+                linked_to_question = ChatMessage.objects.filter(
+                    owner=user, pk=suggestion.source_id,
+                    mentioned_nodes__id__in=named_ids,
+                ).exists()
+            if not snippet or (_score(snippet) <= 0 and not linked_to_question):
+                continue
+            lines.append(f"- سرنخ تأییدنشده از چت: {snippet[:220]}")
+            if len(lines) >= limit * 2:
+                break
+    except Exception:
+        pass
 
     try:
         iq = Interaction.objects.filter(owner=user, node__owner=user).select_related('node')
@@ -1779,6 +1858,8 @@ def chat_api(request):
     if not user_message:
         return JsonResponse({'error': 'message is empty'}, status=400)
 
+    ephemeral = bool(data.get('ephemeral'))
+    chat_input = _persist_chat_input(request.user, user_message, ephemeral=ephemeral)
     request_started = time.monotonic()
     chat_deadline_at = request_started + _chat_response_deadline_seconds()
 
@@ -1802,6 +1883,7 @@ def chat_api(request):
                 request.user, request_started, provider='local-rules',
                 actual_model='authoritative-date', status='success',
             )
+            _persist_chat_exchange(request.user, user_message, f'امروز {jalali_day_name(today)} است.', ephemeral=ephemeral, user_chat=chat_input)
             return JsonResponse({
                 'reply': f'امروز {jalali_day_name(today)} است.',
                 'style': chat_style, 'grounded': True,
@@ -1811,6 +1893,7 @@ def chat_api(request):
                 request.user, request_started, provider='local-rules',
                 actual_model='small-talk', status='success',
             )
+            _persist_chat_exchange(request.user, user_message, 'سلام! من اینجام. چطور می‌تونم کمکت کنم؟', ephemeral=ephemeral, user_chat=chat_input)
             return JsonResponse({
                 'reply': 'سلام! من اینجام. چطور می‌تونم کمکت کنم؟',
                 'style': chat_style, 'grounded': True,
@@ -1824,12 +1907,10 @@ def chat_api(request):
     except Exception:
         grounded = None
     if grounded:
-        try:
-            from .models import ChatMessage
-            ChatMessage.objects.create(owner=request.user, role='user', content=user_message[:2000])
-            ChatMessage.objects.create(owner=request.user, role='assistant', content=grounded[:2000])
-        except Exception:
-            pass
+        _persist_chat_exchange(
+            request.user, user_message, grounded,
+            ephemeral=ephemeral, user_chat=chat_input,
+        )
         _record_chat_metric(
             request.user, request_started, provider='local-data',
             actual_model='grounded-insights', status='success',
@@ -2044,7 +2125,7 @@ def chat_api(request):
                 parts.append(result['tip'])
                 reply = ' '.join(part for part in parts if part)
                 _persist_chat_exchange(
-                    request.user, user_message, reply, ephemeral=bool(data.get('ephemeral')),
+                    request.user, user_message, reply, ephemeral=ephemeral, user_chat=chat_input,
                 )
                 _record_chat_metric(
                     request.user, request_started, provider='local-data',
@@ -2314,7 +2395,7 @@ def chat_api(request):
         # BUGFIX: صفحه insights هم از همین API استفاده می‌کنه؛ با فلگ ephemeral
         # سوال‌های اون صفحه دیگه حافظه‌ی همدم رو آلوده نمی‌کنن.
         _persist_chat_exchange(
-            request.user, user_message, reply, ephemeral=bool(data.get('ephemeral')),
+            request.user, user_message, reply, ephemeral=ephemeral, user_chat=chat_input,
         )
 
         _record_chat_metric(
@@ -2339,7 +2420,7 @@ def chat_api(request):
         reply = _fast_degraded_chat_reply(user_message)
         _persist_chat_exchange(
             request.user, user_message, reply,
-            ephemeral=bool(data.get('ephemeral')),
+            ephemeral=ephemeral, user_chat=chat_input,
         )
         error_name = type(exc).__name__.lower()
         timed_out = isinstance(exc, TimeoutError) or 'timeout' in error_name or 'deadline' in error_name
@@ -3189,9 +3270,17 @@ def export_graph(request):
     ))
     try:
         from .models import ChatMessage
-        chat_messages = list(ChatMessage.objects.filter(owner=user).values(
-            'role', 'content', 'created_at',
-        ))
+        chat_messages = [
+            {
+                'role': message.role,
+                'content': message.content,
+                'created_at': message.created_at,
+                'mentioned_nodes': list(message.mentioned_nodes.filter(owner=user).values_list('username', flat=True)),
+                'extraction_status': message.extraction_status,
+                'extracted_suggestion_count': message.extracted_suggestion_count,
+            }
+            for message in ChatMessage.objects.filter(owner=user).prefetch_related('mentioned_nodes')
+        ]
     except Exception:
         chat_messages = []
     contacts = list(NodeContactDetails.objects.filter(owner=user).values(

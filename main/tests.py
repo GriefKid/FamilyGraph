@@ -11,7 +11,7 @@ import io
 from datetime import date, timedelta
 from pathlib import Path
 
-from .models import AIExtractionTrace, Commitment, Debt, DirectMessage, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftBox, GiftIdea, Information, Interaction, JournalEntry, JournalImage, KnowledgeTriple, LifeEvent, MeetingReflection, MemoryFact, Node, NodeAlias, NodeContactDetails, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
+from .models import AIExtractionTrace, ChatMessage, Commitment, Debt, DirectMessage, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftBox, GiftIdea, Information, Interaction, JournalEntry, JournalImage, KnowledgeTriple, LifeEvent, MeetingReflection, MemoryFact, Node, NodeAlias, NodeContactDetails, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
 from .forms import NodeContactDetailsForm
 from .templatetags.jalali_tags import jalali_date
 
@@ -1913,6 +1913,36 @@ class ChatRetrievalTests(TestCase):
         self.assertIn('کافه', ctx)
         from main.utils_jalali import jalali_str
         self.assertIn(jalali_str(date(2024, 1, 5)), ctx)
+
+    def test_chat_input_is_persisted_linked_and_processed_before_reply(self):
+        from main.views import _persist_chat_input
+        sara = Node.objects.create(owner=self.user, username='nima-memory', name='nima')
+        text = 'nima was tired of crowds and talked about books.'
+        message = _persist_chat_input(self.user, text)
+        self.assertEqual(message.content, text)
+        self.assertEqual(list(message.mentioned_nodes.values_list('id', flat=True)), [sara.id])
+        message.refresh_from_db()
+        self.assertEqual(message.extraction_status, 'processed')
+        self.assertIsNotNone(message.extracted_at)
+        self.assertTrue(AIExtractionTrace.objects.filter(
+            owner=self.user, source='chat', source_id=message.id, input_text=text,
+        ).exists())
+
+    def test_chat_retrieval_includes_an_older_user_message(self):
+        message = ChatMessage.objects.create(
+            owner=self.user, role='user', content='sara trip north',
+        )
+        message.mentioned_nodes.add(self.sara)
+        from main.views import _retrieve_context
+        ctx = _retrieve_context(self.user, 'sara trip north')
+        self.assertIn('trip north', ctx)
+
+    def test_chat_mentions_are_owner_scoped(self):
+        other = get_user_model().objects.create_user(username='chat-other', password='SecurePass1')
+        foreign = Node.objects.create(owner=other, username='foreign-chat-node', name='Foreign')
+        message = ChatMessage.objects.create(owner=self.user, role='user', content='private')
+        with self.assertRaises(Exception):
+            message.mentioned_nodes.add(foreign)
 
     def test_retrieval_is_empty_for_a_contentless_question(self):
         from main.views import _retrieve_context

@@ -257,7 +257,7 @@ def system_health_api(request):
 
 
 def _backup_payload(user):
-    from .models import Debt, Event, FollowUp, NodeContactDetails
+    from .models import ChatMessage, Debt, Event, FollowUp, NodeContactDetails
     events = []
     for event in Event.objects.filter(owner=user).prefetch_related('participants'):
         events.append({'title': event.title, 'date': event.date, 'event_time': event.event_time,
@@ -299,6 +299,17 @@ def _backup_payload(user):
             'node__username', 'direction', 'amount', 'paid', 'currency', 'date',
             'due_date', 'note', 'settled',
         )),
+        'chat_messages': [
+            {
+                'role': message.role,
+                'content': message.content,
+                'created_at': message.created_at,
+                'mentioned_nodes': list(message.mentioned_nodes.filter(owner=user).values_list('username', flat=True)),
+                'extraction_status': message.extraction_status,
+                'extracted_suggestion_count': message.extracted_suggestion_count,
+            }
+            for message in ChatMessage.objects.filter(owner=user).prefetch_related('mentioned_nodes')
+        ],
     }
 
 
@@ -477,6 +488,26 @@ def encrypted_backup_restore(request):
                           'due_date': backup_date(row.get('due_date')), 'note': row.get('note') or '',
                           'settled': bool(row.get('settled'))},
             )
+    from .models import ChatMessage
+    for row in payload.get('chat_messages', [])[:50000]:
+        content = str(row.get('content') or '').strip()
+        role = row.get('role') if row.get('role') in ('user', 'assistant') else 'user'
+        if not content:
+            continue
+        raw_count = row.get('extracted_suggestion_count', 0)
+        try:
+            extracted_count = max(0, int(raw_count))
+        except (TypeError, ValueError):
+            extracted_count = 0
+        message, _ = ChatMessage.objects.get_or_create(
+            owner=request.user, role=role, content=content[:10000],
+            defaults={'created_at': backup_datetime(row.get('created_at')) or timezone.now(),
+                      'extraction_status': row.get('extraction_status') or 'pending',
+                      'extracted_suggestion_count': extracted_count},
+        )
+        mentioned_names = row.get('mentioned_nodes', [])
+        mentioned_names = mentioned_names if isinstance(mentioned_names, list) else []
+        message.mentioned_nodes.set([nodes[name] for name in mentioned_names if name in nodes])
     return JsonResponse({'ok': True, 'nodes': len(nodes),
                          'preview_before_apply': True, 'message': 'بازیابی با merge امن انجام شد.'})
 
