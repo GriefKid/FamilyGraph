@@ -56,3 +56,15 @@ class FirstVisitOnboardingTests(TestCase):
         self.assertContains(response, 'سه قدم ساده')
         self.assertContains(response, 'افزودن اولین شخص')
         self.assertContains(response, 'ثبت اولین لحظه')
+
+    def test_shell_does_not_repeat_sidebar_shortcuts_with_different_names(self):
+        user = get_user_model().objects.create_user(
+            username='clean-nav', password='SecurePass1',
+        )
+        self.client.force_login(user)
+        response = self.client.get('/')
+        self.assertNotContains(response, '<a href="/checkin/">✓ چک‌این</a>')
+        self.assertNotContains(response, '<a href="/journal/">✎ یادداشت</a>')
+        self.assertNotContains(response, '<a href="/nodes/create/">＋ شخص</a>')
+        self.assertContains(response, 'href="/privacy/">حریم خصوصی</a>')
+        self.assertContains(response, 'href="/terms/">قوانین استفاده</a>')

@@ -1386,9 +1386,6 @@ input[type="checkbox"],input[type="radio"]{ min-height:0; width:auto; }
 
       <nav class="quick-nav" aria-label="دسترسی سریع">
         <a href="#" onclick="event.preventDefault();openPalette()" aria-label="بازکردن جست‌وجوی سریع">⌘ جست‌وجو</a>
-        <a href="/checkin/">✓ چک‌این</a>
-        <a href="/journal/">✎ یادداشت</a>
-        <a href="/nodes/create/">＋ شخص</a>
         {% if request.user.is_superuser %}<a href="/platform/ai-quality/">AI Ops</a>{% endif %}
       </nav>
 
@@ -1426,10 +1423,8 @@ input[type="checkbox"],input[type="radio"]{ min-height:0; width:auto; }
   <footer class="site-footer">
     <span>FamilyGraph · برای رابطه‌هایی که ارزش مراقبت دارند</span>
     <nav class="footer-links" aria-label="پیوندهای پایانی">
-      <a href="/">امروز</a>
-      <a href="/graph/">نقشهٔ رابطه‌ها</a>
-      <a href="/social/">اجتماع</a>
-      <a href="/u/{{ request.user.username }}/">پروفایل</a>
+      <a href="/privacy/">حریم خصوصی</a>
+      <a href="/terms/">قوانین استفاده</a>
     </nav>
   </footer>
 
