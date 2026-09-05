@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090a16">
+  <title>FamilyGraph</title>
+  <style>
+    :root{color-scheme:dark;font-family:Tahoma,sans-serif;background:#090a16;color:#faf9ff}
+    *{box-sizing:border-box}body{min-height:100svh;margin:0;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 18% 12%,#38225f 0,transparent 36%),radial-gradient(circle at 85% 90%,#163b54 0,transparent 38%),#090a16}
+    main{width:min(430px,100%);padding:34px 25px;text-align:center;border:1px solid #444261;border-radius:28px;background:#1d1e31dd;box-shadow:0 24px 80px #0009}
+    .logo{width:72px;height:72px;margin:0 auto 20px;display:grid;place-items:center;border-radius:23px;background:linear-gradient(135deg,#7659ff,#b64cf1);font-size:34px;box-shadow:0 15px 38px #7655ff66}
+    h1{margin:0 0 10px;font-size:25px}p{margin:0;color:#bbb9d0;line-height:2;font-size:13px}.status{margin-top:20px;padding:12px;border-radius:14px;background:#111225;color:#d8d5ee;font-size:12px}
+    .retry{display:none;margin-top:20px;border:0;border-radius:14px;padding:12px 20px;background:#7959ff;color:#fff;font:inherit;font-weight:700}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo" aria-hidden="true">✦</div>
+    <h1>FamilyGraph</h1>
+    <p>دفتر امن شناخت آدم‌ها و رابطه‌ها</p>
+    <div class="status" id="status">در حال اتصال…</div>
+    <button class="retry" id="retry" type="button" onclick="connect()">تلاش دوباره</button>
+  </main>
+  <script>
+    const configured='__FAMILYGRAPH_SERVER_URL__';
+    const status=document.getElementById('status');
+    const retry=document.getElementById('retry');
+    async function connect(){
+      if(configured.startsWith('__')){status.textContent='آدرس سرور هنوز برای این نسخه تنظیم نشده است.';retry.style.display='none';return;}
+      status.textContent='در حال اتصال امن به سرور…';retry.style.display='none';
+      try{
+        const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),4500);
+        await fetch(configured,{mode:'no-cors',cache:'no-store',signal:controller.signal});clearTimeout(timer);
+        location.replace(configured);
+      }catch(_){status.textContent=navigator.onLine?'سرور فعلاً در دسترس نیست.':'اینترنت قطع است؛ بعداً دوباره تلاش کن.';retry.style.display='inline-block';}
+    }
+    connect();
+  </script>
+</body>
+</html>

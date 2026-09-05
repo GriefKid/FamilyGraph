@@ -12,6 +12,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from .forms import NodeContactDetailsForm
 from .models import (
     ArtisticWork,
     ChatAnalysis,
@@ -21,11 +22,13 @@ from .models import (
     Friendship,
     Information,
     Node,
+    NodeContactDetails,
     ProfileMediaItem,
     Relationship,
     SocialPost,
 )
 from .uploads import UploadValidationError, normalize_image_upload
+from .utils_jalali import parse_date_input
 
 User = get_user_model()
 
@@ -1007,6 +1010,14 @@ def public_profile_view(request, username):
     })
 
 
+def _profile_node(user):
+    """Find the graph node representing the signed-in user's own profile."""
+    return (
+        Node.objects.filter(owner=user, username=user.username).first()
+        or Node.objects.filter(owner=user, pk=user.root_node_id).first()
+    )
+
+
 @login_required
 def profile_edit_view(request):
     from django.contrib import messages
@@ -1015,6 +1026,17 @@ def profile_edit_view(request):
     if request.method == 'POST':
         action = request.POST.get('action', 'profile')
         if action == 'profile':
+            self_node = _profile_node(user)
+            details = NodeContactDetails.objects.filter(
+                owner=user, node=self_node,
+            ).first() if self_node else None
+            contact_form = NodeContactDetailsForm(request.POST, instance=details)
+            if not contact_form.is_valid():
+                error_messages = []
+                for field_errors in contact_form.errors.values():
+                    error_messages.extend(str(error) for error in field_errors)
+                messages.error(request, 'اطلاعات تماس ذخیره نشد: ' + ' '.join(error_messages))
+                return redirect('profile_edit')
             user.first_name = request.POST.get('first_name', '').strip()
             user.last_name = request.POST.get('last_name', '').strip()
             user.bio = request.POST.get('bio', '').strip()
@@ -1030,7 +1052,7 @@ def profile_edit_view(request):
             bd_raw = request.POST.get('birth_date', '').strip()
             if bd_raw:
                 try:
-                    user.birth_date = date.fromisoformat(bd_raw)
+                    user.birth_date = parse_date_input(bd_raw)
                 except ValueError:
                     messages.error(request, 'فرمت تاریخ تولد درست نیست.')
                     return redirect('profile_edit')
@@ -1044,7 +1066,6 @@ def profile_edit_view(request):
                     messages.error(request, str(exc))
                     return redirect('profile_edit')
             user.save()
-            self_node = Node.objects.filter(owner=user, username=user.username).first()
             if self_node:
                 self_node.first_name = user.first_name
                 self_node.last_name = user.last_name
@@ -1054,6 +1075,11 @@ def profile_edit_view(request):
                 if user.birth_date:
                     self_node.birth_day = user.birth_date
                 self_node.save()
+                if contact_form.has_changed():
+                    contact_details = contact_form.save(commit=False)
+                    contact_details.node = self_node
+                    contact_details.owner = user
+                    contact_details.save()
             messages.success(request, 'اطلاعات پروفایل ذخیره شد.')
         elif action == 'root_node':
             root_id = request.POST.get('root_node_id', '').strip()
@@ -1098,7 +1124,14 @@ def profile_edit_view(request):
             title = request.POST.get('title', '').strip()
             kind = request.POST.get('kind', 'book')
             if title and kind in {'book', 'movie', 'series', 'music'}:
-                completed_on = request.POST.get('completed_on') or None
+                completed_on_raw = request.POST.get('completed_on', '').strip()
+                completed_on = None
+                if completed_on_raw:
+                    try:
+                        completed_on = parse_date_input(completed_on_raw)
+                    except ValueError:
+                        messages.error(request, 'فرمت تاریخ اتمام درست نیست؛ مثلاً ۱۴۰۴/۰۱/۰۱ وارد کن.')
+                        return redirect('profile_edit')
                 creator = request.POST.get('creator', '').strip()
                 status = request.POST.get('status', 'completed')
                 if status not in {'completed', 'current', 'planned'}:
@@ -1152,9 +1185,14 @@ def profile_edit_view(request):
         {'id': 'graphite', 'name': 'Graphite', 'css': 'linear-gradient(135deg,#111827 0%,#334155 52%,#94a3b8 100%)'},
         {'id': 'sunset', 'name': 'Sunset', 'css': 'linear-gradient(135deg,#312e81 0%,#f97316 50%,#fde68a 100%)'},
     ]
+    self_node = _profile_node(user)
+    contact_details = NodeContactDetails.objects.filter(
+        owner=user, node=self_node,
+    ).first() if self_node else None
     return render(request, 'social/profile_edit.html', {
         'profile_user': user,
-        'self_node': Node.objects.filter(owner=user, username=user.username).first(),
+        'self_node': self_node,
+        'contact_form': NodeContactDetailsForm(instance=contact_details),
         'all_nodes': Node.objects.filter(owner=user).order_by('username'),
         'cover_presets': cover_presets,
         'media_items': ProfileMediaItem.objects.filter(user=user)[:80],

@@ -205,6 +205,71 @@ class Node(models.Model):
         ]
 
 
+class NodeContactDetails(models.Model):
+    """Private contact/payment details for one person in one owner's graph."""
+
+    node = models.OneToOneField(
+        Node, on_delete=models.CASCADE, related_name='contact_details',
+        verbose_name='مخاطب',
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='node_contact_details', verbose_name='صاحب اطلاعات',
+    )
+    email = models.EmailField(blank=True, verbose_name='ایمیل')
+    alternate_phone = models.CharField(max_length=20, blank=True, verbose_name='تلفن دوم')
+    bank_name = models.CharField(max_length=120, blank=True, verbose_name='نام بانک')
+    card_number = models.CharField(max_length=32, blank=True, verbose_name='شماره کارت')
+    account_number = models.CharField(max_length=40, blank=True, verbose_name='شماره حساب')
+    iban = models.CharField(max_length=34, blank=True, verbose_name='شماره شبا')
+    telegram_username = models.CharField(max_length=64, blank=True, verbose_name='نام کاربری تلگرام')
+    whatsapp_number = models.CharField(max_length=20, blank=True, verbose_name='شماره واتساپ')
+    instagram_username = models.CharField(max_length=64, blank=True, verbose_name='نام کاربری اینستاگرام')
+    x_username = models.CharField(max_length=64, blank=True, verbose_name='نام کاربری X')
+    linkedin_url = models.URLField(max_length=300, blank=True, verbose_name='لینک لینکدین')
+    address = models.TextField(blank=True, verbose_name='آدرس')
+    notes = models.TextField(blank=True, verbose_name='یادداشت تماس')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        if self.node_id and self.owner_id and self.node.owner_id != self.owner_id:
+            raise ValidationError('Contact details must belong to the node owner.')
+
+    @property
+    def card_number_formatted(self):
+        value = ''.join(ch for ch in (self.card_number or '') if ch.isdigit())
+        return ' '.join(value[index:index + 4] for index in range(0, len(value), 4))
+
+    @property
+    def iban_formatted(self):
+        value = (self.iban or '').replace(' ', '').upper()
+        return ' '.join(value[index:index + 4] for index in range(0, len(value), 4))
+
+    @property
+    def telegram_url(self):
+        return f'https://t.me/{self.telegram_username}' if self.telegram_username else ''
+
+    @property
+    def whatsapp_url(self):
+        return f'https://wa.me/{self.whatsapp_number}' if self.whatsapp_number else ''
+
+    @property
+    def instagram_url(self):
+        return f'https://instagram.com/{self.instagram_username}' if self.instagram_username else ''
+
+    @property
+    def x_url(self):
+        return f'https://x.com/{self.x_username}' if self.x_username else ''
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'Contact details — {self.node}'
+
+
 # ─────────────────────────────────────────────────────────────────
 # 4. Relationship
 # ─────────────────────────────────────────────────────────────────

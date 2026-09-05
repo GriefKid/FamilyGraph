@@ -12,7 +12,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from .models import Node
-from .utils_jalali import jalali_str
+from .utils_jalali import jalali_str, parse_date_input
 
 MIGRATION_MSG = ('جدول موضوعات باز هنوز ساخته نشده — '
                  'فایل migrate_and_run.bat رو یه بار اجرا کن.')
@@ -80,9 +80,9 @@ def followup_create_api(request):
     due_str = (body.get('due_date') or '').strip()
     if due_str:
         try:
-            due = datetime.strptime(due_str, '%Y-%m-%d').date()
+            due = parse_date_input(due_str)
         except ValueError:
-            return JsonResponse({'error': 'فرمت تاریخ: YYYY-MM-DD'}, status=400)
+            return JsonResponse({'error': 'فرمت تاریخ: ۱۴۰۴/۰۱/۰۱'}, status=400)
 
     try:
         from .models import FollowUp

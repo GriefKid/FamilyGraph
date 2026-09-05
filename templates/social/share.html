@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}اشتراک‌گذاری · FamilyGraph{% endblock %}
 {% block page_title %}📤 اشتراک‌گذاری{% endblock %}
 {% block nav_social %}active{% endblock %}
@@ -91,7 +92,7 @@
       <b>{{ s.sender.username }}</b>
       <span style="color:var(--text-soft);">{{ s.title }}</span>
       <span style="margin-right:auto;font-size:10.5px;color:{% if s.applied %}#34d399{% else %}var(--text-muted){% endif %};">
-        {% if s.applied %}✓ به گرافت اضافه شد{% else %}قبلاً داشتیش{% endif %} · {{ s.created_at|date:"Y/m/d" }}
+        {% if s.applied %}✓ به گرافت اضافه شد{% else %}قبلاً داشتیش{% endif %} · {{ s.created_at|jalali_date:"compact" }}
       </span>
     </div>
     {% empty %}

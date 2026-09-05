@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 
 from .models import (Debt, Event, ExtractionSuggestion, KnowledgeTriple, MemoryFact, Node, NodeAlias,
                      Relationship, RelationshipPulse)
+from .utils_jalali import parse_date_input
 
 
 @login_required
@@ -140,7 +141,7 @@ def extraction_suggestion_decide_api(request, pk):
         if chosen_date:
             try:
                 from datetime import date
-                event_date = date.fromisoformat(chosen_date)
+                event_date = parse_date_input(chosen_date)
             except (TypeError, ValueError):
                 return JsonResponse({'error': 'تاریخ رویداد معتبر نیست.'}, status=400)
         event = Event.objects.create(owner=request.user, title=(data.get('title') or suggestion.payload.get('title') or suggestion.payload.get('snippet') or 'رویداد')[:200], date=event_date, event_time=data.get('time') or suggestion.payload.get('time') or None)

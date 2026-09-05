@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6366f1">
+  <title>FamilyGraph — بدون اتصال</title>
+  <link rel="icon" href="/static/app-icon.svg" type="image/svg+xml">
+  <style>
+    :root{color-scheme:dark;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;background:#090a16;color:#f8f7ff}
+    *{box-sizing:border-box}body{min-height:100svh;margin:0;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 15% 10%,#34235b 0,transparent 34%),radial-gradient(circle at 85% 90%,#182f4d 0,transparent 38%),#090a16}
+    main{width:min(470px,100%);padding:32px 26px;border:1px solid #42415f;border-radius:28px;background:rgba(28,29,48,.86);box-shadow:0 24px 80px #0008;text-align:center}
+    .mark{width:68px;height:68px;margin:0 auto 20px;border-radius:22px;display:grid;place-items:center;background:linear-gradient(135deg,#7c5cff,#b24df2);font-size:32px;box-shadow:0 12px 34px #7655ff66}
+    h1{margin:0 0 12px;font-size:24px}p{margin:0;color:#b9b8cc;line-height:2;font-size:14px}.hint{margin-top:18px;padding:13px 15px;border-radius:15px;background:#111225;border:1px solid #383751;font-size:12px;color:#d8d6eb}
+    button{margin-top:22px;border:0;border-radius:14px;padding:12px 22px;background:linear-gradient(135deg,#7659ff,#a34cf1);color:white;font:inherit;font-weight:800;cursor:pointer}button:active{transform:scale(.98)}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">✦</div>
+    <h1>فعلاً آفلاینی</h1>
+    <p>FamilyGraph برای حفظ حریم خصوصی، صفحات شخصی را در کش نگه نمی‌دارد. با برگشتن اینترنت، اطلاعات صف‌شده خودکار ارسال می‌شوند.</p>
+    <div class="hint" id="state">در حال بررسی اتصال…</div>
+    <button type="button" onclick="location.reload()">تلاش دوباره</button>
+  </main>
+  <script>
+    const state=document.getElementById('state');
+    const refresh=()=>{state.textContent=navigator.onLine?'اتصال برگشته؛ دوباره تلاش کن.':'وقتی آنلاین شدی، دکمهٔ تلاش دوباره را بزن.'};
+    addEventListener('online',refresh);addEventListener('offline',refresh);refresh();
+  </script>
+</body>
+</html>

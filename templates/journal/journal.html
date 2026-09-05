@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}دفترچه خاطرات — FamilyGraph{% endblock %}
 {% block page_title %}📓 دفترچه خاطرات{% endblock %}
 {% block nav_journal %}active{% endblock %}
@@ -417,7 +418,7 @@ animation:spin .7s linear infinite;vertical-align:middle;}
             <button type="button" data-kind="reflection" onclick="setEntryKind('reflection')">☾ جمع‌بندی روز</button>
           </div>
           <span class="date-label">تاریخ:</span>
-          <input type="date" id="entryDate" class="date-input" />
+          <input type="text" id="entryDate" class="date-input" inputmode="numeric" dir="ltr" placeholder="۱۴۰۴/۰۱/۰۱" autocomplete="off" />
           <input type="time" id="entryTime" class="date-input" aria-label="ساعت رخداد" />
         </div>
 
@@ -503,9 +504,9 @@ animation:spin .7s linear infinite;vertical-align:middle;}
         <option value="">همه خلق‌وخوها</option>
       </select>
       <span class="filter-label">از:</span>
-      <input type="date" id="fFrom" class="date-input-sm" onchange="loadEntries()">
+      <input type="text" id="fFrom" class="date-input-sm" inputmode="numeric" dir="ltr" placeholder="۱۴۰۴/۰۱/۰۱" onchange="loadEntries()">
       <span class="filter-label">تا:</span>
-      <input type="date" id="fTo" class="date-input-sm" onchange="loadEntries()">
+      <input type="text" id="fTo" class="date-input-sm" inputmode="numeric" dir="ltr" placeholder="۱۴۰۴/۱۲/۲۹" onchange="loadEntries()">
       <button class="filter-clear" onclick="clearFilters()">× پاک کردن</button>
     </div>
     <div id="journalResultSummary" class="filter-summary" role="status" aria-live="polite"></div>
@@ -523,13 +524,13 @@ animation:spin .7s linear infinite;vertical-align:middle;}
     {% if entries %}
     <div class="history-list">
       {% for entry in entries %}
-      <div class="history-item" onclick="loadEntry('{{ entry.text|escapejs }}','{{ entry.entry_date|default:'' }}',JSON.parse('{{ entry.tags_json|escapejs }}'))">
+      <div class="history-item" onclick="loadEntry('{{ entry.text|escapejs }}','{% if entry.entry_date %}{{ entry.entry_date|jalali_input }}{% endif %}',JSON.parse('{{ entry.tags_json|escapejs }}'))">
         {% with fi=entry.images.first %}
         {% if fi %}<img class="history-thumb" src="{{ fi.image.url }}" alt="">
         {% else %}<div class="history-ph"></div>{% endif %}
         {% endwith %}
         <div class="history-meta">
-          <div class="history-date">{% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}</div>
+          <div class="history-date">{% if entry.entry_date %}{{ entry.entry_date|jalali_date:"compact" }}{% else %}{{ entry.created_at|jalali_date:"compact" }}{% endif %}</div>
           <div class="history-preview">{{ entry.text|truncatechars:45 }}</div>
           {% if entry.tags %}
           <div class="history-tags">
@@ -577,7 +578,12 @@ const nodeSet = new Set(ALL_NODES.map(n => n.username));
 
 // ── Init ──────────────────────────────────────────────────
 checkRoot();
-document.getElementById('entryDate').valueAsDate = new Date();
+function jalaliTodayInput(){
+  const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', {year:'numeric', month:'2-digit', day:'2-digit'}).formatToParts(new Date());
+  const get = type => parts.find(p => p.type === type)?.value || '';
+  return `${get('year')}/${get('month')}/${get('day')}`;
+}
+document.getElementById('entryDate').value = jalaliTodayInput();
 document.getElementById('entryTime').value = new Date().toTimeString().slice(0,5);
 populateFilterDropdowns();
 
@@ -777,8 +783,22 @@ function journalSafeURL(value){
 }
 
 function updateCount(){document.getElementById('charCount').textContent=document.getElementById('journalText').value.length+' کاراکتر';}
-function clearAll(){document.getElementById('journalText').value='';currentTags=[];uploadedImages=[];renderTags();renderPreviews();updateCount();}
-function loadEntry(text,date,tags){
+function clearAll(){document.getElementById('journalText').value='';currentTags=[];uploadedImages=[];window._fgJournalEditingId=null;window._fgJournalMood='';window._fgJournalOccurredAt='';renderTags();renderPreviews();updateCount();}
+function occurredAtPayload(){
+  if(window._fgJournalOccurredAt){
+    const raw=String(window._fgJournalOccurredAt);
+    const time=document.getElementById('entryTime').value || '00:00';
+    const base=raw.replace(/T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/,'');
+    return `${base}T${time}:00`;
+  }
+  const now = new Date();
+  const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  return `${date}T${document.getElementById('entryTime').value || '00:00'}`;
+}
+function loadEntry(text,date,tags,entryId='',mood='',occurredAt=''){
+  window._fgJournalEditingId = Number(entryId) || null;
+  window._fgJournalMood = String(mood||'');
+  window._fgJournalOccurredAt = String(occurredAt||'');
   document.getElementById('journalText').value=text;
   if(date) document.getElementById('entryDate').value=date;
   currentTags=(tags||[]).slice();renderTags();updateCount();
@@ -806,8 +826,10 @@ async function quickSave(){
       headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
       body:JSON.stringify({
         text,
+        entry_id: window._fgJournalEditingId || null,
+        mood: window._fgJournalMood || '',
         entry_date:document.getElementById('entryDate').value,
-        occurred_at:`${document.getElementById('entryDate').value}T${document.getElementById('entryTime').value || '00:00'}`,
+        occurred_at:occurredAtPayload(),
         entry_kind:entryKind,
         tags:currentTags,
         image_ids:uploadedImages.map(i=>i.id)
@@ -838,11 +860,12 @@ async function analyzeJournal(){
       body:JSON.stringify({
         text,
         entry_date:document.getElementById('entryDate').value,
-        occurred_at:`${document.getElementById('entryDate').value}T${document.getElementById('entryTime').value || '00:00'}`,
+        occurred_at:occurredAtPayload(),
         entry_kind:entryKind,
         tags:currentTags,
         image_ids:uploadedImages.map(i=>i.id),
-        entry_id: window._analyzeEntryId || null,
+        entry_id: window._analyzeEntryId || window._fgJournalEditingId || null,
+        mood: window._fgJournalMood || '',
       })
     });
     window._analyzeEntryId = null;  // reset after use
@@ -1189,7 +1212,7 @@ function selectDay(dateStr){
 
   list.innerHTML = `<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;">${dateStr}</div>` +
     entries.map(e => `
-      <div class="day-entry-item" onclick="loadEntry('${e.preview.replace(/'/g,"\\'")}','${dateStr}',${JSON.stringify(e.tags)})">
+      <div class="day-entry-item" onclick="loadEntry('${e.preview.replace(/'/g,"\\'")}','${e.entry_date_fa || dateStr}',${JSON.stringify(e.tags)})">
         ${e.image ? `<img class="day-entry-thumb" src="${e.image}">` : ''}
         <div class="day-entry-meta">
           <div class="day-entry-preview">${e.preview}</div>
@@ -1284,7 +1307,7 @@ async function loadEntries(){
       body.className='entry-card-body';
       const date=document.createElement('div');
       date.className='entry-card-date';
-      date.textContent=String(e.entry_date||e.created_at||'')+
+      date.textContent=String(e.entry_date_fa||e.created_at_fa||'')+
         (e.occurred_at?' · '+String(e.occurred_at):'')+
         (e.kind==='moment'?' · ✦ لحظه':' · ☾ جمع‌بندی');
       const text=document.createElement('div');
@@ -1316,15 +1339,20 @@ async function loadEntries(){
       edit.className='entry-btn primary';
       edit.textContent='✎ ویرایش';
       edit.addEventListener('click',()=>loadEntry(
-        String(e.text||''), String(e.entry_date||''), Array.isArray(e.tags)?e.tags:[]
+        String(e.text||''), String(e.entry_date_fa||''), Array.isArray(e.tags)?e.tags:[],
+        id, String(e.mood||''), String(e.occurred_at_iso||'')
       ));
-      actions.append(expand,edit);
+      const del=document.createElement('button');
+      del.className='entry-btn';
+      del.textContent='\u062d\u0630\u0641';
+      del.addEventListener('click',()=>deleteJournalEntry(id));
+      actions.append(expand,edit,del);
       if(!e.analyzed){
         const analyze=document.createElement('button');
         analyze.className='entry-btn primary';
         analyze.textContent='✦ استخراج از متن';
         analyze.addEventListener('click',()=>analyzeExisting(
-          id, String(e.text||''), String(e.entry_date||'')
+          id, String(e.text||''), String(e.entry_date_fa||''), String(e.mood||''), String(e.occurred_at_iso||'')
         ));
         actions.appendChild(analyze);
       }
@@ -1343,15 +1371,28 @@ function scheduleLoadEntries(){
   entryLoadTimer = setTimeout(loadEntries, 180);
 }
 
+async function deleteJournalEntry(id){
+  if(!Number.isInteger(Number(id)) || !window.confirm('\u0627\u06cc\u0646 \u062e\u0627\u0637\u0631\u0647 \u062d\u0630\u0641 \u0634\u0648\u062f\u061f')) return;
+  try{
+    const r=await fetch('/api/journal/entries/'+Number(id)+'/',{method:'DELETE',headers:{'X-CSRFToken':getCookie('csrftoken')}});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||'delete failed');
+    if(window._fgJournalEditingId===Number(id)) clearAll();
+    loadEntries();
+  }catch(e){alert(e.message||'\u062d\u0630\u0641 \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062f');}
+}
+
 function toggleText(id){
   const el = document.getElementById('et'+id);
   el.classList.toggle('expanded');
 }
 
-function analyzeExisting(entryId, text, date){
+function analyzeExisting(entryId, text, date, mood='', occurredAt=''){
   // Load into write tab and mark entry_id for update
   document.getElementById('journalText').value = text;
   if(date) document.getElementById('entryDate').value = date;
+  if(mood) window._fgJournalMood = mood;
+  if(occurredAt) window._fgJournalOccurredAt = occurredAt;
   updateCount();
   showTab('write');
   // Store entry ID so analyze_api can update it

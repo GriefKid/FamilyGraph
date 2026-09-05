@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from .models import Node, CLOSENESS_CHOICES
 from .health import compute_health, health_summary
-from .utils_jalali import jalali_str
+from .utils_jalali import jalali_str, parse_date_input
 
 MIGRATION_MSG = ('جدول تعامل‌ها هنوز ساخته نشده — '
                  'فایل migrate_and_run.bat رو یه بار اجرا کن.')
@@ -88,9 +88,9 @@ def interaction_log_api(request):
     date_str = (body.get('date') or '').strip()
     if date_str:
         try:
-            date_val = datetime.strptime(date_str, '%Y-%m-%d').date()
+            date_val = parse_date_input(date_str)
         except ValueError:
-            return JsonResponse({'error': 'فرمت تاریخ: YYYY-MM-DD'}, status=400)
+            return JsonResponse({'error': 'فرمت تاریخ: ۱۴۰۴/۰۱/۰۱'}, status=400)
     else:
         date_val = timezone.localdate()
     if date_val > timezone.localdate():

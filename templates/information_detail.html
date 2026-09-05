@@ -1,4 +1,5 @@
 {% load static %}
+{% load jalali_tags %}
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
@@ -181,7 +182,7 @@
                         </div>
                         <div class="col-md-3">
                             <strong><i class="fas fa-calendar text-warning me-2"></i>تاریخ:</strong>
-                            <code>{{ info.created_at|date:"Y/m/d H:i"|default:"نامشخص" }}</code>
+                            <code>{{ info.created_at|jalali_date:"datetime"|default:"نامشخص" }}</code>
                         </div>
                     </div>
                 </div>
@@ -197,7 +198,7 @@
         <div class="card mt-4">
             <div class="card-body text-center">
                 {% if node %}
-                <a href="/node/{{ node.id }}/" class="btn btn-outline-primary me-2">
+                <a href="/nodes/{{ node.id }}/" class="btn btn-outline-primary me-2">
                     <i class="fas fa-arrow-right me-1"></i>نود اصلی
                 </a>
                 {% endif %}

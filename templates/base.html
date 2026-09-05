@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}FamilyGraph{% endblock %}</title>
 <meta name="theme-color" content="#6366f1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="icon" href="/static/app-icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -559,6 +562,9 @@ body{ display:block; }
 .quick-nav{ display:flex; align-items:center; gap:6px; }
 .quick-nav a{ display:inline-flex; align-items:center; gap:5px; padding:6px 9px; border:1px solid var(--border); border-radius:9px; color:var(--text-soft); text-decoration:none; font-size:11px; font-weight:700; background:rgba(255,255,255,.025); }
 .quick-nav a:hover{ color:var(--primary-light); border-color:var(--primary-border); background:var(--primary-glow); }
+.topbar-logout{margin:0;display:flex;align-items:center}
+.topbar-logout button{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 10px;border:1px solid rgba(244,63,94,.28);border-radius:9px;background:rgba(244,63,94,.06);color:#fda4af;font:700 11px var(--font-sans);cursor:pointer;transition:var(--t)}
+.topbar-logout button:hover{border-color:rgba(244,63,94,.55);background:rgba(244,63,94,.13);color:#fecdd3;transform:translateY(-1px)}
 
 /* ═══════════════ CONTENT ═══════════════ */
 .content{
@@ -1176,6 +1182,8 @@ input:focus, textarea:focus, select:focus{
   .mobile-menu-btn{ display:inline-flex; flex-shrink:0; }
   .page-title{ min-width:0; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .topbar-right{ margin-right:auto; }
+  .topbar-logout button{width:36px;height:36px;padding:0;justify-content:center;font-size:17px;border-radius:11px}
+  .topbar-logout button span:last-child{display:none}
   .quick-nav{ display:none; }
   .tehran-clock{ min-width:auto; padding-left:0; border-left:0; }
   .tehran-clock-date{ display:none; }
@@ -1280,6 +1288,28 @@ input:focus,textarea:focus,select:focus{ box-shadow:0 0 0 3px rgba(168,85,247,.1
   .card,.section,.ai-card,.metric-card,.full-card,.lg-card,.lg-total,.ck-card,.daily-card,.je-item,.briefing-card,.merge-card,.panel,.mh-card,.review-panel{ border-radius:16px; }
 }
 
+.fg-network-status{position:fixed;right:18px;bottom:18px;z-index:9997;display:flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid var(--border);border-radius:999px;background:color-mix(in srgb,var(--bg2) 94%,transparent);color:var(--text-muted);font-size:11px;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:opacity .2s,transform .2s}
+.fg-network-dot{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 10px #34d399}
+.fg-network-status.is-offline{border-color:rgba(251,113,133,.35);color:#fecdd3}.fg-network-status.is-offline .fg-network-dot{background:#fb7185;box-shadow:0 0 10px #fb7185}
+@media (max-width:640px){.fg-network-status{right:12px;bottom:12px;font-size:10px;padding:7px 9px}}
+
+.fg-modal[hidden]{display:none !important}
+.fg-modal{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:20px;background:rgba(4,5,18,.72);backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px);animation:fgModalIn .18s ease both}
+.fg-modal-card{position:relative;width:min(470px,100%);padding:28px 26px 22px;border:1px solid var(--border-strong);border-radius:24px;background:linear-gradient(145deg,rgba(31,32,57,.98),rgba(17,18,38,.98));box-shadow:0 28px 90px rgba(0,0,0,.58),0 0 50px rgba(99,102,241,.12);text-align:center;animation:fgModalCardIn .22s cubic-bezier(.22,.9,.36,1) both}
+.light .fg-modal-card{background:linear-gradient(145deg,rgba(255,255,255,.99),rgba(239,240,255,.99));box-shadow:0 24px 70px rgba(56,54,130,.22),0 0 35px rgba(99,102,241,.08)}
+.fg-modal-close{position:absolute;top:12px;left:12px;width:30px;height:30px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text-muted);font:700 17px var(--font-sans);cursor:pointer;line-height:1;transition:var(--t)}
+.fg-modal-close:hover{color:var(--text);border-color:var(--primary-border);background:var(--primary-glow);transform:rotate(4deg)}
+.fg-modal-icon{width:52px;height:52px;margin:0 auto 15px;display:grid;place-items:center;border-radius:17px;background:linear-gradient(135deg,#7659ff,#ad4ff0);color:#fff;font-size:25px;box-shadow:0 10px 28px rgba(118,89,255,.32)}
+.fg-modal-icon.is-error{background:linear-gradient(135deg,#e44772,#f9735b);box-shadow:0 10px 28px rgba(244,63,94,.25)}
+.fg-modal-eyebrow{display:block;margin-bottom:5px;color:var(--primary-light);font-size:10px;font-weight:800;letter-spacing:1px}
+.fg-modal-card h2{margin:0;color:var(--text);font-size:20px;line-height:1.5}.fg-modal-card p{margin:9px auto 0;max-width:390px;color:var(--text-muted);font-size:12.5px;line-height:2;white-space:pre-line}
+.fg-modal-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:21px}.fg-modal-actions .btn{min-width:120px}
+.fg-onboarding-progress{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:21px 0 10px;padding:9px 11px;border:1px solid var(--border);border-radius:12px;background:rgba(99,102,241,.06);color:var(--text-soft);font-size:11px;font-weight:800}
+.fg-onboarding-steps{display:grid;gap:7px;text-align:right}.fg-onboarding-step{display:flex;align-items:center;gap:9px;padding:10px 11px;border:1px solid var(--border-soft);border-radius:12px;background:rgba(255,255,255,.025);color:var(--text-soft);font-size:12px;text-decoration:none;transition:var(--t)}
+.fg-onboarding-step:hover{border-color:var(--primary-border);background:var(--primary-glow);color:var(--text);transform:translateX(-2px)}.fg-onboarding-step.is-done{color:#86efac}.fg-onboarding-step-mark{width:22px;height:22px;display:grid;place-items:center;flex:none;border-radius:8px;background:var(--surface);font-size:11px}
+@keyframes fgModalIn{from{opacity:0}to{opacity:1}}@keyframes fgModalCardIn{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
+@media(max-width:520px){.fg-modal{padding:14px}.fg-modal-card{padding:25px 17px 18px;border-radius:21px}.fg-modal-card h2{font-size:18px}.fg-modal-card p{font-size:12px}.fg-modal-actions .btn{flex:1}}
+
 {% block extra_css %}{% endblock %}
 </style>
 </head>
@@ -1287,6 +1317,9 @@ input:focus,textarea:focus,select:focus{ box-shadow:0 0 0 3px rgba(168,85,247,.1
 
 <a class="skip-link" href="#main-content">پرش به محتوای اصلی</a>
 <div class="nav-scrim" id="navScrim" aria-hidden="true" onclick="toggleMobileMenu(false)"></div>
+<div id="fgNetworkStatus" class="fg-network-status" role="status" aria-live="polite" aria-atomic="true">
+  <span class="fg-network-dot" aria-hidden="true"></span><span id="fgNetworkText">در حال بررسی اتصال…</span>
+</div>
 
 <!-- Ambient orbs -->
 <div class="orb orb-1"></div>
@@ -1441,6 +1474,11 @@ input:focus,textarea:focus,select:focus{ box-shadow:0 0 0 3px rgba(168,85,247,.1
           <div class="notif-footer"><a href="/alerts/">مشاهده همه هشدارها</a></div>
         </div>
       </div>
+
+      <form class="topbar-logout" method="post" action="/logout/" aria-label="خروج از حساب">
+        {% csrf_token %}
+        <button type="submit" title="خروج از حساب"><span aria-hidden="true">⎋</span><span>خروج</span></button>
+      </form>
 
       <div>{% block topbar_actions %}{% endblock %}</div>
 
@@ -1800,16 +1838,42 @@ function _safeLocalUrl(value){
 </script>
 {% block extra_js %}{% endblock %}
 <div id="fgToast" role="status" aria-live="polite" style="position:fixed;left:20px;bottom:20px;z-index:99999;max-width:360px;padding:11px 15px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);box-shadow:0 15px 45px rgba(0,0,0,.4);display:none"></div>
+<div id="fgModal" class="fg-modal" role="alertdialog" aria-modal="true" aria-labelledby="fgModalTitle" aria-describedby="fgModalMessage" hidden>
+  <div class="fg-modal-card">
+    <button class="fg-modal-close" id="fgModalClose" type="button" aria-label="بستن">×</button>
+    <div class="fg-modal-icon is-error" id="fgModalIcon" aria-hidden="true">!</div>
+    <span class="fg-modal-eyebrow" id="fgModalEyebrow">پیام سیستم</span>
+    <h2 id="fgModalTitle">یک پیام برای تو</h2>
+    <p id="fgModalMessage"></p>
+    <div class="fg-modal-actions"><button class="btn btn-primary" id="fgModalOk" type="button">متوجه شدم</button></div>
+  </div>
+</div>
 <div id="fgUpdate" role="status" aria-live="polite" style="display:none;position:fixed;left:20px;bottom:20px;z-index:99998;max-width:360px;padding:11px 15px;border-radius:12px;background:var(--bg2);border:1px solid var(--primary-border);box-shadow:0 15px 45px rgba(0,0,0,.4);font-size:12px"><span>نسخهٔ جدید آماده است.</span><button type="button" onclick="applyFGUpdate()" class="btn btn-sm" style="margin-right:9px">به‌روزرسانی</button></div>
 <div id="fgPalette" role="dialog" aria-modal="true" aria-label="جست‌وجو و فرمان‌ها" style="display:none;position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.65);padding:10vh 16px"><div style="max-width:620px;margin:auto;background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:12px"><input id="fgPaletteInput" aria-label="فرمان یا نام شخص" placeholder="نام شخص یا یک فرمان…" style="width:100%;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--text)"><div id="fgPaletteResults" style="margin-top:8px;max-height:55vh;overflow:auto"></div></div></div>
-<aside id="fgOnboarding" aria-label="راهنمای شروع" style="display:none;position:fixed;left:18px;bottom:76px;z-index:9000;width:min(360px,calc(100vw - 36px));padding:17px;background:var(--bg2);border:1px solid var(--primary-border);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.45)"><b>FamilyGraph چیه؟</b><p style="margin:5px 0 0;color:var(--text-muted);font-size:11.5px;line-height:1.8">آدم‌های مهم، رابطه‌ها و خاطره‌هایت را ثبت کن تا به‌مرور شناخت بهتری از رابطه‌هایت بسازی.</p><div style="margin-top:10px;color:var(--primary-light);font-size:11px;font-weight:800">سه قدم ساده</div><div id="fgOnboardingSteps" style="margin-top:5px"></div><button class="btn btn-sm" style="margin-top:9px" onclick="finishOnboarding()">فعلاً ردش کن</button></aside>
+<div id="fgOnboarding" class="fg-modal" role="dialog" aria-modal="true" aria-labelledby="fgOnboardingTitle" hidden>
+  <div class="fg-modal-card fg-onboarding-card">
+    <button class="fg-modal-close" type="button" aria-label="بستن راهنما" onclick="finishOnboarding()">×</button>
+    <div class="fg-modal-icon" aria-hidden="true">✦</div>
+    <span class="fg-modal-eyebrow">شروع آرام و ساده</span>
+    <h2 id="fgOnboardingTitle">FamilyGraph چیه؟</h2>
+    <p>آدم‌های مهم، رابطه‌ها و خاطره‌هایت را ثبت کن تا به‌مرور شناخت بهتری از رابطه‌هایت بسازی.</p>
+    <div class="fg-onboarding-progress"><span>سه قدم ساده</span><span id="fgOnboardingCount">۰ از ۰</span></div>
+    <div id="fgOnboardingSteps" class="fg-onboarding-steps"></div>
+    <div class="fg-modal-actions"><button class="btn" type="button" onclick="finishOnboarding()">فعلاً ردش کن</button></div>
+  </div>
+</div>
 <div id="fgUndo" role="status" aria-live="polite" style="display:none;position:fixed;left:20px;bottom:20px;z-index:99999;max-width:380px;padding:11px 15px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);box-shadow:0 15px 45px rgba(0,0,0,.4);font-size:12px">
   <span id="fgUndoText"></span>
   <button type="button" id="fgUndoBtn" class="btn btn-sm" style="margin-right:9px">برگردان</button>
 </div>
 <script>
 const fgToast=(message,error=false)=>{const el=document.getElementById('fgToast');if(!el)return;el.textContent=String(message);el.style.color=error?'#fb7185':'var(--text)';el.style.display='block';clearTimeout(window.__fgToastTimer);window.__fgToastTimer=setTimeout(()=>el.style.display='none',2800)};
-window.alert=message=>fgToast(message,true);
+const fgModal=document.getElementById('fgModal'),fgModalIcon=document.getElementById('fgModalIcon'),fgModalTitle=document.getElementById('fgModalTitle'),fgModalMessage=document.getElementById('fgModalMessage'),fgModalClose=document.getElementById('fgModalClose'),fgModalOk=document.getElementById('fgModalOk');
+let fgModalReturnFocus=null;
+function closeFGModal(){if(!fgModal)return;fgModal.hidden=true;fgModalReturnFocus?.focus?.()}
+function showFGModal(message,{error=true,title='خطا',eyebrow='پیام سیستم'}={}){if(!fgModal)return fgToast(message,error);fgModalReturnFocus=document.activeElement;fgModalIcon.classList.toggle('is-error',error);fgModalIcon.textContent=error?'!':'✓';fgModalTitle.textContent=title;document.getElementById('fgModalEyebrow').textContent=eyebrow;fgModalMessage.textContent=String(message||'عملیات انجام نشد.');fgModal.hidden=false;setTimeout(()=>fgModalOk?.focus(),20)}
+fgModalClose?.addEventListener('click',closeFGModal);fgModalOk?.addEventListener('click',closeFGModal);fgModal?.addEventListener('click',e=>{if(e.target===fgModal)closeFGModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!fgModal.hidden)closeFGModal()});
+window.alert=message=>showFGModal(message,{error:true,title:'یه مشکلی پیش اومد',eyebrow:'خطا'});
 window.fgUndo=(undoId,label)=>{
   if(!undoId) return;
   const bar=document.getElementById('fgUndo'),txt=document.getElementById('fgUndoText'),btn=document.getElementById('fgUndoBtn');
@@ -1855,18 +1919,56 @@ async function saveOnboardingGoal(goal){const r=await fetch('/api/platform/onboa
 async function loadOnboarding(){
   try{
     const r=await fetch('/api/platform/onboarding/'),d=await r.json();
-    if(!r.ok||d.completed)return;
-    const box=document.getElementById('fgOnboarding'),out=document.getElementById('fgOnboardingSteps');
-    box.style.display='block';out.replaceChildren();
-    for(const step of (d.steps||[])){
-      const link=document.createElement('a');link.href=_safeLocalUrl(step.url);link.style.cssText=`display:block;padding:7px;color:${step.done?'#34d399':'var(--text)'};text-decoration:none`;link.textContent=`${step.done?'✓':'○'} ${String(step.title||'')}`;out.append(link);
+    if(!r.ok)return;
+    const goalBox=document.getElementById('onboardingGoal');
+    if(goalBox){
+      goalBox.replaceChildren();
+      if(!d.goal){
+        goalBox.hidden=false;
+        goalBox.style.cssText='display:grid;gap:8px;margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:13px;background:rgba(0,0,0,.12)';
+        const title=document.createElement('div');title.textContent='برای شروع بیشتر دنبال چه چیزی هستی؟';title.style.fontWeight='800';title.style.fontSize='12px';goalBox.append(title);
+        const choices=document.createElement('div');choices.style.cssText='display:flex;gap:7px;flex-wrap:wrap';
+        for(const choice of (d.goal_choices||[])){
+          const button=document.createElement('button');button.type='button';button.className='btn btn-sm';button.textContent=String(choice.label||'');
+          button.title=String(choice.description||'');button.addEventListener('click',()=>saveOnboardingGoal(choice.id));choices.append(button);
+        }
+        goalBox.append(choices);
+      }else goalBox.hidden=true;
     }
+    const box=document.getElementById('fgOnboarding');
+    if(!d.completed){if(box)box.hidden=true;return;}
+    const out=document.getElementById('fgOnboardingSteps'),count=document.getElementById('fgOnboardingCount');
+    box.hidden=false;out.replaceChildren();
+    const steps=d.steps||[];count.textContent=`${steps.filter(step=>step.done).length} از ${steps.length}`;
+    for(const step of steps){
+      const link=document.createElement('a');link.className='fg-onboarding-step'+(step.done?' is-done':'');link.href=_safeLocalUrl(step.url);
+      const mark=document.createElement('span');mark.className='fg-onboarding-step-mark';mark.textContent=step.done?'✓':'○';
+      const title=document.createElement('span');title.textContent=String(step.title||'');link.append(mark,title);out.append(link);
+    }
+    setTimeout(()=>box.querySelector('.fg-modal-close')?.focus(),20);
   }catch(e){}
 }
-async function finishOnboarding(){await fetch('/api/platform/onboarding/complete/',{method:'POST',headers:{'X-CSRFToken':fgCsrf()}});document.getElementById('fgOnboarding').style.display='none'}{% if request.user.is_authenticated and not request.user.onboarding_completed %}loadOnboarding();{% endif %}
+async function finishOnboarding(){const box=document.getElementById('fgOnboarding');box.hidden=true;try{await fetch('/api/platform/onboarding/complete/',{method:'POST',headers:{'X-CSRFToken':fgCsrf()}})}catch(e){}}
+{% if request.user.is_authenticated and not request.user.onboarding_completed %}loadOnboarding();{% endif %}
 window.addEventListener('error',e=>fetch('/api/platform/frontend-error/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':(document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop()||''},body:JSON.stringify({code:'window_error',message:e.message,path:location.pathname})}).catch(()=>{}));
 </script>
 <script>let fgWaitingWorker;function showFGUpdate(worker){fgWaitingWorker=worker;document.getElementById('fgUpdate').style.display='block'}function applyFGUpdate(){if(fgWaitingWorker)fgWaitingWorker.postMessage({type:'SKIP_WAITING'})}if('serviceWorker' in navigator){let refreshing=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!refreshing){refreshing=true;location.reload()}});window.addEventListener('load',()=>navigator.serviceWorker.register('/service-worker.js').then(reg=>{if(reg.waiting&&navigator.serviceWorker.controller)showFGUpdate(reg.waiting);reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)showFGUpdate(worker)})})}).catch(()=>{}))}</script>
+<script>
+(() => {
+  const badge = document.getElementById('fgNetworkStatus');
+  const label = document.getElementById('fgNetworkText');
+  if (!badge || !label) return;
+  const update = () => {
+    const offline = !navigator.onLine;
+    badge.classList.toggle('is-offline', offline);
+    label.textContent = offline ? 'آفلاین' : 'آنلاین و همگام';
+    badge.title = offline ? 'ثبت‌های سریع بعد از اتصال ارسال می‌شوند.' : 'اتصال به سرور برقرار است.';
+  };
+  addEventListener('online', update);
+  addEventListener('offline', update);
+  update();
+})();
+</script>
 <script>
 function _urlB64ToUint8(base64){
   const pad='='.repeat((4-base64.length%4)%4);
@@ -1970,5 +2072,54 @@ async function enableFGNotifications(){
 })();
 </script>
 <script src="/static/js/relationship_life.js"></script>
+<script>
+// Shared progressive enhancements for dynamically-created Persian date fields.
+(() => {
+  const toJalali = (value) => {
+    const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value);
+    if (Number.isNaN(date.getTime())) return value;
+    const parts = new Intl.DateTimeFormat('en-US-u-ca-persian', {
+      year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'UTC',
+    }).formatToParts(date).reduce((out, part) => {
+      if (part.type !== 'literal') out[part.type] = part.value;
+      return out;
+    }, {});
+    return `${parts.year}/${parts.month}/${parts.day}`;
+  };
+  const enhanceDateInput = (input) => {
+    if (input.dataset.fgDateEnhanced) return;
+    input.dataset.fgDateEnhanced = '1';
+    const oldValue = input.value;
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.dir = 'ltr';
+    input.placeholder = 'YYYY/MM/DD';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(oldValue)) input.value = toJalali(oldValue);
+  };
+  const scan = () => {
+    document.querySelectorAll('input[type="date"][id^="date-"], input[type="date"][id^="pcfb-"]')
+      .forEach(enhanceDateInput);
+    const text = document.getElementById('quickText');
+    if (text && !document.getElementById('quickDate')) {
+      const date = document.createElement('input');
+      date.id = 'quickDate'; date.type = 'text'; date.inputMode = 'numeric'; date.dir = 'ltr';
+      date.placeholder = '\u062a\u0627\u0631\u06cc\u062e \u0634\u0645\u0633\u06cc (YYYY/MM/DD)'; date.setAttribute('aria-label', '\u062a\u0627\u0631\u06cc\u062e \u0631\u0648\u06cc\u062f\u0627\u062f \u06cc\u0627 \u0633\u0631\u0631\u0633\u06cc');
+      text.insertAdjacentElement('afterend', date);
+    }
+  };
+  const originalQuickCapture = window.quickCapture;
+  if (originalQuickCapture && !window.__fgQuickCaptureEnhanced) {
+    window.__fgQuickCaptureEnhanced = true;
+    window.quickCapture = () => window.send('/api/relationship-life/capture/', {
+      node_id: document.getElementById('quickNode')?.value || '',
+      kind: document.getElementById('quickKind')?.value || '',
+      text: document.getElementById('quickText')?.value || '',
+      date: document.getElementById('quickDate')?.value.trim() || '',
+    });
+  }
+  scan();
+  new MutationObserver(scan).observe(document.body, {childList: true, subtree: true});
+})();
+</script>
 </body>
 </html>

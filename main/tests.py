@@ -11,7 +11,8 @@ import io
 from datetime import date, timedelta
 from pathlib import Path
 
-from .models import AIExtractionTrace, Commitment, Debt, DirectMessage, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftBox, GiftIdea, Information, Interaction, JournalEntry, JournalImage, KnowledgeTriple, LifeEvent, MeetingReflection, MemoryFact, Node, NodeAlias, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
+from .models import AIExtractionTrace, Commitment, Debt, DirectMessage, Event, ExtractionSuggestion, FeatureFlag, Follow, FollowUp, Friendship, GiftBox, GiftIdea, Information, Interaction, JournalEntry, JournalImage, KnowledgeTriple, LifeEvent, MeetingReflection, MemoryFact, Node, NodeAlias, NodeContactDetails, NodeMergeOperation, NodeSafetySetting, ProfileMediaItem, Relationship, RelationshipRecommendation, SocialCircle, SocialPost
+from .forms import NodeContactDetailsForm
 from .templatetags.jalali_tags import jalali_date
 
 
@@ -1910,7 +1911,8 @@ class ChatRetrievalTests(TestCase):
         from main.views import _retrieve_context
         ctx = _retrieve_context(self.user, 'آخرین بار کی با سارا رفتم کافه؟')
         self.assertIn('کافه', ctx)
-        self.assertIn('2024-01-05', ctx)
+        from main.utils_jalali import jalali_str
+        self.assertIn(jalali_str(date(2024, 1, 5)), ctx)
 
     def test_retrieval_is_empty_for_a_contentless_question(self):
         from main.views import _retrieve_context
@@ -2483,6 +2485,51 @@ class JournalMomentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['entries'], [])
 
+    def test_jalali_journal_date_is_stored_and_returned_in_jalali(self):
+        user = get_user_model().objects.create_user(username='journal-jalali', password='SecurePass1')
+        self.client.force_login(user)
+        response = self.client.post(
+            '/api/journal/save/',
+            data=json.dumps({'text': 'خاطره با تاریخ شمسی', 'entry_date': '۱۴۰۵/۰۵/۱۵'}),
+            content_type='application/json',
+        )
+        self.assertEqual(response.status_code, 200)
+        entry = JournalEntry.objects.get(owner=user)
+        self.assertEqual(entry.entry_date, date(2026, 8, 6))
+        listed = self.client.get('/api/journal/entries/').json()['entries'][0]
+        self.assertEqual(listed['entry_date_fa'], '1405/05/15')
+
+    def test_journal_save_updates_an_owned_entry_without_losing_metadata(self):
+        user = get_user_model().objects.create_user(username='journal-update', password='SecurePass1')
+        entry = JournalEntry.objects.create(
+            owner=user, text='old text', entry_date=date(2026, 8, 6),
+            occurred_at=timezone.now(), mood='خوب', tags=['قدیمی'],
+        )
+        self.client.force_login(user)
+        response = self.client.post('/api/journal/save/', data=json.dumps({
+            'entry_id': entry.id, 'text': 'new text', 'entry_date': '1405/05/15',
+            'occurred_at': entry.occurred_at.isoformat(), 'mood': 'خوب', 'tags': ['جدید'],
+            'entry_kind': 'moment',
+        }), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['updated'])
+        entry.refresh_from_db()
+        self.assertEqual(JournalEntry.objects.filter(owner=user).count(), 1)
+        self.assertEqual(entry.text, 'new text')
+        self.assertEqual(entry.entry_date, date(2026, 8, 6))
+        self.assertEqual(entry.mood, 'خوب')
+
+    def test_journal_delete_is_owner_scoped(self):
+        user = get_user_model().objects.create_user(username='journal-delete', password='SecurePass1')
+        other = get_user_model().objects.create_user(username='journal-delete-other', password='SecurePass1')
+        own = JournalEntry.objects.create(owner=user, text='own')
+        foreign = JournalEntry.objects.create(owner=other, text='foreign')
+        self.client.force_login(user)
+        self.assertEqual(self.client.delete(f'/api/journal/entries/{foreign.id}/').status_code, 404)
+        self.assertEqual(self.client.delete(f'/api/journal/entries/{own.id}/').status_code, 200)
+        self.assertFalse(JournalEntry.objects.filter(pk=own.id).exists())
+        self.assertTrue(JournalEntry.objects.filter(pk=foreign.id).exists())
+
     def test_journal_search_normalizes_arabic_and_persian_letters(self):
         user = get_user_model().objects.create_user(username='journal-search', password='SecurePass1')
         JournalEntry.objects.create(owner=user, text='دوستم علي کتاب خواند', entry_date=date.today())
@@ -2505,6 +2552,22 @@ class JalaliPresentationTests(TestCase):
     def test_jalali_filter_uses_persian_calendar_and_digits(self):
         rendered = jalali_date(date(2026, 8, 6), 'compact')
         self.assertEqual(rendered, '۱۴۰۵/۰۵/۱۵')
+
+    def test_jalali_input_is_stored_as_gregorian_without_changing_the_day(self):
+        from .utils_jalali import jalali_input_value, parse_date_input
+        parsed = parse_date_input('۱۴۰۵/۰۵/۱۵')
+        self.assertEqual(parsed, date(2026, 8, 6))
+        self.assertEqual(jalali_input_value(parsed), '1405/05/15')
+
+    def test_legacy_gregorian_input_is_still_accepted(self):
+        from .utils_jalali import parse_date_input
+        self.assertEqual(parse_date_input('2026-08-06'), date(2026, 8, 6))
+
+    def test_event_form_accepts_a_jalali_date(self):
+        from .forms import EventForm
+        form = EventForm(data={'title': 'دیدار', 'date': '۱۴۰۵/۰۵/۱۵'})
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['date'], date(2026, 8, 6))
 
 
 class ExtractionWorkflowTests(TestCase):
@@ -2836,6 +2899,7 @@ class MemoryIntelligenceTests(TestCase):
         self.assertNotContains(other_response, self.ali.display_name())
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class RelationshipLifeCycleTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username='life-owner', password='SecurePass1')
@@ -2857,6 +2921,15 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertTrue(Commitment.objects.filter(owner=self.user, node=self.sara).exists())
         self.assertTrue(GiftIdea.objects.filter(owner=self.user, node=self.sara).exists())
 
+    def test_quick_capture_accepts_a_jalali_date(self):
+        response = self.client.post('/api/relationship-life/capture/', data=json.dumps({
+            'kind': 'interaction', 'node_id': self.sara.id, 'text': 'تعامل قدیمی',
+            'date': '1405/05/15',
+        }), content_type='application/json')
+        self.assertEqual(response.status_code, 200)
+        interaction = Interaction.objects.get(pk=response.json()['id'])
+        self.assertEqual(interaction.date, date(2026, 8, 6))
+
     def test_open_followup_can_be_snoozed_by_its_owner(self):
         item = FollowUp.objects.create(owner=self.user, node=self.sara, text='تماس بگیر')
         response = self.client.post(f'/api/followups/{item.id}/snooze/', data=json.dumps({'days': 7}),
@@ -2864,6 +2937,25 @@ class RelationshipLifeCycleTests(TestCase):
         self.assertEqual(response.status_code, 200)
         item.refresh_from_db()
         self.assertEqual(item.due_date, timezone.localdate() + timedelta(days=7))
+
+    def test_relationship_apis_accept_jalali_dates(self):
+        followup = self.client.post('/api/followups/create/', data=json.dumps({
+            'node_id': self.sara.id, 'text': 'پیگیری', 'due_date': '۱۴۰۵/۰۵/۱۵',
+        }), content_type='application/json')
+        self.assertEqual(followup.status_code, 200)
+        self.assertEqual(FollowUp.objects.get(pk=followup.json()['followup']['id']).due_date, date(2026, 8, 6))
+
+        interaction = self.client.post('/api/interactions/log/', data=json.dumps({
+            'node_id': self.sara.id, 'kind': 'call', 'date': '۱۴۰۵/۰۵/۱۵',
+        }), content_type='application/json')
+        self.assertEqual(interaction.status_code, 200)
+        self.assertEqual(Interaction.objects.get(pk=interaction.json()['interaction']['id']).date, date(2026, 8, 6))
+
+        life_event = self.client.post('/api/life-events/create/', data=json.dumps({
+            'node_id': self.sara.id, 'kind': 'other', 'date': '۱۴۰۵/۰۵/۱۵',
+        }), content_type='application/json')
+        self.assertEqual(life_event.status_code, 200)
+        self.assertEqual(LifeEvent.objects.get(pk=life_event.json()['id']).date, date(2026, 8, 6))
 
     def test_share_link_exposes_only_the_safe_person_card(self):
         self.sara.phone_number = '09120000000'
@@ -2877,6 +2969,80 @@ class RelationshipLifeCycleTests(TestCase):
         revoked = self.client.post(f'/api/share-links/{created.json()["token"]}/revoke/')
         self.assertEqual(revoked.status_code, 200)
         self.assertEqual(self.client.get(f'/shared/person/{created.json()["token"]}/').status_code, 404)
+
+    def test_private_person_card_shows_payment_details_and_edit_link(self):
+        details = NodeContactDetails.objects.create(
+            owner=self.user, node=self.sara, bank_name='ملت',
+            card_number='6037991234567890', iban='IR123456789012345678901234',
+            telegram_username='sara_life', whatsapp_number='989120000000',
+            instagram_username='sara.life', x_username='sara_life',
+            linkedin_url='https://www.linkedin.com/in/sara-life/',
+        )
+        response = self.client.get(f'/people/{self.sara.id}/card/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '6037 9912 3456 7890')
+        self.assertContains(response, 'IR12 3456 7890 1234 5678 9012 34')
+        self.assertContains(response, f'/nodes/{self.sara.id}/edit/')
+        self.assertContains(response, 'کارت‌به‌کارت')
+        self.assertContains(response, 'https://t.me/sara_life')
+        self.assertContains(response, 'https://wa.me/989120000000')
+        self.assertContains(response, 'https://instagram.com/sara.life')
+        self.assertContains(response, 'https://x.com/sara_life')
+        self.assertContains(response, 'https://www.linkedin.com/in/sara-life/')
+        self.assertEqual(details.card_number_formatted, '6037 9912 3456 7890')
+
+    def test_social_contact_fields_are_normalized_and_validated(self):
+        form = NodeContactDetailsForm(data={
+            'telegram_username': '@sara_life', 'whatsapp_number': '۰۹۱۲-۰۰۰-۰۰۰۰',
+            'instagram_username': '@sara.life', 'x_username': '@sara_life',
+            'linkedin_url': 'https://www.linkedin.com/in/sara-life/',
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['telegram_username'], 'sara_life')
+        self.assertEqual(form.cleaned_data['whatsapp_number'], '989120000000')
+
+        invalid = NodeContactDetailsForm(data={'telegram_username': 'sara life'})
+        self.assertFalse(invalid.is_valid())
+
+    def test_contact_details_are_tenant_isolated(self):
+        other = get_user_model().objects.create_user(username='life-other', password='SecurePass1')
+        foreign_node = Node.objects.create(owner=other, username='foreign-person', name='Foreign')
+        NodeContactDetails.objects.create(
+            owner=other, node=foreign_node, card_number='6037991234567890',
+        )
+        response = self.client.get(f'/people/{foreign_node.id}/card/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_contact_details_can_be_saved_from_person_edit(self):
+        response = self.client.post(f'/nodes/{self.sara.id}/edit/', {
+            'username': self.sara.username,
+            'first_name': 'سارا', 'last_name': '', 'nickname': '',
+            'birth_day': '', 'career': '', 'phone_number': '09120000000',
+            'group': '', 'name': '',
+            'email': 'sara@example.com', 'alternate_phone': '', 'bank_name': 'ملت',
+            'card_number': '۶۰۳۷۹۹۱۲۳۴۵۶۷۸۹۰', 'account_number': '',
+            'iban': '', 'address': '', 'notes': 'حساب اصلی',
+        })
+        self.assertEqual(response.status_code, 302)
+        details = NodeContactDetails.objects.get(owner=self.user, node=self.sara)
+        self.assertEqual(details.card_number, '6037991234567890')
+        self.assertEqual(details.email, 'sara@example.com')
+
+    def test_contact_details_can_be_saved_from_profile_edit(self):
+        self.user.root_node = self.sara
+        self.user.save(update_fields=['root_node'])
+        response = self.client.post('/profile/edit/', {
+            'action': 'profile', 'first_name': '', 'last_name': '', 'bio': '',
+            'career': '', 'city': '', 'country': '', 'birth_date': '',
+            'phone_number': '', 'nickname': '', 'public_interests': '',
+            'public_values': '', 'public_communication_style': '',
+            'email': '', 'alternate_phone': '', 'bank_name': 'تجارت',
+            'card_number': '6037991234567890', 'account_number': '',
+            'iban': '', 'address': '', 'notes': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        details = NodeContactDetails.objects.get(owner=self.user, node=self.sara)
+        self.assertEqual(details.bank_name, 'تجارت')
 
     def test_person_can_be_created_without_a_technical_username(self):
         form = self.client.get('/nodes/create/')
@@ -2900,6 +3066,14 @@ class RelationshipLifeCycleTests(TestCase):
             'source': self.root.id, 'target': person.id, 'rel': 'دوست', 'strength': 3, 'status': 'active',
         })
         self.assertEqual(relation['Location'], f'/nodes/{person.id}/')
+
+    def test_missing_username_uses_finglish_name(self):
+        response = self.client.post('/nodes/create/', {
+            'first_name': 'علی', 'last_name': 'رضایی',
+        })
+        self.assertEqual(response.status_code, 302)
+        person = Node.objects.get(owner=self.user, first_name='علی', last_name='رضایی')
+        self.assertEqual(person.username, 'ali_rezaei')
 
     def test_post_meeting_creates_private_timeline_and_extraction(self):
         response = self.client.post('/api/relationship-life/reflection/', data=json.dumps({

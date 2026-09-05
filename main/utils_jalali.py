@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 from datetime import date, timedelta
+import re
 
 
 # ── نام‌های ماه و روز شمسی ───────────────────────────────────────────────────
@@ -107,6 +108,32 @@ def to_jalali(d: date):
         return jdatetime.date.fromgregorian(date=d)
     except ImportError:
         return None
+
+
+def parse_date_input(value):
+    """Parse a user date as Jalali, while accepting legacy Gregorian input."""
+    raw = str(value or '').strip().translate(str.maketrans('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩', '01234567890123456789'))
+    if not raw:
+        return None
+    match = re.fullmatch(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})', raw)
+    if not match:
+        raise ValueError('تاریخ باید به شکل ۱۴۰۴/۰۱/۰۱ وارد شود.')
+    year, month, day = (int(item) for item in match.groups())
+    if 1300 <= year <= 1600:
+        try:
+            import jdatetime
+            return jdatetime.date(year, month, day).togregorian()
+        except ImportError:
+            raise ValueError('برای تبدیل تاریخ شمسی، jdatetime نصب نیست.')
+    return date(year, month, day)
+
+
+def jalali_input_value(value):
+    """Return a Gregorian date as a compact Jalali value for form inputs."""
+    if not value:
+        return ''
+    converted = to_jalali(value)
+    return converted.strftime('%Y/%m/%d') if converted else value.strftime('%Y-%m-%d')
 
 
 def jalali_str(d: date) -> str:

@@ -3,7 +3,7 @@ from datetime import date, datetime
 from django import template
 from django.utils import timezone
 
-from main.utils_jalali import jalali_full_str, jalali_str, to_jalali
+from main.utils_jalali import jalali_full_str, jalali_input_value, jalali_str, to_jalali
 
 
 register = template.Library()
@@ -43,3 +43,9 @@ def jalali_date(value, style='long'):
     if style in ('datetime', 'full_datetime') and time_value:
         rendered = f'{rendered} · {time_value}'
     return _fa_number(rendered)
+
+
+@register.filter
+def jalali_input(value):
+    """Compact Jalali value for editable date fields."""
+    return _fa_number(jalali_input_value(value)) if value else ''

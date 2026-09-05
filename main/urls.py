@@ -23,6 +23,7 @@ from .views import (
 )
 from .views_journal_extra import (
     journal_save_api,
+    journal_entry_delete_api,
     journal_calendar_api,
     journal_entries_api,
 )
@@ -290,6 +291,7 @@ urlpatterns = [
     path('api/journal/save/',         journal_save_api,               name='journal_save'),
     path('api/journal/calendar/',     journal_calendar_api,           name='journal_calendar'),
     path('api/journal/entries/',      journal_entries_api,            name='journal_entries'),
+    path('api/journal/entries/<int:pk>/', journal_entry_delete_api,    name='journal_entry_delete'),
 
     # ======================
     # INTERACTIONS + HEALTH (V4)

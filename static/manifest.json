@@ -4,7 +4,10 @@
   "lang": "fa",
   "dir": "rtl",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "description": "دفتر امن شناخت آدم‌ها و رابطه‌ها",
   "background_color": "#070712",
   "theme_color": "#6366f1",
   "icons": [{"src": "/static/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]

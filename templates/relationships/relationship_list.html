@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}روابط · FamilyGraph{% endblock %}
 {% block page_title %}💞 روابط{% endblock %}
 {% block nav_rels %}active{% endblock %}
@@ -99,7 +100,7 @@
         </div>
       </div>
       <div class="rl-names">{{ rel.source.display_name }} ⟷ {{ rel.target.display_name }}</div>
-      <div class="rl-label">{{ rel.rel|default:"بدون برچسب" }}{% if rel.met_at %} · از {{ rel.met_at|date:"Y" }}{% endif %}</div>
+      <div class="rl-label">{{ rel.rel|default:"بدون برچسب" }}{% if rel.met_at %} · از {{ rel.met_at|jalali_date:"compact" }}{% endif %}</div>
       <div class="rl-foot">
         <span class="rl-pips">{% for i in "12345" %}<span class="rl-pip {% if forloop.counter <= rel.strength %}on{% endif %}"></span>{% endfor %}</span>
         <span class="rl-status {{ rel.status }}">

@@ -65,6 +65,15 @@
 	background:#16a34a;
 }
 
+.contact-edit-card{margin-top:20px;padding:18px;border:1px solid rgba(99,102,241,.3);border-radius:16px;background:linear-gradient(145deg,rgba(99,102,241,.09),rgba(15,23,42,.24));}
+.contact-edit-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;}
+.contact-edit-heading h2{font-size:16px;margin:0 0 5px;color:var(--text);}
+.contact-edit-heading p{font-size:12px;line-height:1.8;color:var(--text-muted);margin:0;}
+.private-badge{white-space:nowrap;border:1px solid rgba(52,211,153,.25);background:rgba(52,211,153,.1);color:#6ee7b7;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800;}
+.contact-edit-card .form-group{margin-bottom:12px;}
+.contact-subheading{margin:5px 0 12px;color:var(--text-soft);font-size:12px;font-weight:800}.contact-subheading span{color:var(--text-muted);font-size:10px;font-weight:500;margin-right:5px}
+.contact-edit-card input,.contact-edit-card textarea{border-color:rgba(129,140,248,.28);}
+
 </style>
 
 {% endblock %}
@@ -103,6 +112,42 @@
 				{% endif %}{% endfor %}
 			</div>
 		</details>
+
+		{% if object and contact_form %}
+		<section class="contact-edit-card">
+			<div class="contact-edit-heading">
+				<div>
+					<h2>اطلاعات تماس و پرداخت</h2>
+					<p>این بخش خصوصی است و فقط خودت در کارت شخصی این مخاطب می‌بینی.</p>
+				</div>
+				<span class="private-badge">🔒 خصوصی</span>
+			</div>
+			<div class="field-row">
+				<div class="form-group"><label>{{ contact_form.email.label }}</label>{{ contact_form.email }}{{ contact_form.email.errors }}</div>
+				<div class="form-group"><label>{{ contact_form.alternate_phone.label }}</label>{{ contact_form.alternate_phone }}{{ contact_form.alternate_phone.errors }}</div>
+			</div>
+			<div class="field-row">
+				<div class="form-group"><label>{{ contact_form.bank_name.label }}</label>{{ contact_form.bank_name }}{{ contact_form.bank_name.errors }}</div>
+				<div class="form-group"><label>{{ contact_form.card_number.label }}</label>{{ contact_form.card_number }}{{ contact_form.card_number.errors }}</div>
+			</div>
+			<div class="field-row">
+				<div class="form-group"><label>{{ contact_form.account_number.label }}</label>{{ contact_form.account_number }}{{ contact_form.account_number.errors }}</div>
+				<div class="form-group"><label>{{ contact_form.iban.label }}</label>{{ contact_form.iban }}{{ contact_form.iban.errors }}</div>
+			</div>
+			<div class="contact-subheading">راه‌های ارتباطی آنلاین <span>اختیاری</span></div>
+			<div class="field-row">
+				<div class="form-group"><label>✈ {{ contact_form.telegram_username.label }}</label>{{ contact_form.telegram_username }}{{ contact_form.telegram_username.errors }}</div>
+				<div class="form-group"><label>◉ {{ contact_form.whatsapp_number.label }}</label>{{ contact_form.whatsapp_number }}{{ contact_form.whatsapp_number.errors }}</div>
+			</div>
+			<div class="field-row">
+				<div class="form-group"><label>◎ {{ contact_form.instagram_username.label }}</label>{{ contact_form.instagram_username }}{{ contact_form.instagram_username.errors }}</div>
+				<div class="form-group"><label>𝕏 {{ contact_form.x_username.label }}</label>{{ contact_form.x_username }}{{ contact_form.x_username.errors }}</div>
+			</div>
+			<div class="form-group"><label>in {{ contact_form.linkedin_url.label }}</label>{{ contact_form.linkedin_url }}{{ contact_form.linkedin_url.errors }}</div>
+			<div class="form-group"><label>{{ contact_form.address.label }}</label>{{ contact_form.address }}{{ contact_form.address.errors }}</div>
+			<div class="form-group"><label>{{ contact_form.notes.label }}</label>{{ contact_form.notes }}{{ contact_form.notes.errors }}</div>
+		</section>
+		{% endif %}
 
 		<div class="form-actions">
 

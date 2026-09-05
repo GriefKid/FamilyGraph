@@ -33,6 +33,16 @@ from .models import (
     RelationshipPulse,
     RelationshipStrengthHistory,
 )
+from .utils_jalali import jalali_str
+
+
+def _ai_date(value):
+    """Keep dates in the Persian calendar when they are shown to the AI."""
+    if not value:
+        return '—'
+    if isinstance(value, datetime):
+        value = value.date()
+    return jalali_str(value)
 
 
 CATEGORY_LABELS = {
@@ -220,7 +230,7 @@ def _person_evidence(user, node: Node, data: dict[str, Any]) -> list[dict[str, A
     if node.career:
         profile_parts.append(f'شغل: {node.career}')
     if node.birth_day:
-        profile_parts.append(f'تولد: {node.birth_day}')
+        profile_parts.append(f'تولد: {_ai_date(node.birth_day)}')
     c.add('identity', ' | '.join(profile_parts), 'profile', source_id=node.id,
           observed_at=node.created_at, confidence=100)
 
@@ -230,7 +240,7 @@ def _person_evidence(user, node: Node, data: dict[str, Any]) -> list[dict[str, A
             f'وضعیت {rel.get_status_display()}'
         )
         if rel.met_at:
-            text += f'؛ آشنایی از {rel.met_at}'
+            text += f'؛ آشنایی از {_ai_date(rel.met_at)}'
         c.add('relationship', text, 'relationship', source_id=rel.id,
               observed_at=rel.created_at, confidence=100)
 
@@ -280,7 +290,7 @@ def _person_evidence(user, node: Node, data: dict[str, Any]) -> list[dict[str, A
         for item in [item for item in interactions[:16] if item.note][:8]:
             c.add(
                 'interaction_note',
-                f'{item.get_kind_display()} در {item.date}؛ حس {item.get_feeling_display()}؛ {item.note}',
+                f'{item.get_kind_display()} در {_ai_date(item.date)}؛ حس {item.get_feeling_display()}؛ {item.note}',
                 'interaction',
                 source_id=item.id,
                 observed_at=item.date,

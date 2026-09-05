@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}پروفایل — FamilyGraph{% endblock %}
 {% block page_title %}⚙ پروفایل و تنظیمات{% endblock %}
 {% block nav_settings %}active{% endblock %}
@@ -159,7 +160,7 @@
         <div class="field-row">
           <div class="field">
             <label>تاریخ تولد</label>
-            <input type="date" name="birth_date" value="{{ user.birth_date|date:'Y-m-d'|default:'' }}" dir="ltr">
+            <input name="birth_date" value="{{ user.birth_date|jalali_input }}" placeholder="۱۴۰۴/۰۱/۰۱" inputmode="numeric" dir="ltr">
           </div>
           <div class="field">
             <label>شماره تلفن</label>

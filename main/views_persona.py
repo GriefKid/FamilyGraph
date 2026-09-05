@@ -23,8 +23,17 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .models import Node, Relationship
+from .utils_jalali import jalali_str
 
 User = get_user_model()
+
+
+def _ai_date(value):
+    if not value:
+        return '—'
+    if hasattr(value, 'hour'):
+        value = value.date()
+    return jalali_str(value)
 
 
 def _safe(fn, default):
@@ -46,7 +55,7 @@ def gather_person_signals(user, node):
     if node.career:
         base += f' | شغل: {node.career}'
     if node.birth_day:
-        base += f' | تولد: {node.birth_day}'
+        base += f' | تولد: {_ai_date(node.birth_day)}'
     S.append(base)
 
     # ── رابطه با من ──
@@ -55,7 +64,7 @@ def gather_person_signals(user, node):
         for r in Relationship.objects.filter(
                 Q(source=root, target=node) | Q(source=node, target=root), owner=user):
             S.append(f'رابطه با من: {r.rel or "نامشخص"} | قدرت {r.strength}/5 | وضعیت {r.status}'
-                     + (f' | آشنایی از {r.met_at}' if r.met_at else ''))
+                     + (f' | آشنایی از {_ai_date(r.met_at)}' if r.met_at else ''))
 
     # ── سلامت + دایره نزدیکی ──
     def _health():
@@ -124,7 +133,7 @@ def gather_person_signals(user, node):
         if not getattr(user, 'ai_journal_enabled', True):
             return []
         entries = list(node.journal_entries.filter(owner=user).order_by('-created_at')[:6])
-        return [f'از خاطرات ({e.entry_date or e.created_at.date()}): {e.text[:180]}'
+        return [f'از خاطرات ({_ai_date(e.entry_date or e.created_at)}): {e.text[:180]}'
                 + (f' [حس: {e.mood}]' if e.mood else '') for e in entries]
     S += _safe(_journal, [])
 
@@ -133,7 +142,7 @@ def gather_person_signals(user, node):
         from .models import LifeEvent
         evs = list(LifeEvent.objects.filter(node=node, owner=user)[:6])
         return [f'رویداد زندگی: {e.get_kind_display()}'
-                + (f' ({e.title})' if e.title else '') + f' — {e.date}' for e in evs]
+                + (f' ({e.title})' if e.title else '') + f' — {_ai_date(e.date)}' for e in evs]
     S += _safe(_life, [])
 
     # ── مالی + قول‌ها ──
@@ -172,7 +181,7 @@ def gather_person_signals(user, node):
         if not root_:
             return []
         evs = list(node.events.filter(owner=user, participants=root_).order_by('-date')[:5])
-        return [f'رویداد مشترک: {e.title} ({e.date})'
+        return [f'رویداد مشترک: {e.title} ({_ai_date(e.date)})'
                 + (f' — {e.description[:100]}' if e.description else '') for e in evs]
     S += _safe(_shared_events, [])
 
@@ -268,7 +277,7 @@ def gather_person_signals(user, node):
         linked_ids = set(node.journal_entries.values_list('id', flat=True))
         rows = list(JournalEntry.objects.filter(owner=user, text__icontains=nm)
                     .exclude(id__in=linked_ids).order_by('-created_at')[:4])
-        return [f'از خاطرات ({e.entry_date or e.created_at.date()}): {e.text[:160]}' for e in rows]
+        return [f'از خاطرات ({_ai_date(e.entry_date or e.created_at)}): {e.text[:160]}' for e in rows]
     S += _safe(_journal_by_name, [])
 
     # ── رفتار من با هشدارهاش (اهمیتی که بهش می‌دم) ──
@@ -369,7 +378,7 @@ def gather_rel_signals(user, rel):
     a, b = rel.source, rel.target
     S.append(f'رابطه بین «{a.display_name()}» و «{b.display_name()}»: '
              f'{rel.rel or "بدون برچسب"} | قدرت {rel.strength}/5 | وضعیت {rel.status}'
-             + (f' | آشنایی از {rel.met_at}' if rel.met_at else ''))
+             + (f' | آشنایی از {_ai_date(rel.met_at)}' if rel.met_at else ''))
 
     # تاریخچه قدرت
     def _hist():
@@ -385,7 +394,7 @@ def gather_rel_signals(user, rel):
     # رویدادهای مشترک
     def _events():
         evs = list(a.events.filter(owner=user, participants=b).order_by('-date')[:5])
-        return [f'رویداد مشترک: {e.title} ({e.date})' for e in evs]
+        return [f'رویداد مشترک: {e.title} ({_ai_date(e.date)})' for e in evs]
     S += _safe(_events, [])
 
     # اگه یال به «من» وصله → کل سیگنال‌های شخصِ مقابل هم مربوطه

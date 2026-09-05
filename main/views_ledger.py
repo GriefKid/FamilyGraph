@@ -16,7 +16,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from .models import Node, Relationship
-from .utils_jalali import jalali_str
+from .utils_jalali import jalali_str, parse_date_input
 
 MIGRATION_MSG = ('جدول قرض و طلب هنوز ساخته نشده — '
                  'فایل migrate_and_run.bat رو یه بار اجرا کن.')
@@ -118,13 +118,13 @@ def debt_create_api(request):
         if not s:
             return None
         try:
-            return datetime.strptime(s, '%Y-%m-%d').date()
+            return parse_date_input(s)
         except ValueError:
             return 'ERR'
     date_val = _d('date') or timezone.localdate()
     due_val = _d('due_date')
     if date_val == 'ERR' or due_val == 'ERR':
-        return JsonResponse({'error': 'فرمت تاریخ: YYYY-MM-DD'}, status=400)
+        return JsonResponse({'error': 'فرمت تاریخ: ۱۴۰۴/۰۱/۰۱'}, status=400)
 
     note = (body.get('note') or '').strip()[:300]
 

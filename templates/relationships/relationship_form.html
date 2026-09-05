@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}رابطه — FamilyGraph{% endblock %}
 {% block page_title %}{% if form.instance.pk %}ویرایش رابطه{% else %}رابطه جدید{% endif %}{% endblock %}
 {% block nav_rels %}active{% endblock %}
@@ -158,8 +159,8 @@ margin-top:8px;
         </div>
         <div class="form-group">
           <label class="form-label">تاریخ آشنایی</label>
-          <input name="met_at" type="date" class="form-input"
-                 value="{{ form.instance.met_at|date:'Y-m-d'|default:'' }}">
+          {{ form.met_at }}
+          {% if form.met_at.errors %}<small style="color:#fb7185">{{ form.met_at.errors }}</small>{% endif %}
         </div>
       </div>
       </details>

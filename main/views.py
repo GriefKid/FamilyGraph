@@ -13,15 +13,17 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 
-from .forms import NodeForm, RelationshipForm, EventForm
+from .forms import NodeForm, NodeContactDetailsForm, RelationshipForm, EventForm
 from .models import Relationship, AppSettings, JournalEntry, JournalImage, AlertAction, Group
 from django.core.cache import cache
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from .models import Group, Node, Information, Event
+from .models import Group, Node, NodeContactDetails, Information, Event
 from .uploads import UploadValidationError, normalize_image_upload
+from .text_utils import finglish_slug
+from .utils_jalali import jalali_str, parse_date_input
 from django.views.generic import ListView
 from django.views.generic import TemplateView
 
@@ -471,7 +473,17 @@ class UpdateNodeView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['title'] = f'ویرایش {self.object.username}'
+        context['contact_form'] = getattr(self, 'contact_form', None) or self.get_contact_form()
         return context
+
+    def get_contact_form(self):
+        details = NodeContactDetails.objects.filter(
+            owner=self.request.user, node=self.object,
+        ).first()
+        return NodeContactDetailsForm(
+            self.request.POST or None,
+            instance=details,
+        )
 
     def get_queryset(self):
         return Node.objects.filter(owner=self.request.user)
@@ -485,6 +497,9 @@ class UpdateNodeView(LoginRequiredMixin, UpdateView):
             if existing:
                 form.add_error('username', 'این نام قبلاً استفاده شده')
                 return self.form_invalid(form)
+        self.contact_form = self.get_contact_form()
+        if not self.contact_form.is_valid():
+            return self.form_invalid(form)
         response = super().form_valid(form)
         # BUGFIX مفهومی: فیلد متنی «گروه» → گروه واقعی M2M
         if self.object.group and self.object.group.strip():
@@ -492,6 +507,11 @@ class UpdateNodeView(LoginRequiredMixin, UpdateView):
             _g, _ = _G.objects.get_or_create(
                 name=self.object.group.strip(), owner=self.request.user)
             self.object.groups.add(_g)
+        if self.contact_form.has_changed():
+            details = self.contact_form.save(commit=False)
+            details.node = self.object
+            details.owner = self.request.user
+            details.save()
         return response
 
 
@@ -1614,7 +1634,7 @@ def _retrieve_context(user, query, limit=8):
         for s, j in scored[:limit]:
             if s <= 0:
                 break
-            lines.append(f"- یادداشت {j.entry_date}: {j.text[:280]}"
+            lines.append(f"- یادداشت {jalali_str(j.entry_date or j.created_at.date())}: {j.text[:280]}"
                          + (f" [حال: {j.mood}]" if j.mood else ""))
 
     try:
@@ -1624,7 +1644,7 @@ def _retrieve_context(user, query, limit=8):
         for it in iq.order_by('-date')[:limit]:
             who = it.node.display_name() if it.node_id else '—'
             note = f" — {it.note}" if getattr(it, 'note', '') else ''
-            lines.append(f"- تعامل {it.date} با {who} ({it.get_kind_display()}){note}")
+            lines.append(f"- تعامل {jalali_str(it.date)} با {who} ({it.get_kind_display()}){note}")
             if len(lines) >= limit * 2:
                 break
     except Exception:
@@ -1653,7 +1673,7 @@ def _retrieve_context(user, query, limit=8):
             event_q |= Q(participants__id__in=named_ids)
         for event in Event.objects.filter(owner=user).filter(event_q).distinct().prefetch_related('participants')[:limit]:
             people = ', '.join(p.display_name() for p in event.participants.all()[:4])
-            lines.append(f"- رویداد {event.date}: {event.title}"
+            lines.append(f"- رویداد {jalali_str(event.date)}: {event.title}"
                          + (f" (شرکت‌کننده: {people})" if people else '')
                          + (f" — {event.description[:140]}" if event.description else ''))
     except Exception:
@@ -1856,7 +1876,7 @@ def chat_api(request):
         root_info = (
             f"نام: {root_node.name or root_node.username}\n"
             f"شغل: {root_node.career or '—'}\n"
-            f"تولد: {root_node.birth_day or '—'}"
+            f"تولد: {jalali_str(root_node.birth_day) if root_node.birth_day else '—'}"
         )
         root_extra = root_node.informations.first()
         if root_extra and root_extra.data:
@@ -1892,7 +1912,7 @@ def chat_api(request):
     nodes_text = "\n".join(
         f"- {n.display_name()}"
         + (f" (شغل: {n.career})" if n.career else "")
-        + (f" (تولد: {n.birth_day})" if n.birth_day else "")
+        + (f" (تولد: {jalali_str(n.birth_day)})" if n.birth_day else "")
         for n in others
     ) or "موردی ثبت نشده"
 
@@ -2693,7 +2713,7 @@ def journal_analyze_api(request):
     entry_date_str = entry_date_str.strip() if isinstance(entry_date_str, str) else ''
     if entry_date_str:
         try:
-            entry_date = date.fromisoformat(entry_date_str)
+            entry_date = parse_date_input(entry_date_str)
         except ValueError:
             pass
 
@@ -2714,6 +2734,8 @@ def journal_analyze_api(request):
     if entry_kind not in dict(JournalEntry.ENTRY_KIND_CHOICES):
         return JsonResponse({'error': 'نوع خاطره معتبر نیست'}, status=400)
 
+    supplied_mood = body.get('mood') if isinstance(body.get('mood'), str) else None
+
     if existing_entry_id:
         entry = JournalEntry.objects.filter(
             id=existing_entry_id, owner=request.user,
@@ -2725,7 +2747,7 @@ def journal_analyze_api(request):
         entry.occurred_at = occurred_at
         entry.entry_kind = entry_kind
         entry.tags = raw_tags
-        entry.mood = ''
+        entry.mood = supplied_mood[:100] if supplied_mood is not None else entry.mood
         entry.ai_analyzed = True
         entry.save(update_fields=[
             'text', 'entry_date', 'occurred_at', 'entry_kind', 'tags',
@@ -2734,7 +2756,7 @@ def journal_analyze_api(request):
     else:
         entry = JournalEntry.objects.create(
             text=text, entry_date=entry_date, occurred_at=occurred_at,
-            entry_kind=entry_kind, tags=raw_tags, mood='', ai_analyzed=True,
+            entry_kind=entry_kind, tags=raw_tags, mood=(supplied_mood or '')[:100], ai_analyzed=True,
             owner=request.user,
         )
 
@@ -2994,8 +3016,7 @@ def journal_apply_api(request):
             continue
         date_str = ed.get('date')
         try:
-            from datetime import date
-            event_date = date.fromisoformat(date_str) if date_str else today_date.today()
+            event_date = parse_date_input(date_str) if date_str else today_date.today()
         except Exception:
             event_date = today_date.today()
         try:
@@ -3153,6 +3174,65 @@ def export_graph(request):
         'id', 'text', 'entry_date', 'tags', 'mood', 'ai_analyzed', 'created_at',
     ))
 
+    from .models import (Commitment, Debt, FollowUp, GiftIdea, Interaction, LifeEvent,
+                         MemoryFact, MeetingReflection, NodeContactDetails,
+                         RelationshipGoal, RelationshipPulse)
+    events = []
+    for event in Event.objects.filter(owner=user).prefetch_related('participants'):
+        events.append({
+            'title': event.title, 'date': event.date, 'event_time': event.event_time,
+            'description': event.description,
+            'participants': [node.username for node in event.participants.filter(owner=user)],
+        })
+    informations = list(Information.objects.filter(node__owner=user).values(
+        'node__username', 'visibility', 'data',
+    ))
+    try:
+        from .models import ChatMessage
+        chat_messages = list(ChatMessage.objects.filter(owner=user).values(
+            'role', 'content', 'created_at',
+        ))
+    except Exception:
+        chat_messages = []
+    contacts = list(NodeContactDetails.objects.filter(owner=user).values(
+        'node__username', 'email', 'alternate_phone', 'bank_name', 'card_number',
+        'account_number', 'iban', 'telegram_username', 'whatsapp_number',
+        'instagram_username', 'x_username', 'linkedin_url', 'address', 'notes',
+    ))
+    memories = list(MemoryFact.objects.filter(owner=user).values(
+        'node__username', 'category', 'value', 'confidence', 'source', 'source_id',
+        'active', 'ai_usable', 'confidentiality',
+    ))
+    interactions = list(Interaction.objects.filter(owner=user).values(
+        'node__username', 'kind', 'date', 'feeling', 'support_kind', 'note',
+    ))
+    followups = list(FollowUp.objects.filter(owner=user).values(
+        'node__username', 'text', 'due_date', 'done', 'done_at', 'created_at',
+    ))
+    commitments = list(Commitment.objects.filter(owner=user).values(
+        'node__username', 'responsible', 'text', 'due_date', 'status', 'completed_at',
+    ))
+    debts = list(Debt.objects.filter(owner=user).values(
+        'node__username', 'direction', 'amount', 'paid', 'currency', 'date', 'due_date',
+        'note', 'settled', 'settled_at',
+    ))
+    life_events = list(LifeEvent.objects.filter(owner=user).values(
+        'node__username', 'kind', 'title', 'date', 'archived', 'created_at',
+    ))
+    goals = list(RelationshipGoal.objects.filter(owner=user).values(
+        'node__username', 'text', 'status', 'baseline_score', 'created_at', 'closed_at',
+    ))
+    gifts = list(GiftIdea.objects.filter(owner=user).values(
+        'node__username', 'title', 'occasion', 'budget', 'notes', 'created_at',
+    ))
+    reflections = list(MeetingReflection.objects.filter(owner=user).values(
+        'node__username', 'summary', 'feeling', 'relationship_change', 'created_at',
+    ))
+    pulses = list(RelationshipPulse.objects.filter(owner=user).values(
+        'node__username', 'support', 'autonomy', 'belonging', 'trust', 'voice',
+        'note', 'created_at',
+    ))
+
     # dates → strings for JSON
     for n in nodes:
         if n['birth_day']:
@@ -3172,9 +3252,23 @@ def export_graph(request):
         'nodes':       nodes,
         'relationships': rels,
         'journal_entries': entries,
+        'contact_details': contacts,
+        'events': events,
+        'informations': informations,
+        'chat_messages': chat_messages,
+        'memories': memories,
+        'interactions': interactions,
+        'followups': followups,
+        'commitments': commitments,
+        'debts': debts,
+        'life_events': life_events,
+        'relationship_goals': goals,
+        'gift_ideas': gifts,
+        'meeting_reflections': reflections,
+        'relationship_pulses': pulses,
     }
     response = HttpResponse(
-        json.dumps(data, ensure_ascii=False, indent=2),
+        json.dumps(data, ensure_ascii=False, indent=2, default=str),
         content_type='application/json; charset=utf-8',
     )
     response['Content-Disposition'] = f'attachment; filename="familygraph_{user.username}.json"'
@@ -3246,7 +3340,7 @@ def node_quick_update(request, pk):
         if val:
             try:
                 from datetime import date as _date
-                node.birth_day = _date.fromisoformat(val)
+                node.birth_day = parse_date_input(val)
             except Exception:
                 pass
         else:
@@ -3262,8 +3356,6 @@ def node_create_from_image(request):
     """ایجاد نود از عکس drag-drop شده روی گراف — wizard step per image."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
-
-    import re, uuid as _uuid
 
     req_user     = request.user
     target_id    = (request.POST.get('target_id') or '').strip()
@@ -3294,9 +3386,8 @@ def node_create_from_image(request):
             return JsonResponse({'error': str(exc), 'code': 'invalid_image'}, status=400)
 
     # ── Generate unique username از نام ──────────────────
-    raw  = f"{first_name} {last_name}".strip()
-    base = re.sub(r'[^\w]', '_', raw).lower().strip('_') if raw else 'person'
-    base = base or 'person'
+    raw = f"{first_name} {last_name}".strip()
+    base = finglish_slug(raw) or 'person'
     username = base
     counter  = 1
     while Node.objects.filter(username=username, owner=req_user).exists():
@@ -3316,7 +3407,7 @@ def node_create_from_image(request):
     if birth_day:
         try:
             from datetime import date as _date
-            new_node.birth_day = _date.fromisoformat(birth_day)
+            new_node.birth_day = parse_date_input(birth_day)
         except Exception:
             pass
     if image:

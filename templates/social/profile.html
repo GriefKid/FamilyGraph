@@ -40,7 +40,8 @@
       </div>
       <div class="actions">
         {% if profile_user == request.user %}
-          <a class="btn" href="{% url 'profile_edit' %}">ویرایش اطلاعات</a>
+          <a class="btn btn-primary" href="{% url 'profile_edit' %}">✎ ویرایش پروفایل من</a>
+          {% if persona_node_id %}<a class="btn ghost" href="{% url 'person_card' persona_node_id %}">کارت شخصی من</a>{% endif %}
         {% else %}
           {% if card.is_following %}<button class="btn ghost" disabled>فالو شده</button>{% else %}<button class="btn ghost" onclick="followUser({{ profile_user.id }})">فالو</button>{% endif %}
           {% if card.is_connection %}<a class="btn" href="/social/chat/?u={{ profile_user.id }}">پیام</a>{% elif card.connection_request_sent %}<button class="btn" disabled>در انتظار کانکشن</button>{% else %}<button class="btn" onclick="connectUser({{ profile_user.id }})">کانکت</button>{% endif %}

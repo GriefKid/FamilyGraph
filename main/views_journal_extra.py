@@ -8,7 +8,9 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
+from django.views.decorators.http import require_http_methods
 from .models import ArtisticWork, JournalEntry, JournalImage, ProfileMediaItem
+from .utils_jalali import jalali_input_value, parse_date_input
 
 
 def _extract_profile_media_from_journal(entry):
@@ -65,6 +67,14 @@ def journal_save_api(request):
     if not text:
         return JsonResponse({'error': 'متن خالی است'}, status=400)
 
+    raw_entry_id = body.get('entry_id')
+    entry_id = raw_entry_id if isinstance(raw_entry_id, int) and not isinstance(raw_entry_id, bool) else None
+    entry = None
+    if entry_id:
+        entry = JournalEntry.objects.filter(id=entry_id, owner=request.user).first()
+        if not entry:
+            return JsonResponse({'error': 'journal entry not found'}, status=404)
+
     bucket = int(timezone.now().timestamp() // 3600)
     rate_key = f'anti-spam:journal-moment:{request.user.pk}:{bucket}'
     moment_count = 1 if cache.add(rate_key, 1, timeout=3600) else cache.incr(rate_key)
@@ -73,17 +83,16 @@ def journal_save_api(request):
     normalized = ' '.join(text.lower().split())
     recent_entries = JournalEntry.objects.filter(
         owner=request.user, created_at__gte=timezone.now() - timedelta(minutes=5)
-    ).only('text')
-    if any(' '.join(entry.text.lower().split()) == normalized for entry in recent_entries):
+    ).exclude(id=entry_id).only('text')
+    if entry is None and any(' '.join(item.text.lower().split()) == normalized for item in recent_entries):
         return JsonResponse({'error': 'همین لحظه را همین چند دقیقه پیش ثبت کرده‌ای.'}, status=400)
 
-    from datetime import date as _date
     entry_date_str = body.get('entry_date')
     entry_date_str = entry_date_str.strip() if isinstance(entry_date_str, str) else ''
     entry_date = None
     if entry_date_str:
         try:
-            entry_date = _date.fromisoformat(entry_date_str)
+            entry_date = parse_date_input(entry_date_str)
         except Exception:
             pass
 
@@ -95,7 +104,7 @@ def journal_save_api(request):
     else:
         raw_tags = []
 
-    occurred_at = timezone.now()
+    occurred_at = entry.occurred_at if entry else timezone.now()
     raw_occurred_at = body.get('occurred_at', '')
     if raw_occurred_at:
         try:
@@ -111,10 +120,21 @@ def journal_save_api(request):
     if entry_kind not in dict(JournalEntry.ENTRY_KIND_CHOICES):
         return JsonResponse({'error': 'invalid entry_kind'}, status=400)
 
-    entry = JournalEntry.objects.create(
-        text=text, entry_date=entry_date, occurred_at=occurred_at, entry_kind=entry_kind, tags=raw_tags,
-        ai_analyzed=False, owner=request.user,
-    )
+    mood = body.get('mood') if isinstance(body.get('mood'), str) else (entry.mood if entry else '')
+    if entry:
+        entry.text = text
+        entry.entry_date = entry_date
+        entry.occurred_at = occurred_at
+        entry.entry_kind = entry_kind
+        entry.tags = raw_tags
+        entry.mood = mood[:100]
+        entry.ai_analyzed = False
+        entry.save(update_fields=['text', 'entry_date', 'occurred_at', 'entry_kind', 'tags', 'mood', 'ai_analyzed'])
+    else:
+        entry = JournalEntry.objects.create(
+            text=text, entry_date=entry_date, occurred_at=occurred_at, entry_kind=entry_kind, tags=raw_tags,
+            mood=mood[:100], ai_analyzed=False, owner=request.user,
+        )
 
     image_ids = body.get('image_ids')
     image_ids = [
@@ -138,9 +158,21 @@ def journal_save_api(request):
         pass
 
     return JsonResponse({'id': entry.id, 'message': 'ذخیره شد',
+                         'updated': bool(entry_id),
+                         'entry_date_fa': jalali_input_value(entry.entry_date),
                          'suggestions_created': len(suggestions),
                          'followups_created': followups_created,
                          'occurred_at': entry.occurred_at.isoformat()})
+
+
+@login_required
+@require_http_methods(['DELETE'])
+def journal_entry_delete_api(request, pk):
+    entry = JournalEntry.objects.filter(pk=pk, owner=request.user).first()
+    if not entry:
+        return JsonResponse({'error': 'journal entry not found'}, status=404)
+    entry.delete()
+    return JsonResponse({'ok': True, 'id': pk})
 
 
 @login_required
@@ -166,6 +198,7 @@ def journal_calendar_api(request):
         first_img = e.images.first()
         cal[key].append({
             'id':       e.id,
+            'entry_date_fa': jalali_input_value(e.entry_date),
             'preview':  e.text[:80],
             'tags':     e.tags or [],
             'mood':     e.mood,
@@ -210,9 +243,17 @@ def journal_entries_api(request):
     if mood:
         qs = qs.filter(mood__icontains=mood)
     if d_from:
-        qs = qs.filter(entry_date__gte=d_from)
+        try:
+            d_from_value = parse_date_input(d_from)
+        except (TypeError, ValueError, OverflowError):
+            return JsonResponse({'error': 'فرمت تاریخ شروع: ۱۴۰۴/۰۱/۰۱'}, status=400)
+        qs = qs.filter(entry_date__gte=d_from_value)
     if d_to:
-        qs = qs.filter(entry_date__lte=d_to)
+        try:
+            d_to_value = parse_date_input(d_to)
+        except (TypeError, ValueError, OverflowError):
+            return JsonResponse({'error': 'فرمت تاریخ پایان: ۱۴۰۴/۱۲/۲۹'}, status=400)
+        qs = qs.filter(entry_date__lte=d_to_value)
     if has_img == '1':
         qs = qs.filter(images__isnull=False).distinct()
 
@@ -225,12 +266,15 @@ def journal_entries_api(request):
             'text':       e.text,
             'preview':    e.text[:100],
             'entry_date': str(e.entry_date) if e.entry_date else None,
+            'entry_date_fa': jalali_input_value(e.entry_date) if e.entry_date else None,
             'tags':       e.tags or [],
             'mood':       e.mood,
             'kind':       e.entry_kind,
             'analyzed':   e.ai_analyzed,
             'created_at': e.created_at.strftime('%Y/%m/%d'),
+            'created_at_fa': jalali_input_value(timezone.localtime(e.created_at).date()),
             'occurred_at': timezone.localtime(e.occurred_at).strftime('%H:%M') if e.occurred_at else '',
+            'occurred_at_iso': timezone.localtime(e.occurred_at).isoformat() if e.occurred_at else '',
             'image':      first_img.image.url if first_img else None,
             'mentioned':  [n.username for n in e.mentioned_nodes.all()[:5]],
         })

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}دفتر قرض و طلب · FamilyGraph{% endblock %}
 {% block page_title %}💰 دفتر قرض و طلب{% endblock %}
 {% block nav_ledger %}active{% endblock %}
@@ -89,7 +90,7 @@
     <select class="lg-sel" id="lgCurrency">
       <option>تومان</option><option>دلار</option><option>یورو</option>
     </select>
-    <input class="lg-in" id="lgDue" type="date" title="سررسید (اختیاری)">
+    <input class="lg-in" id="lgDue" inputmode="numeric" placeholder="سررسید: ۱۴۰۴/۰۱/۰۱" title="سررسید شمسی (اختیاری)">
     <input class="lg-in" id="lgNote" placeholder="بابت؟ (اختیاری)" maxlength="300" style="flex:1;min-width:130px">
     <button class="lg-btn" onclick="lgCreate()">ثبت</button>
     <span class="ix-msg" id="lgMsg" style="font-size:11px;min-width:60px;"></span>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jalali_tags %}
 {% block title %}پروفایل رابطه · FamilyGraph{% endblock %}
 {% block page_title %}💞 پروفایل رابطه{% endblock %}
 {% block nav_rels %}active{% endblock %}
@@ -74,7 +75,7 @@
       <span class="rp-chip">
         {% if relationship.status == 'active' %}🟢 فعال{% elif relationship.status == 'distant' %}🟡 دور{% else %}⚪ غیرفعال{% endif %}
       </span>
-      {% if relationship.met_at %}<span class="rp-chip">🤝 آشنایی: {{ relationship.met_at|date:"Y/m/d" }}</span>{% endif %}
+      {% if relationship.met_at %}<span class="rp-chip">🤝 آشنایی: {{ relationship.met_at|jalali_date:"compact" }}</span>{% endif %}
     </div>
   </div>
 
@@ -85,7 +86,7 @@
     <div class="rp-title">📈 روند قدرت رابطه</div>
     <div class="rp-hist">
       {% for h in hist reversed %}
-      <div class="rp-hist-bar" title="{{ h.changed_at|date:'Y/m/d' }} — قدرت {{ h.strength }}"
+      <div class="rp-hist-bar" title="{{ h.changed_at|jalali_date:'compact' }} — قدرت {{ h.strength }}"
            style="height:{% widthratio h.strength 5 100 %}%;"></div>
       {% endfor %}
     </div>

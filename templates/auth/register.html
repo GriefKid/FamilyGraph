@@ -281,7 +281,7 @@ html,body{ min-height:100vh; font-family:'Estedad','Vazirmatn',sans-serif; font-
       <div class="field">
         <label>تاریخ تولد <span class="opt-badge">اختیاری</span></label>
         <div class="field-inner">
-          <input type="date" name="birth_date" dir="ltr" value="{{ reg.birth_date|default:'' }}">
+          <input name="birth_date" dir="ltr" inputmode="numeric" placeholder="۱۴۰۴/۰۱/۰۱" value="{{ reg.birth_date|default:'' }}">
           <span class="field-icon">🎂</span>
         </div>
       </div>

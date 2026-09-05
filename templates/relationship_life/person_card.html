@@ -1,5 +1,103 @@
 {% extends "base.html" %}
-{% block title %}کارت شخص · FamilyGraph{% endblock %}
-{% block page_title %}کارت شخص{% endblock %}
-{% block extra_css %}<style>@media print{.sidebar,.topbar,.site-footer{display:none!important}.main-wrap{margin:0!important}.card{box-shadow:none!important}}</style>{% endblock %}
-{% block content %}<main style="max-width:720px;margin:0 auto"><section class="card" style="padding:24px"><h1 style="margin-top:0">{{ node.display_name }}</h1><p style="color:var(--text-muted)">@{{ node.username }}{% if node.career %} · {{ node.career }}{% endif %}</p>{% if node.birth_day %}<p>تولد: {{ node.birth_day }}</p>{% endif %}<h2 style="font-size:15px;margin-top:24px">نکات مهم</h2>{% for fact in facts %}<div style="padding:7px 0;border-bottom:1px solid var(--border)">{{ fact.value }}</div>{% empty %}<p style="color:var(--text-muted)">هنوز نکته‌ای ثبت نشده است.</p>{% endfor %}<h2 style="font-size:15px;margin-top:24px">پیگیری‌های باز</h2>{% for item in followups %}<div style="padding:7px 0;border-bottom:1px solid var(--border)">{{ item.text }}</div>{% empty %}<p style="color:var(--text-muted)">پیگیری بازی ندارد.</p>{% endfor %}<h2 style="font-size:15px;margin-top:24px">رویدادهای آینده</h2>{% for event in events %}<div style="padding:7px 0;border-bottom:1px solid var(--border)">{{ event.title }} · {{ event.date }}</div>{% empty %}<p style="color:var(--text-muted)">رویداد نزدیکی ندارد.</p>{% endfor %}<button class="btn btn-sm" style="margin-top:22px" onclick="window.print()">چاپ</button></section></main>{% endblock %}
+{% load jalali_tags %}
+
+{% block title %}کارت شخصی · {{ node.display_name }}{% endblock %}
+{% block page_title %}کارت شخصی مخاطب{% endblock %}
+
+{% block extra_css %}
+<style>
+  .personal-card-shell{max-width:980px;margin:0 auto;padding:18px 0 40px}
+  .person-card-hero{display:flex;align-items:center;gap:18px;padding:22px;margin-bottom:14px;background:linear-gradient(135deg,rgba(99,102,241,.18),rgba(168,85,247,.08));border:1px solid rgba(129,140,248,.28)}
+  .person-avatar{width:82px;height:82px;flex:0 0 82px;border-radius:24px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:linear-gradient(135deg,#6366f1,#ec4899);color:#fff;font-size:30px;font-weight:900;box-shadow:0 10px 26px rgba(99,102,241,.28)}
+  .person-avatar img{width:100%;height:100%;object-fit:cover}
+  .hero-copy{min-width:0;flex:1}.eyebrow{font-size:11px;color:#a5b4fc;font-weight:800;margin-bottom:5px}.hero-copy h1{font-size:26px;margin:0 0 5px}.hero-meta{color:var(--text-muted);font-size:12px;line-height:1.8}
+  .card-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.btn-primary{background:var(--grad-brand)!important;color:#fff!important}.btn-secondary{background:var(--surface);border:1px solid var(--border);color:var(--text-soft)}
+  .section-card{padding:20px;margin-bottom:14px}.section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.section-heading h2{font-size:16px;margin:0 0 5px}.section-heading p{font-size:12px;color:var(--text-muted);line-height:1.8;margin:0}.privacy-pill{white-space:nowrap;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:800;color:#6ee7b7;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.25)}
+  .contact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.contact-item{min-width:0;padding:13px;border:1px solid var(--border);border-radius:13px;background:rgba(255,255,255,.025)}.contact-label{display:block;color:var(--text-muted);font-size:11px;margin-bottom:5px}.contact-value{display:flex;align-items:center;gap:8px;min-height:24px;color:var(--text);font-size:13px;font-weight:700;word-break:break-word}.contact-value a{color:inherit;text-decoration:none}.contact-value a:hover{color:#c4b5fd}.payment-item{border-color:rgba(129,140,248,.32);background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(255,255,255,.025))}.copy-btn{margin-right:auto;flex:0 0 auto;border:1px solid rgba(165,180,252,.28);background:rgba(99,102,241,.12);color:#c4b5fd;border-radius:8px;padding:5px 8px;font-family:inherit;font-size:11px;cursor:pointer}.copy-btn:hover{background:rgba(99,102,241,.25)}.contact-wide{grid-column:1/-1}.empty-state{padding:16px;border:1px dashed var(--border);border-radius:12px;color:var(--text-muted);font-size:12px;line-height:1.9}
+  .list-section h2{font-size:15px;margin:0 0 10px}.line-item{padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.8}.line-item:last-child{border-bottom:0}.muted{color:var(--text-muted);font-size:12px}.bottom-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+  @media(max-width:700px){.personal-card-shell{padding:10px 0 28px}.person-card-hero{align-items:flex-start;flex-wrap:wrap}.hero-copy{flex-basis:calc(100% - 110px)}.card-actions{width:100%;justify-content:flex-start}.contact-grid{grid-template-columns:1fr}.contact-wide{grid-column:auto}.section-heading{flex-direction:column}.person-avatar{width:68px;height:68px;flex-basis:68px;border-radius:20px}.hero-copy h1{font-size:22px}}
+  @media print{.sidebar,.topbar,.site-footer,.bottom-actions{display:none!important}.main-wrap{margin:0!important}.personal-card-shell{max-width:none;padding:0}.card{box-shadow:none!important;border-color:#ddd!important;color:#111!important}.contact-item{break-inside:avoid}.contact-value,.hero-copy h1{color:#111!important}}
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="personal-card-shell">
+  <section class="card person-card-hero">
+    <div class="person-avatar">
+      {% if node.picture %}<img src="{{ node.picture.url }}" alt="{{ node.display_name }}">
+      {% else %}{{ node.display_name|first|upper }}{% endif %}
+    </div>
+    <div class="hero-copy">
+      <div class="eyebrow">کارت خصوصی مخاطب</div>
+      <h1>{{ node.display_name }}</h1>
+      <div class="hero-meta">@{{ node.username }}{% if node.career %} · {{ node.career }}{% endif %}{% if node.birth_day %} · تولد {{ node.birth_day|jalali_date:"long" }}{% endif %}</div>
+    </div>
+    <div class="card-actions">
+      <a class="btn btn-primary" href="{% url 'node_update' node.id %}">✎ ویرایش این فرد</a>
+      {% if node.phone_number %}<a class="btn btn-secondary" href="tel:{{ node.phone_number|urlencode }}">☎ تماس</a>{% endif %}
+    </div>
+  </section>
+
+  <section class="card section-card">
+    <div class="section-heading">
+      <div><h2>اطلاعات تماس و پرداخت</h2><p>برای تماس، کارت‌به‌کارت و دسترسی سریع؛ این اطلاعات فقط برای خودت قابل‌نمایش است.</p></div>
+      <span class="privacy-pill">🔒 خصوصی</span>
+    </div>
+    <div class="contact-grid">
+      {% if node.phone_number %}<div class="contact-item"><span class="contact-label">شماره تلفن</span><div class="contact-value"><a href="tel:{{ node.phone_number|urlencode }}" dir="ltr">{{ node.phone_number }}</a></div></div>{% endif %}
+      {% if contact_details.alternate_phone %}<div class="contact-item"><span class="contact-label">تلفن دوم</span><div class="contact-value"><a href="tel:{{ contact_details.alternate_phone|urlencode }}" dir="ltr">{{ contact_details.alternate_phone }}</a></div></div>{% endif %}
+      {% if contact_details.email %}<div class="contact-item"><span class="contact-label">ایمیل</span><div class="contact-value"><a href="mailto:{{ contact_details.email }}" dir="ltr">{{ contact_details.email }}</a></div></div>{% endif %}
+      {% if contact_details.bank_name %}<div class="contact-item"><span class="contact-label">بانک</span><div class="contact-value">{{ contact_details.bank_name }}</div></div>{% endif %}
+      {% if contact_details.card_number %}<div class="contact-item payment-item"><span class="contact-label">شماره کارت · کارت‌به‌کارت</span><div class="contact-value" dir="ltr"><span>{{ contact_details.card_number_formatted }}</span><button class="copy-btn" type="button" data-copy="{{ contact_details.card_number }}" onclick="copyContactValue(this)">کپی</button></div></div>{% endif %}
+      {% if contact_details.account_number %}<div class="contact-item payment-item"><span class="contact-label">شماره حساب</span><div class="contact-value" dir="ltr"><span>{{ contact_details.account_number }}</span><button class="copy-btn" type="button" data-copy="{{ contact_details.account_number }}" onclick="copyContactValue(this)">کپی</button></div></div>{% endif %}
+      {% if contact_details.iban %}<div class="contact-item payment-item"><span class="contact-label">شماره شبا</span><div class="contact-value" dir="ltr"><span>{{ contact_details.iban_formatted }}</span><button class="copy-btn" type="button" data-copy="{{ contact_details.iban }}" onclick="copyContactValue(this)">کپی</button></div></div>{% endif %}
+      {% if contact_details.telegram_username %}<div class="contact-item"><span class="contact-label">تلگرام</span><div class="contact-value"><a href="{{ contact_details.telegram_url }}" target="_blank" rel="noopener noreferrer" dir="ltr">@{{ contact_details.telegram_username }} ↗</a></div></div>{% endif %}
+      {% if contact_details.whatsapp_number %}<div class="contact-item"><span class="contact-label">واتساپ</span><div class="contact-value"><a href="{{ contact_details.whatsapp_url }}" target="_blank" rel="noopener noreferrer" dir="ltr">{{ contact_details.whatsapp_number }} ↗</a></div></div>{% endif %}
+      {% if contact_details.instagram_username %}<div class="contact-item"><span class="contact-label">اینستاگرام</span><div class="contact-value"><a href="{{ contact_details.instagram_url }}" target="_blank" rel="noopener noreferrer" dir="ltr">@{{ contact_details.instagram_username }} ↗</a></div></div>{% endif %}
+      {% if contact_details.x_username %}<div class="contact-item"><span class="contact-label">X</span><div class="contact-value"><a href="{{ contact_details.x_url }}" target="_blank" rel="noopener noreferrer" dir="ltr">@{{ contact_details.x_username }} ↗</a></div></div>{% endif %}
+      {% if contact_details.linkedin_url %}<div class="contact-item"><span class="contact-label">لینکدین</span><div class="contact-value"><a href="{{ contact_details.linkedin_url }}" target="_blank" rel="noopener noreferrer" dir="ltr">مشاهده پروفایل ↗</a></div></div>{% endif %}
+      {% if contact_details.address %}<div class="contact-item contact-wide"><span class="contact-label">آدرس</span><div class="contact-value">{{ contact_details.address|linebreaksbr }}</div></div>{% endif %}
+      {% if contact_details.notes %}<div class="contact-item contact-wide"><span class="contact-label">یادداشت تماس</span><div class="contact-value">{{ contact_details.notes|linebreaksbr }}</div></div>{% endif %}
+      {% if not node.phone_number and not contact_details %}<div class="empty-state contact-wide">هنوز اطلاعات تماس یا پرداختی برای این مخاطب ثبت نشده. از دکمهٔ «ویرایش این فرد» اضافه‌شان کن.</div>{% endif %}
+    </div>
+  </section>
+
+  <div class="contact-grid">
+    <section class="card section-card list-section">
+      <h2>نکات مهم</h2>
+      {% for fact in facts %}<div class="line-item">{{ fact.value }}</div>{% empty %}<div class="muted">هنوز نکته‌ای ثبت نشده است.</div>{% endfor %}
+    </section>
+    <section class="card section-card list-section">
+      <h2>پیگیری‌های باز</h2>
+      {% for item in followups %}<div class="line-item">{{ item.text }}</div>{% empty %}<div class="muted">پیگیری بازی وجود ندارد.</div>{% endfor %}
+    </section>
+    <section class="card section-card list-section contact-wide">
+      <h2>رویدادهای آینده</h2>
+      {% for event in events %}<div class="line-item">{{ event.title }} <span class="muted">· {{ event.date|jalali_date:"long" }}</span></div>{% empty %}<div class="muted">رویداد نزدیکی وجود ندارد.</div>{% endfor %}
+    </section>
+  </div>
+
+  <div class="bottom-actions"><a class="btn btn-primary" href="{% url 'node_update' node.id %}">✎ ویرایش اطلاعات مخاطب</a><button class="btn btn-secondary" type="button" onclick="window.print()">🖨 چاپ کارت</button></div>
+</main>
+<script>
+function copyContactValue(button) {
+  const value = button.dataset.copy || '';
+  const done = () => {
+    const oldText = button.textContent;
+    button.textContent = 'کپی شد';
+    setTimeout(() => { button.textContent = oldText; }, 1400);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(value).then(done).catch(() => fallbackCopy(value, done));
+  } else {
+    fallbackCopy(value, done);
+  }
+}
+function fallbackCopy(value, done) {
+  const input = document.createElement('textarea');
+  input.value = value; input.style.position = 'fixed'; input.style.opacity = '0';
+  document.body.appendChild(input); input.focus(); input.select();
+  try { document.execCommand('copy'); done(); } finally { input.remove(); }
+}
+</script>
+{% endblock %}

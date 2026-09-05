@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import os
+from datetime import date as date_type, datetime as datetime_type
 from collections import Counter
 
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -256,13 +257,49 @@ def system_health_api(request):
 
 
 def _backup_payload(user):
-    return {'version': 1, 'created_at': timezone.now().isoformat(),
-            'nodes': list(Node.objects.filter(owner=user).values('username','name','first_name','last_name','nickname','career','phone_number','is_public')),
-            'relationships': list(Relationship.objects.filter(owner=user).values('source__username','target__username','rel','strength','status')),
-            'facts': list(MemoryFact.objects.filter(owner=user).values('node__username','category','value','confidence','source','active','ai_usable','confidentiality')),
-            'journal': list(JournalEntry.objects.filter(owner=user).values('text','entry_date','entry_kind','tags','mood')),
-            'interactions': list(Interaction.objects.filter(owner=user).values('node__username','kind','date','feeling','note')),
-            'commitments': list(Commitment.objects.filter(owner=user).values('node__username','responsible','text','due_date','status'))}
+    from .models import Debt, Event, FollowUp, NodeContactDetails
+    events = []
+    for event in Event.objects.filter(owner=user).prefetch_related('participants'):
+        events.append({'title': event.title, 'date': event.date, 'event_time': event.event_time,
+                       'description': event.description,
+                       'participants': [node.username for node in event.participants.filter(owner=user)]})
+    return {
+        'version': 2,
+        'created_at': timezone.now().isoformat(),
+        'nodes': list(Node.objects.filter(owner=user).values(
+            'username', 'name', 'first_name', 'last_name', 'nickname', 'career',
+            'birth_day', 'phone_number', 'is_public', 'group',
+        )),
+        'contact_details': list(NodeContactDetails.objects.filter(owner=user).values(
+            'node__username', 'email', 'alternate_phone', 'bank_name', 'card_number',
+            'account_number', 'iban', 'telegram_username', 'whatsapp_number',
+            'instagram_username', 'x_username', 'linkedin_url', 'address', 'notes',
+        )),
+        'relationships': list(Relationship.objects.filter(owner=user).values(
+            'source__username', 'target__username', 'rel', 'strength', 'status',
+        )),
+        'events': events,
+        'facts': list(MemoryFact.objects.filter(owner=user).values(
+            'node__username', 'category', 'value', 'confidence', 'source', 'active',
+            'ai_usable', 'confidentiality',
+        )),
+        'journal': list(JournalEntry.objects.filter(owner=user).values(
+            'text', 'entry_date', 'occurred_at', 'entry_kind', 'tags', 'mood',
+        )),
+        'interactions': list(Interaction.objects.filter(owner=user).values(
+            'node__username', 'kind', 'date', 'feeling', 'support_kind', 'note',
+        )),
+        'followups': list(FollowUp.objects.filter(owner=user).values(
+            'node__username', 'text', 'due_date', 'done',
+        )),
+        'commitments': list(Commitment.objects.filter(owner=user).values(
+            'node__username', 'responsible', 'text', 'due_date', 'status',
+        )),
+        'debts': list(Debt.objects.filter(owner=user).values(
+            'node__username', 'direction', 'amount', 'paid', 'currency', 'date',
+            'due_date', 'note', 'settled',
+        )),
+    }
 
 
 def _fernet(password, salt):
@@ -327,15 +364,48 @@ def encrypted_backup_restore(request):
         payload = _read_backup(uploaded, password)
     except (UploadValidationError, ValueError, RuntimeError) as exc:
         return JsonResponse({'error': str(exc)}, status=400)
-    if payload.get('version') != 1:
+    if payload.get('version') not in (1, 2):
         return JsonResponse({'error': 'نسخه بکاپ پشتیبانی نمی‌شود.'}, status=400)
+    def backup_date(value):
+        if not value:
+            return None
+        if isinstance(value, date_type):
+            return value
+        try:
+            return date_type.fromisoformat(str(value)[:10])
+        except (TypeError, ValueError):
+            return None
+
+    def backup_datetime(value):
+        if not value:
+            return None
+        if isinstance(value, datetime_type):
+            return value
+        try:
+            return datetime_type.fromisoformat(str(value).replace('Z', '+00:00'))
+        except (TypeError, ValueError):
+            return None
+
     nodes = {}
     for row in payload.get('nodes', [])[:5000]:
         username = str(row.get('username', ''))[:100]
         if not username: continue
         node, _ = Node.objects.update_or_create(owner=request.user, username=username,
-            defaults={key: row.get(key) or '' for key in ('name','first_name','last_name','nickname','career','phone_number')})
+            defaults={key: row.get(key) or '' for key in ('name','first_name','last_name','nickname','career','phone_number','group')}
+                     | {'birth_day': backup_date(row.get('birth_day')), 'is_public': bool(row.get('is_public'))})
         nodes[username] = node
+    from .models import NodeContactDetails
+    for row in payload.get('contact_details', [])[:5000]:
+        node = nodes.get(row.get('node__username'))
+        if node:
+            NodeContactDetails.objects.update_or_create(
+                owner=request.user, node=node,
+                defaults={key: row.get(key) or '' for key in (
+                    'email', 'alternate_phone', 'bank_name', 'card_number', 'account_number',
+                    'iban', 'telegram_username', 'whatsapp_number', 'instagram_username',
+                    'x_username', 'linkedin_url', 'address', 'notes',
+                )},
+            )
     for row in payload.get('relationships', [])[:10000]:
         source, target = nodes.get(row.get('source__username')), nodes.get(row.get('target__username'))
         if source and target and source != target:
@@ -346,8 +416,67 @@ def encrypted_backup_restore(request):
         if node and row.get('category') in dict(MemoryFact.CATEGORY_CHOICES) and row.get('value'):
             MemoryFact.objects.update_or_create(owner=request.user, node=node, category=row['category'], value=row['value'],
                 defaults={'confidence': row.get('confidence', 70), 'source': 'restore',
-                          'active': row.get('active', True), 'ai_usable': row.get('ai_usable', True),
-                          'confidentiality': row.get('confidentiality', 'personal')})
+                           'active': row.get('active', True), 'ai_usable': row.get('ai_usable', True),
+                           'confidentiality': row.get('confidentiality', 'personal')})
+    from .models import Debt, Event, FollowUp
+    for row in payload.get('events', [])[:10000]:
+        event_date = backup_date(row.get('date'))
+        title = str(row.get('title') or '').strip()[:200]
+        if not event_date or not title:
+            continue
+        event, _ = Event.objects.update_or_create(
+            owner=request.user, title=title, date=event_date,
+            defaults={'event_time': row.get('event_time') or None,
+                      'description': str(row.get('description') or '')[:2000]},
+        )
+        event.participants.set([nodes[name] for name in row.get('participants', []) if name in nodes])
+    for row in payload.get('journal', [])[:20000]:
+        text = str(row.get('text') or '').strip()
+        if not text:
+            continue
+        JournalEntry.objects.get_or_create(
+            owner=request.user, text=text[:10000], entry_date=backup_date(row.get('entry_date')),
+            defaults={'occurred_at': backup_datetime(row.get('occurred_at')),
+                      'entry_kind': row.get('entry_kind') or 'reflection',
+                      'tags': row.get('tags') or [], 'mood': row.get('mood') or ''},
+        )
+    for row in payload.get('interactions', [])[:20000]:
+        node = nodes.get(row.get('node__username'))
+        interaction_date = backup_date(row.get('date'))
+        if node and interaction_date:
+            Interaction.objects.get_or_create(
+                owner=request.user, node=node, kind=row.get('kind') or 'other',
+                date=interaction_date, note=str(row.get('note') or '')[:300],
+                defaults={'feeling': row.get('feeling', 0), 'support_kind': row.get('support_kind') or ''},
+            )
+    for row in payload.get('followups', [])[:20000]:
+        node = nodes.get(row.get('node__username'))
+        text = str(row.get('text') or '').strip()
+        if node and text:
+            FollowUp.objects.get_or_create(
+                owner=request.user, node=node, text=text[:300],
+                defaults={'due_date': backup_date(row.get('due_date')), 'done': bool(row.get('done'))},
+            )
+    for row in payload.get('commitments', [])[:20000]:
+        node = nodes.get(row.get('node__username'))
+        text = str(row.get('text') or '').strip()
+        if node and text:
+            Commitment.objects.get_or_create(
+                owner=request.user, node=node, text=text[:300],
+                defaults={'responsible': row.get('responsible') if row.get('responsible') in ('me', 'them') else 'me',
+                          'due_date': backup_date(row.get('due_date')), 'status': row.get('status') or 'open'},
+            )
+    for row in payload.get('debts', [])[:20000]:
+        node = nodes.get(row.get('node__username'))
+        debt_date = backup_date(row.get('date'))
+        if node and debt_date and row.get('amount') is not None:
+            Debt.objects.get_or_create(
+                owner=request.user, node=node, amount=row.get('amount'), date=debt_date,
+                defaults={'direction': row.get('direction') if row.get('direction') in ('i_owe', 'they_owe') else 'i_owe',
+                          'paid': row.get('paid', 0), 'currency': row.get('currency') or 'طھظˆظ…ط§ظ†',
+                          'due_date': backup_date(row.get('due_date')), 'note': row.get('note') or '',
+                          'settled': bool(row.get('settled'))},
+            )
     return JsonResponse({'ok': True, 'nodes': len(nodes),
                          'preview_before_apply': True, 'message': 'بازیابی با merge امن انجام شد.'})
 

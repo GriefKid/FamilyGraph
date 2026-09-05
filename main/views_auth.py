@@ -2,6 +2,7 @@
 views_auth.py — احراز هویت V3
 login, register (multi-step), logout, profile, captcha
 """
+import logging
 import random
 import re
 from datetime import date
@@ -10,8 +11,9 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core import signing
+from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
@@ -19,8 +21,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST, require_GET
 
 from .uploads import UploadValidationError, normalize_image_upload
+from .utils_jalali import parse_date_input
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -239,6 +243,28 @@ def _validate_password(pw: str) -> str | None:
     return None
 
 
+def _registration_error_message(exc: Exception) -> str:
+    """Return a user-friendly registration error without leaking raw details."""
+    if isinstance(exc, IntegrityError):
+        return 'ثبت‌نام انجام نشد؛ این نام کاربری یا ایمیل احتمالاً قبلاً استفاده شده. دوباره بررسی کن.'
+
+    if isinstance(exc, ValidationError):
+        labels = {
+            'username': 'نام کاربری',
+            'email': 'ایمیل',
+            'password': 'رمز عبور',
+            'birth_date': 'تاریخ تولد',
+        }
+        fields = []
+        for field in getattr(exc, 'message_dict', {}):
+            fields.append(labels.get(field, 'اطلاعات واردشده'))
+        if fields:
+            return 'لطفاً این موارد را اصلاح کن: ' + '، '.join(dict.fromkeys(fields)) + '.'
+        return 'یکی از اطلاعات واردشده معتبر نیست؛ لطفاً فرم را بررسی کن.'
+
+    return 'ثبت‌نام انجام نشد. اطلاعات را بررسی کن و دوباره تلاش کن.'
+
+
 def _clean_registration_text(request, field: str, limit: int) -> str:
     """Keep onboarding answers bounded before storing them in the session."""
     return request.POST.get(field, '').strip()[:limit]
@@ -258,7 +284,11 @@ def register_view(request):
     if request.user.is_authenticated:
         return redirect('/')
 
-    step = int(request.POST.get('step', request.GET.get('step', '1')))
+    raw_step = request.POST.get('step', request.GET.get('step', '1'))
+    try:
+        step = max(1, min(4, int(raw_step)))
+    except (TypeError, ValueError):
+        step = 1
     reg  = request.session.get('reg_data', {})
     error = None
 
@@ -268,6 +298,9 @@ def register_view(request):
         email    = request.POST.get('email', '').strip()
         pw1      = request.POST.get('password', '')
         pw2      = request.POST.get('password2', '')
+
+        # Keep safe, non-secret values visible after a validation error.
+        reg.update({'username': username, 'email': email})
 
         if not username or not re.match(r'^[a-zA-Z0-9_.-]{3,30}$', username):
             error = 'نام کاربری باید ۳ تا ۳۰ کاراکتر (حروف انگلیسی، عدد، _ - .) باشه.'
@@ -334,7 +367,7 @@ def register_view(request):
                 bd = None
                 if reg.get('birth_date'):
                     try:
-                        bd = date.fromisoformat(reg['birth_date'])
+                        bd = parse_date_input(reg['birth_date'])
                     except ValueError:
                         pass
 
@@ -400,8 +433,9 @@ def register_view(request):
                 del request.session['reg_data']
                 login(request, user)
                 return redirect('/')
-            except Exception as e:
-                error = f'خطا در ثبت‌نام: {e}'
+            except Exception as exc:
+                logger.exception('registration failed for username=%r', reg.get('username'))
+                error = _registration_error_message(exc)
 
     captcha_q = request.session.get('captcha_question', _new_captcha(request))
 
@@ -525,7 +559,7 @@ def profile_view(request):
             bd_raw = request.POST.get('birth_date', '').strip()
             if bd_raw:
                 try:
-                    user.birth_date = date.fromisoformat(bd_raw)
+                    user.birth_date = parse_date_input(bd_raw)
                 except ValueError:
                     error = 'فرمت تاریخ اشتباهه (YYYY-MM-DD).'
             if 'avatar' in request.FILES:

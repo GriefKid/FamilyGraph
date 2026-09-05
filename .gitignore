@@ -36,3 +36,4 @@ staticfiles/
 ollama/models/
 .coverage
 htmlcov/
+FamilyGraph-mobile-source.zip

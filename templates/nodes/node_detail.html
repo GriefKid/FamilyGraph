@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load people_tags %}
+{% load jalali_tags %}
 {% block title %}{{ node.display_name }} — FamilyGraph{% endblock %}
 {% block page_title %}◉ افراد <span class="page-title-sep">›</span> {{ node.display_name }}{% endblock %}
 {% block nav_nodes %}active{% endblock %}
@@ -673,7 +674,7 @@
       <option value="presence">🫂 صرفاً بودن</option>
     </select>
     <input class="ix-note" id="ixNote" placeholder="یادداشت کوتاه (اختیاری)" maxlength="300">
-    <input class="ix-date" id="ixDate" type="date">
+    <input class="ix-date" id="ixDate" inputmode="numeric" placeholder="۱۴۰۴/۰۱/۰۱">
     <button class="ix-submit" onclick="logInteraction()">ثبت</button>
     <span class="ix-msg" id="ixMsg"></span>
   </div>
@@ -719,7 +720,7 @@
 
   <div class="fu-add">
     <input class="fu-text" id="fuText" placeholder="مثلاً: قرار شد کتابشو پس بدم / بپرسم امتحانش چی شد" maxlength="300">
-    <input class="fu-date" id="fuDate" type="date" title="سررسید (اختیاری)">
+    <input class="fu-date" id="fuDate" inputmode="numeric" placeholder="۱۴۰۴/۰۱/۰۱" title="سررسید شمسی (اختیاری)">
     <button class="fu-btn" onclick="fuAdd()">+ افزودن</button>
     <span class="ix-msg" id="fuMsg"></span>
   </div>
@@ -731,7 +732,7 @@
       <span class="fu-item-text">{{ f.text }}</span>
       {% if f.due_date %}
         <span class="fu-due {% if f.due_date < today %}overdue{% elif f.due_date == today %}today{% endif %}">
-          {% if f.due_date < today %}⏰ گذشته: {% elif f.due_date == today %}⏰ امروز{% else %}📅 {% endif %}{% if f.due_date != today %}{{ f.due_date|date:"Y/m/d" }}{% endif %}
+          {% if f.due_date < today %}⏰ گذشته: {% elif f.due_date == today %}⏰ امروز{% else %}📅 {% endif %}{% if f.due_date != today %}{{ f.due_date|jalali_date:"compact" }}{% endif %}
         </span>
       {% endif %}
       <button class="fu-del" onclick="fuSnooze({{ f.id }})" title="یک هفته بعد">↷</button>
@@ -789,7 +790,7 @@
       <option value="they_owe">💰 بهش قرض دادم</option>
     </select>
     <input class="fu-text" id="ndAmount" placeholder="مبلغ (تومان)" inputmode="numeric" style="min-width:110px;flex:0 1 140px;">
-    <input class="fu-date" id="ndDue" type="date" title="سررسید (اختیاری)">
+    <input class="fu-date" id="ndDue" inputmode="numeric" placeholder="۱۴۰۴/۰۱/۰۱" title="سررسید شمسی (اختیاری)">
     <input class="fu-text" id="ndNote" placeholder="بابت؟ (اختیاری)" maxlength="300">
     <button class="fu-btn" onclick="ndCreate()">ثبت</button>
     <span class="ix-msg" id="ndMsg"></span>
@@ -813,7 +814,7 @@
   <div class="fu-item" id="le{{ le.id }}">
     <span>{{ le.get_kind_display }}</span>
     {% if le.title %}<span style="color:var(--text-soft);font-size:12px;">{{ le.title }}</span>{% endif %}
-    <span style="font-size:11px;color:var(--text-muted);margin-right:auto;">{{ le.date|date:"Y/m/d" }}</span>
+    <span style="font-size:11px;color:var(--text-muted);margin-right:auto;">{{ le.date|jalali_date:"compact" }}</span>
     <button class="fu-del" onclick="leDelete({{ le.id }})" title="حذف">✕</button>
   </div>
   {% endfor %}
@@ -821,7 +822,7 @@
     <select class="ix-closeness" id="leKind">
       {% for val, label in life_event_kinds %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
     </select>
-    <input class="fu-date" id="leDate" type="date">
+    <input class="fu-date" id="leDate" inputmode="numeric" placeholder="۱۴۰۴/۰۱/۰۱">
     <input class="fu-text" id="leTitle" placeholder="توضیح کوتاه (اختیاری)" maxlength="200">
     <button class="fu-btn" onclick="leAdd()">+ ثبت</button>
     <span class="ix-msg" id="leMsg"></span>
@@ -840,7 +841,7 @@
   {% if active_goal %}
   <div style="font-size:13.5px;font-weight:700;">«{{ active_goal.text }}»</div>
   <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-    از {{ active_goal.created_at|date:"Y/m/d" }}
+    از {{ active_goal.created_at|jalali_date:"compact" }}
     {% if active_goal.baseline_score is not None %} · امتیاز شروع: {{ active_goal.baseline_score }}{% endif %}
     {% if node_health and node_health.score is not None %} · الان: {{ node_health.score }}{% endif %}
   </div>
@@ -1033,7 +1034,7 @@
       <div class="tl-dot"></div>
       <div class="tl-content">
         <div class="tl-title">{{ ev.title }}</div>
-        <div class="tl-date">{{ ev.date|date:"j F Y" }}</div>
+        <div class="tl-date">{{ ev.date|jalali_date:"long" }}</div>
         {% if ev.description %}<div class="tl-desc">{{ ev.description }}</div>{% endif %}
       </div>
     </div>
@@ -1058,7 +1059,7 @@
         {% endwith %}
         <div class="je-info">
           <div class="je-date">
-            {% if entry.entry_date %}{{ entry.entry_date|date:"Y/m/d" }}{% else %}{{ entry.created_at|date:"Y/m/d" }}{% endif %}
+            {% if entry.entry_date %}{{ entry.entry_date|jalali_date:"compact" }}{% else %}{{ entry.created_at|jalali_date:"compact" }}{% endif %}
             {% if entry.mood %} · {{ entry.mood }}{% endif %}
           </div>
           <div class="je-text">{{ entry.text|truncatechars:80 }}</div>

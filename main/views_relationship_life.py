@@ -14,9 +14,11 @@ from django.conf import settings
 from pathlib import Path
 
 from .models import (Commitment, Debt, Event, GiftIdea, Information, Interaction,
-                     JournalEntry, MeetingReflection, MemoryFact, Node, NodeSafetySetting,
+                     JournalEntry, MeetingReflection, MemoryFact, Node, NodeContactDetails,
+                     NodeSafetySetting,
                      Relationship, ShareLink)
 from .uploads import UploadValidationError, read_limited_upload
+from .utils_jalali import parse_date_input
 
 
 def _body(request):
@@ -87,6 +89,9 @@ def person_card_view(request, pk):
     from .models import FollowUp
     return render(request, 'relationship_life/person_card.html', {
         'node': node,
+        'contact_details': NodeContactDetails.objects.filter(
+            owner=request.user, node=node,
+        ).first(),
         'facts': MemoryFact.objects.filter(owner=request.user, node=node, active=True,
                                             confidentiality__in=('normal', 'personal'))[:8],
         'followups': FollowUp.objects.filter(owner=request.user, node=node, done=False)[:5],
@@ -180,20 +185,31 @@ def quick_capture_api(request):
         return JsonResponse({'error': 'شخص معتبر لازم است.'}, status=400)
     if not text:
         return JsonResponse({'error': 'متن خالی است.'}, status=400)
+    capture_date = timezone.localdate()
+    raw_date = data.get('date') or data.get('due_date')
+    if raw_date:
+        try:
+            capture_date = parse_date_input(str(raw_date).strip())
+        except (TypeError, ValueError, OverflowError):
+            return JsonResponse({'error': 'invalid date'}, status=400)
     if kind == 'moment':
-        entry = JournalEntry.objects.create(owner=request.user, text=text, entry_date=timezone.localdate(),
-                                            occurred_at=timezone.now(), entry_kind='moment')
+        local_now = timezone.localtime(timezone.now())
+        occurred_at = timezone.make_aware(
+            datetime.combine(capture_date, local_now.time()), timezone.get_current_timezone(),
+        )
+        entry = JournalEntry.objects.create(owner=request.user, text=text, entry_date=capture_date,
+                                            occurred_at=occurred_at, entry_kind='moment')
         if node: entry.mentioned_nodes.add(node)
         from .memory_pipeline import capture_text
         suggestions = capture_text(request.user, text, 'journal', entry.id, node=node)
         return JsonResponse({'ok': True, 'id': entry.id, 'suggestions': len(suggestions)})
     if kind == 'interaction':
         obj = Interaction.objects.create(owner=request.user, node=node, kind=data.get('interaction_kind', 'other'),
-                                         date=timezone.localdate(), feeling=int(data.get('feeling', 0)), note=text[:300])
+                                         date=capture_date, feeling=int(data.get('feeling', 0)), note=text[:300])
     elif kind == 'commitment':
         obj = Commitment.objects.create(owner=request.user, node=node,
             responsible=data.get('responsible') if data.get('responsible') in ('me', 'them') else 'me',
-            text=text[:300], due_date=data.get('due_date') or None)
+            text=text[:300], due_date=capture_date if raw_date else None)
     elif kind == 'gift':
         obj = GiftIdea.objects.create(owner=request.user, node=node, title=text[:200],
                                       occasion=str(data.get('occasion', ''))[:100], budget=data.get('budget') or None)
