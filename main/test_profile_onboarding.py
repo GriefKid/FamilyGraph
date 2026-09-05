@@ -68,3 +68,17 @@ class FirstVisitOnboardingTests(TestCase):
         self.assertNotContains(response, '<a href="/nodes/create/">＋ شخص</a>')
         self.assertContains(response, 'href="/privacy/">حریم خصوصی</a>')
         self.assertContains(response, 'href="/terms/">قوانین استفاده</a>')
+
+
+class FrontendMarkupRegressionTests(TestCase):
+    def test_shared_visual_css_is_rendered_inside_head(self):
+        user = get_user_model().objects.create_user(
+            username='markup-user', password='SecurePass1',
+        )
+        self.client.force_login(user)
+        html = self.client.get('/').content.decode('utf-8')
+        head_end = html.index('</head>')
+        body_start = html.index('<body')
+        visual_marker = html.index('FINAL VISUAL SYSTEM')
+        self.assertLess(visual_marker, head_end)
+        self.assertGreater(body_start, head_end)

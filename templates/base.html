@@ -1249,8 +1249,6 @@ input[type="checkbox"],input[type="radio"]{ min-height:0; width:auto; }
 }
 @media (max-width:420px){ .mobile-bottom-nav{ right:6px; left:6px; } .mobile-nav-item{ font-size:9px; } }
 
-{% block extra_css %}{% endblock %}
-
 /* ═══════════════ FINAL VISUAL SYSTEM ═══════════════
    A quiet, shared surface for pages that still carry older local styles. */
 body{ background:radial-gradient(circle at 84% -10%,rgba(99,102,241,.10),transparent 34%),radial-gradient(circle at 8% 110%,rgba(236,72,153,.06),transparent 30%),var(--bg); }
@@ -1282,6 +1280,7 @@ input:focus,textarea:focus,select:focus{ box-shadow:0 0 0 3px rgba(168,85,247,.1
   .card,.section,.ai-card,.metric-card,.full-card,.lg-card,.lg-total,.ck-card,.daily-card,.je-item,.briefing-card,.merge-card,.panel,.mh-card,.review-panel{ border-radius:16px; }
 }
 
+{% block extra_css %}{% endblock %}
 </style>
 </head>
 <body>
